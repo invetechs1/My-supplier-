@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+/* Table cells and numbers align nicely in both directions */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+[dir="rtl"] .rtl-flip {
+  transform: scaleX(-1);
+}

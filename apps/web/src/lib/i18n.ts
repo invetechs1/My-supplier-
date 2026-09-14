@@ -1,0 +1,242 @@
+"use client";
+
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+
+export type Lang = "en" | "ar";
+const LANG_KEY = "ms_lang";
+
+const dictionary = {
+  en: {
+    "nav.materials": "Materials",
+    "nav.suppliers": "Suppliers",
+    "nav.compare": "Compare",
+    "nav.boq": "BOQ Pricing",
+    "boq.title": "BOQ price research",
+    "boq.paste": "Paste your BOQ",
+    "boq.research": "Research prices",
+    "nav.howItWorks": "How it works",
+    "nav.login": "Log in",
+    "nav.register": "Sign up",
+    "nav.logout": "Log out",
+    "nav.dashboard": "Dashboard",
+    "nav.notifications": "Notifications",
+    "hero.title": "Real construction material prices across Saudi Arabia",
+    "hero.subtitle":
+      "Compare live supplier prices for cement, steel, aggregates and more. Request quotes, receive competitive bids and award orders in one place.",
+    "hero.searchPlaceholder": "Search materials, e.g. Portland cement, rebar 12mm…",
+    "hero.search": "Search",
+    "landing.priceIndex": "Price index",
+    "landing.priceIndexSub": "Category averages and 30-day movement",
+    "landing.howItWorks": "How it works",
+    "landing.categories": "Browse by category",
+    "landing.forBuyers": "For buyers & contractors",
+    "landing.forSuppliers": "For suppliers",
+    "stats.materials": "Materials",
+    "stats.suppliers": "Suppliers",
+    "stats.listings": "Price listings",
+    "stats.openRfqs": "Open RFQs",
+    "stats.bids": "Bids",
+    "stats.orders": "Orders",
+    "stats.gmv": "Order value",
+    "materials.title": "Materials",
+    "materials.filters": "Filters",
+    "materials.category": "Category",
+    "materials.city": "City",
+    "materials.sort": "Sort",
+    "materials.allCities": "All cities",
+    "materials.allCategories": "All categories",
+    "materials.compare": "Compare",
+    "materials.results": "results",
+    "price.lowest": "Lowest",
+    "price.average": "Average",
+    "price.median": "Median",
+    "price.highest": "Highest",
+    "price.suppliers": "Suppliers",
+    "material.requestQuotes": "Request quotes for this item",
+    "material.listings": "Supplier listings",
+    "material.history": "Price history",
+    "suppliers.title": "Suppliers",
+    "auth.login": "Log in",
+    "auth.register": "Create account",
+    "auth.email": "Email",
+    "auth.password": "Password",
+    "auth.name": "Full name",
+    "auth.role": "I am a",
+    "auth.buyer": "Buyer / Contractor",
+    "auth.supplier": "Supplier",
+    "dash.overview": "Overview",
+    "dash.rfqs": "My RFQs",
+    "dash.newRfq": "New RFQ",
+    "dash.orders": "Orders",
+    "dash.notifications": "Notifications",
+    "sup.marketplace": "Marketplace",
+    "sup.bids": "My bids",
+    "sup.prices": "Price list",
+    "sup.orders": "Orders",
+    "admin.users": "Users",
+    "admin.companies": "Companies",
+    "admin.materials": "Materials",
+    "admin.categories": "Categories",
+    "admin.imports": "Price imports",
+    "common.loading": "Loading…",
+    "common.error": "Something went wrong",
+    "common.retry": "Retry",
+    "common.save": "Save",
+    "common.cancel": "Cancel",
+    "common.delete": "Delete",
+    "common.viewAll": "View all",
+    "common.verified": "Verified",
+    "common.city": "City",
+    "common.status": "Status",
+    "common.actions": "Actions",
+    "footer.tagline": "Transparent building-material pricing for the Kingdom.",
+  },
+  ar: {
+    "nav.materials": "المواد",
+    "nav.suppliers": "الموردون",
+    "nav.compare": "مقارنة",
+    "nav.boq": "تسعير جدول الكميات",
+    "boq.title": "بحث أسعار جدول الكميات",
+    "boq.paste": "الصق جدول الكميات",
+    "boq.research": "ابحث عن الأسعار",
+    "nav.howItWorks": "كيف يعمل",
+    "nav.login": "تسجيل الدخول",
+    "nav.register": "إنشاء حساب",
+    "nav.logout": "تسجيل الخروج",
+    "nav.dashboard": "لوحة التحكم",
+    "nav.notifications": "الإشعارات",
+    "hero.title": "أسعار حقيقية لمواد البناء في جميع أنحاء المملكة العربية السعودية",
+    "hero.subtitle":
+      "قارن أسعار الموردين المباشرة للإسمنت والحديد والركام وغيرها. اطلب عروض الأسعار، واستقبل العطاءات التنافسية، وأرسِ الطلبات في مكان واحد.",
+    "hero.searchPlaceholder": "ابحث عن المواد، مثل الإسمنت البورتلاندي، حديد التسليح 12 مم…",
+    "hero.search": "بحث",
+    "landing.priceIndex": "مؤشر الأسعار",
+    "landing.priceIndexSub": "متوسطات الفئات والتغير خلال 30 يوماً",
+    "landing.howItWorks": "كيف يعمل",
+    "landing.categories": "تصفح حسب الفئة",
+    "landing.forBuyers": "للمشترين والمقاولين",
+    "landing.forSuppliers": "للموردين",
+    "stats.materials": "المواد",
+    "stats.suppliers": "الموردون",
+    "stats.listings": "قوائم الأسعار",
+    "stats.openRfqs": "طلبات عروض مفتوحة",
+    "stats.bids": "العطاءات",
+    "stats.orders": "الطلبات",
+    "stats.gmv": "قيمة الطلبات",
+    "materials.title": "المواد",
+    "materials.filters": "التصفية",
+    "materials.category": "الفئة",
+    "materials.city": "المدينة",
+    "materials.sort": "الترتيب",
+    "materials.allCities": "جميع المدن",
+    "materials.allCategories": "جميع الفئات",
+    "materials.compare": "مقارنة",
+    "materials.results": "نتيجة",
+    "price.lowest": "الأدنى",
+    "price.average": "المتوسط",
+    "price.median": "الوسيط",
+    "price.highest": "الأعلى",
+    "price.suppliers": "الموردون",
+    "material.requestQuotes": "اطلب عروض أسعار لهذا الصنف",
+    "material.listings": "عروض الموردين",
+    "material.history": "سجل الأسعار",
+    "suppliers.title": "الموردون",
+    "auth.login": "تسجيل الدخول",
+    "auth.register": "إنشاء حساب",
+    "auth.email": "البريد الإلكتروني",
+    "auth.password": "كلمة المرور",
+    "auth.name": "الاسم الكامل",
+    "auth.role": "أنا",
+    "auth.buyer": "مشترٍ / مقاول",
+    "auth.supplier": "مورّد",
+    "dash.overview": "نظرة عامة",
+    "dash.rfqs": "طلبات عروض الأسعار",
+    "dash.newRfq": "طلب جديد",
+    "dash.orders": "الطلبات",
+    "dash.notifications": "الإشعارات",
+    "sup.marketplace": "السوق",
+    "sup.bids": "عطاءاتي",
+    "sup.prices": "قائمة الأسعار",
+    "sup.orders": "الطلبات",
+    "admin.users": "المستخدمون",
+    "admin.companies": "الشركات",
+    "admin.materials": "المواد",
+    "admin.categories": "الفئات",
+    "admin.imports": "استيراد الأسعار",
+    "common.loading": "جارٍ التحميل…",
+    "common.error": "حدث خطأ ما",
+    "common.retry": "إعادة المحاولة",
+    "common.save": "حفظ",
+    "common.cancel": "إلغاء",
+    "common.delete": "حذف",
+    "common.viewAll": "عرض الكل",
+    "common.verified": "موثّق",
+    "common.city": "المدينة",
+    "common.status": "الحالة",
+    "common.actions": "الإجراءات",
+    "footer.tagline": "تسعير شفاف لمواد البناء في المملكة.",
+  },
+} as const;
+
+export type TranslationKey = keyof (typeof dictionary)["en"];
+
+interface I18nContextValue {
+  lang: Lang;
+  dir: "ltr" | "rtl";
+  setLang: (lang: Lang) => void;
+  toggle: () => void;
+  t: (key: TranslationKey) => string;
+}
+
+const I18nContext = createContext<I18nContextValue | undefined>(undefined);
+
+export function I18nProvider({ children }: { children: React.ReactNode }) {
+  const [lang, setLangState] = useState<Lang>("en");
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(LANG_KEY);
+      if (stored === "ar" || stored === "en") setLangState(stored);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.lang = lang;
+    root.dir = lang === "ar" ? "rtl" : "ltr";
+  }, [lang]);
+
+  const setLang = useCallback((next: Lang) => {
+    setLangState(next);
+    try {
+      window.localStorage.setItem(LANG_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggle = useCallback(() => setLang(lang === "en" ? "ar" : "en"), [lang, setLang]);
+
+  const t = useCallback(
+    (key: TranslationKey) => {
+      const table = dictionary[lang] as Record<string, string>;
+      return table[key] ?? dictionary.en[key] ?? key;
+    },
+    [lang],
+  );
+
+  const value = useMemo<I18nContextValue>(
+    () => ({ lang, dir: lang === "ar" ? "rtl" : "ltr", setLang, toggle, t }),
+    [lang, setLang, toggle, t],
+  );
+
+  return React.createElement(I18nContext.Provider, { value }, children);
+}
+
+export function useI18n(): I18nContextValue {
+  const ctx = useContext(I18nContext);
+  if (!ctx) throw new Error("useI18n must be used within I18nProvider");
+  return ctx;
+}
