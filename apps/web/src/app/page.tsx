@@ -9,6 +9,7 @@ import { useAsync } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatCompact, formatNumber, formatSar } from "@/lib/format";
 import { Alert, Card, CardHeader, LinkButton, LoadingBlock, PriceChange } from "@/components/ui";
+import { ProductRail } from "@/components/shop/ProductCard";
 
 export default function LandingPage() {
   const { t, lang } = useI18n();
@@ -18,6 +19,7 @@ export default function LandingPage() {
   const stats = useAsync(() => api.stats(), []);
   const index = useAsync(() => api.priceIndex(), []);
   const categories = useAsync(() => api.categories(), []);
+  const shop = useAsync(() => api.shopHome(), []);
 
   const onSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +71,12 @@ export default function LandingPage() {
               <button type="submit" className="h-12 rounded-xl bg-amber-500 px-6 font-semibold text-slate-900 shadow-lg hover:bg-amber-600">
                 {t("hero.search")}
               </button>
+              <Link href="/shop" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/30 bg-white/10 px-6 font-semibold text-white backdrop-blur hover:bg-white/20">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                </svg>
+                {t("shop.shopLivePrices")}
+              </Link>
             </form>
             <Link
               href="/boq"
@@ -96,6 +104,31 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Today's deals */}
+      <section className="border-b border-slate-200 bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 className="inline-flex items-center gap-2 text-xl font-semibold tracking-tight text-slate-900">
+                <span className="rounded-md bg-amber-500 px-2 py-0.5 text-xs font-bold text-slate-900">%</span>
+                {t("shop.deals")}
+              </h2>
+              <p className="text-sm text-slate-500">Live offers priced under the market average — add to cart and check out in minutes.</p>
+            </div>
+            <Link href="/shop" className="text-sm font-semibold text-brand-700 hover:underline">
+              {t("shop.shopLivePrices")} →
+            </Link>
+          </div>
+          {shop.loading ? (
+            <LoadingBlock className="py-6" />
+          ) : shop.error ? (
+            <Alert kind="warning" onRetry={shop.reload}>Deals unavailable: {shop.error}</Alert>
+          ) : (
+            <ProductRail products={shop.data?.deals ?? []} emptyText="No deals right now — browse the shop for live prices." />
+          )}
         </div>
       </section>
 

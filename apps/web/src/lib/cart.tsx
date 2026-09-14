@@ -289,7 +289,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const isGuest = !userId;
   const cart = useMemo<Cart | null>(() => (isGuest ? buildGuestCart(localItems) : serverCart), [isGuest, localItems, serverCart]);
-  const items = cart?.items ?? [];
+  const items = useMemo<CartItem[]>(() => cart?.items ?? [], [cart]);
 
   const value = useMemo<CartContextValue>(
     () => ({

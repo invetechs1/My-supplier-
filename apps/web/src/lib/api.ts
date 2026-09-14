@@ -273,7 +273,7 @@ export const api = {
     request<Bid>(`/rfqs/${encodeURIComponent(rfqId)}/bids`, { method: "POST", body: payload }),
   bids: (query: { status?: string; page?: number } = {}) => request<Paginated<Bid>>("/bids", { query }),
   withdrawBid: (id: string) => request<Bid>(`/bids/${encodeURIComponent(id)}/withdraw`, { method: "POST" }),
-  supplierPrices: (page = 1) => request<Paginated<PriceListing>>("/supplier/prices", { query: { page } }),
+  supplierPrices: (page = 1) => request<Paginated<SupplierListing>>("/supplier/prices", { query: { page } }),
   upsertPrice: (payload: UpsertPricePayload) =>
     request<PriceListing>("/supplier/prices", { method: "POST", body: payload }),
   bulkPrices: (items: UpsertPricePayload[]) =>

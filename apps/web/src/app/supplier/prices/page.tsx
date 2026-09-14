@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import { SAUDI_CITIES, type Material, type PriceListing, type UpsertPricePayload } from "@mysupplier/shared";
-import { api, errorMessage } from "@/lib/api";
+import { api, errorMessage, type SupplierListing } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatSar, timeAgo } from "@/lib/format";
-import { Alert, Button, Card, CardBody, CardHeader, EmptyState, FlashMessage, Input, LoadingBlock, Modal, PageHeader, Pagination, Select, Table, Textarea, type Column } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, FlashMessage, Input, LinkButton, LoadingBlock, Modal, PageHeader, Pagination, Select, Table, Textarea, type Column } from "@/components/ui";
 import { MaterialAutocomplete } from "@/components/MaterialAutocomplete";
 
 interface PriceForm {
@@ -29,6 +29,35 @@ export default function SupplierPricesPage() {
   const [page, setPage] = useState(1);
   const state = useAsync(() => api.supplierPrices(page), [page]);
   const [flash, setFlash] = useFlash(6000);
+
+  // Inline price / stock editing (PATCH /supplier/prices/:id)
+  const [inline, setInline] = useState<{ id: string; price: string; stock: string } | null>(null);
+  const [inlineSaving, setInlineSaving] = useState(false);
+  const startInline = (l: SupplierListing) => setInline({ id: l.id, price: String(l.price), stock: l.stock === null || l.stock === undefined ? "" : String(l.stock) });
+  const saveInline = async () => {
+    if (!inline) return;
+    const price = Number(inline.price);
+    if (!inline.price || Number.isNaN(price) || price <= 0) {
+      setFlash({ kind: "error", message: "Enter a valid price." });
+      return;
+    }
+    const stock = inline.stock.trim() === "" ? null : Math.max(0, Math.floor(Number(inline.stock)));
+    if (stock !== null && Number.isNaN(stock)) {
+      setFlash({ kind: "error", message: "Stock must be a number (leave blank for on request)." });
+      return;
+    }
+    setInlineSaving(true);
+    try {
+      const updated = await api.updateSupplierPrice(inline.id, { price, stock });
+      state.setData((prev) => (prev ? { ...prev, data: prev.data.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)) } : prev));
+      setInline(null);
+      setFlash({ kind: "success", message: "Listing updated." });
+    } catch (err) {
+      setFlash({ kind: "error", message: errorMessage(err) });
+    } finally {
+      setInlineSaving(false);
+    }
+  };
 
   const [modal, setModal] = useState<{ open: boolean; editing: PriceListing | null }>({ open: false, editing: null });
   const [form, setForm] = useState<PriceForm>(emptyForm(defaultCity));
@@ -142,29 +171,61 @@ export default function SupplierPricesPage() {
     }
   };
 
-  const columns: Column<PriceListing>[] = [
+  const columns: Column<SupplierListing>[] = [
     { key: "material", header: "Material", render: (l) => (
       <div>
-        <p className="font-medium text-slate-900">{l.material ? <Link href={`/materials/${l.material.id}`} className="hover:text-brand-700">{l.material.name}</Link> : l.materialId}</p>
+        <p className="font-medium text-slate-900">{l.material ? <Link href={`/shop/products/${l.material.id}`} className="hover:text-brand-700">{l.material.name}</Link> : l.materialId}</p>
         <p className="text-xs text-slate-500">{l.material?.sku}{l.material ? ` · per ${l.material.unit}` : ""}</p>
       </div>
     ) },
     { key: "city", header: t("common.city"), render: (l) => l.city },
-    { key: "price", header: "Price", align: "end", render: (l) => <span className="font-semibold tabular-nums">{formatSar(l.price, lang)}</span> },
+    { key: "price", header: "Price", align: "end", render: (l) =>
+      inline?.id === l.id ? (
+        <Input name={`price-${l.id}`} type="number" min={0} step="0.01" value={inline.price} onChange={(e) => setInline({ ...inline, price: e.target.value })} className="w-28" dir="ltr" aria-label="Price" autoFocus />
+      ) : (
+        <span className="font-semibold tabular-nums">{formatSar(l.price, lang)}</span>
+      ) },
+    { key: "stock", header: "Stock", align: "end", render: (l) =>
+      inline?.id === l.id ? (
+        <Input name={`stock-${l.id}`} type="number" min={0} value={inline.stock} onChange={(e) => setInline({ ...inline, stock: e.target.value })} className="w-24" dir="ltr" placeholder="—" aria-label="Stock" />
+      ) : l.stock === null || l.stock === undefined ? (
+        <Badge tone="slate">On request</Badge>
+      ) : l.stock > 0 ? (
+        <span className="tabular-nums text-emerald-700">{l.stock}</span>
+      ) : (
+        <Badge tone="red">Out of stock</Badge>
+      ) },
     { key: "minQty", header: "Min qty", align: "end", render: (l) => l.minQty },
     { key: "lead", header: "Lead time", align: "end", render: (l) => `${l.leadTimeDays} d` },
     { key: "updated", header: "Updated", render: (l) => <span className="text-slate-500">{timeAgo(l.updatedAt)}</span> },
     { key: "actions", header: "", align: "end", render: (l) => (
-      <div className="flex justify-end gap-2">
-        <Button size="sm" variant="outline" onClick={() => openEdit(l)}>Edit</Button>
-        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(l)} loading={deleting === l.id}>{t("common.delete")}</Button>
-      </div>
+      inline?.id === l.id ? (
+        <div className="flex justify-end gap-2">
+          <Button size="sm" onClick={saveInline} loading={inlineSaving}>{t("common.save")}</Button>
+          <Button size="sm" variant="ghost" onClick={() => setInline(null)} disabled={inlineSaving}>{t("common.cancel")}</Button>
+        </div>
+      ) : (
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={() => startInline(l)}>Edit</Button>
+          <Button size="sm" variant="ghost" onClick={() => openEdit(l)} title="Lead time, min qty, validity">More</Button>
+          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(l)} loading={deleting === l.id}>{t("common.delete")}</Button>
+        </div>
+      )
     ) },
   ];
 
   return (
     <div>
-      <PageHeader title={t("sup.prices")} subtitle="Published prices appear on material pages and feed the market index." action={<Button variant="accent" onClick={openCreate}>+ Add price</Button>} />
+      <PageHeader
+        title={t("sup.prices")}
+        subtitle="Published prices appear in the shop and on material pages, and feed the market index. Click Edit to change price and stock inline."
+        action={
+          <>
+            <LinkButton href="/supplier/catalog" variant="outline">{t("sup.catalog")}</LinkButton>
+            <Button variant="accent" onClick={openCreate}>+ Add price</Button>
+          </>
+        }
+      />
       <FlashMessage flash={flash} className="mb-4" />
       {state.loading ? <LoadingBlock /> : state.error ? <Alert onRetry={state.reload}>{state.error}</Alert> : (
         <Card>
