@@ -2,6 +2,7 @@ import React from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth";
+import { useCart } from "@/lib/cart";
 import { useI18n } from "@/lib/i18n";
 import { colors } from "@/theme";
 
@@ -13,9 +14,14 @@ function tabIcon(focused: IconName, unfocused: IconName) {
   );
 }
 
+export const unstable_settings = {
+  initialRouteName: "shop",
+};
+
 export default function TabsLayout() {
   const { t } = useI18n();
   const { isSupplier } = useAuth();
+  const { count } = useCart();
 
   return (
     <Tabs
@@ -27,6 +33,15 @@ export default function TabsLayout() {
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
       }}
     >
+      <Tabs.Screen
+        name="shop"
+        options={{
+          title: t("shop"),
+          tabBarIcon: tabIcon("storefront", "storefront-outline"),
+          tabBarBadge: count > 0 ? (count > 99 ? "99+" : count) : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.accent, color: colors.text, fontSize: 10, fontWeight: "700" },
+        }}
+      />
       <Tabs.Screen name="index" options={{ title: t("home"), tabBarIcon: tabIcon("home", "home-outline") }} />
       <Tabs.Screen name="search" options={{ title: t("search"), tabBarIcon: tabIcon("search", "search-outline") }} />
       <Tabs.Screen

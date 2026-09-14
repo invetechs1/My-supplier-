@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import type { Order } from "@mysupplier/shared";
+import type { OrderExtended } from "@mysupplier/shared";
 import { Screen, StatusBadge, EmptyState, ErrorView, LoadingView, RequireAuth } from "@/components";
 import { api, getErrorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -10,11 +10,30 @@ import { useI18n } from "@/lib/i18n";
 import { formatDate, formatSar } from "@/lib/format";
 import { colors, radius, spacing, typography, shadow } from "@/theme";
 
+function orderType(order: OrderExtended): "DIRECT" | "RFQ" {
+  return order.type ?? (order.rfqId ? "RFQ" : "DIRECT");
+}
+
+function paymentLabel(method: string): string {
+  if (method === "COD") return "Cash on delivery";
+  if (method === "BANK_TRANSFER") return "Bank transfer";
+  if (method === "CARD") return "Card";
+  return method;
+}
+
+function orderTitle(order: OrderExtended): string {
+  if (order.rfq?.title) return order.rfq.title;
+  const items = order.items ?? [];
+  if (items.length === 0) return "Order";
+  const first = items[0].name || items[0].material?.name || "Item";
+  return items.length > 1 ? `${first} +${items.length - 1} more` : first;
+}
+
 function OrdersList() {
   const router = useRouter();
   const { t } = useI18n();
   const { isSupplier } = useAuth();
-  const [items, setItems] = useState<Order[]>([]);
+  const [items, setItems] = useState<OrderExtended[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -68,7 +87,7 @@ function OrdersList() {
     <Screen padded={false}>
       <View style={styles.header}>
         <Text style={styles.heading}>{t("orders")}</Text>
-        <Text style={typography.caption}>{isSupplier ? "Orders awarded to your company" : "Awarded RFQs become orders"}</Text>
+        <Text style={typography.caption}>{isSupplier ? "Shop orders and awarded RFQs for your company" : "Shop purchases and awarded RFQs"}</Text>
       </View>
       {loading && items.length === 0 ? (
         <LoadingView />
@@ -89,7 +108,9 @@ function OrdersList() {
             <EmptyState
               icon="cube-outline"
               title="No orders yet"
-              message={isSupplier ? "When a buyer accepts one of your bids, the order shows up here." : "Accept a bid on one of your RFQs to create an order."}
+              message={isSupplier ? "Shop purchases and accepted bids show up here." : "Buy from the shop or accept a bid on one of your RFQs to create an order."}
+              actionTitle={isSupplier ? undefined : t("shop")}
+              onAction={isSupplier ? undefined : () => router.push("/(tabs)/shop")}
             />
           }
           ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.primary} /> : null}
@@ -97,10 +118,19 @@ function OrdersList() {
             <Pressable onPress={() => router.push(`/order/${item.id}`)} style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}>
               <View style={styles.cardTop}>
                 <View style={{ flex: 1 }}>
-                  <Text style={typography.caption}>{item.reference}</Text>
+                  <View style={styles.refRow}>
+                    <Text style={typography.caption}>{item.reference}</Text>
+                    <StatusBadge status={orderType(item)} small />
+                  </View>
                   <Text style={styles.cardTitle} numberOfLines={2}>
-                    {item.rfq?.title ?? "Order"}
+                    {orderTitle(item)}
                   </Text>
+                  {item.paymentStatus ? (
+                    <Text style={[typography.caption, { color: item.paymentStatus === "PAID" ? colors.success : colors.warning, fontWeight: "600" }]}>
+                      {item.paymentStatus === "PAID" ? t("paid") : item.paymentStatus === "REFUNDED" ? "Refunded" : t("unpaid")}
+                      {item.paymentMethod ? ` · ${paymentLabel(item.paymentMethod)}` : ""}
+                    </Text>
+                  ) : null}
                 </View>
                 <StatusBadge status={item.status} small />
               </View>
@@ -137,6 +167,7 @@ const styles = StyleSheet.create({
   list: { padding: spacing.lg, paddingBottom: spacing.xxl, flexGrow: 1 },
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.md, ...shadow.card },
   cardTop: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
+  refRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   cardTitle: { ...typography.h3, marginTop: 2 },
   cardFooter: {
     flexDirection: "row",

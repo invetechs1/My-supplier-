@@ -6,7 +6,10 @@ import type {
   BoqAnalysis,
   BoqLineInput,
   BoqToRfqPayload,
+  Cart,
   Category,
+  CheckoutPayload,
+  CheckoutResult,
   Company,
   CreateBidPayload,
   CreateRfqPayload,
@@ -14,8 +17,13 @@ import type {
   Material,
   Notification,
   Order,
+  OrderExtended,
   OrderStatus,
   Paginated,
+  PaymentStatus,
+  Product,
+  ProductDetail,
+  ShopHome,
   PlatformStats,
   PriceHistoryPoint,
   PriceIndexEntry,
@@ -167,6 +175,27 @@ export type MaterialsQuery = {
   sort?: MaterialSort;
 };
 
+export type ShopSort = "relevance" | "price_asc" | "price_desc" | "newest" | "popular";
+
+// Type alias (not interface) so it is assignable to the indexed Query type.
+export type ShopProductsQuery = {
+  q?: string;
+  categoryId?: string;
+  city?: string;
+  brand?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: 1 | undefined;
+  sort?: ShopSort;
+  page?: number;
+  pageSize?: number;
+};
+
+/** URL of the generated SVG product image for a material without imageUrl. */
+export function materialImageUrl(sku: string): string {
+  return `${API_URL}/images/materials/${encodeURIComponent(sku)}.svg`;
+}
+
 export interface BoqAnalyzeBody {
   text?: string;
   lines?: BoqLineInput[];
@@ -227,11 +256,30 @@ export const api = {
     request<PriceListing>("/supplier/prices", { method: "POST", body: payload }),
   deletePrice: (id: string) => request<{ ok: true }>(`/supplier/prices/${id}`, { method: "DELETE" }),
 
-  // Orders
-  orders: (page = 1) => request<Paginated<Order>>("/orders", { query: { page } }),
-  order: (id: string) => request<Order>(`/orders/${id}`),
+  // Shop (public)
+  shopHome: () => request<ShopHome>("/shop/home", { auth: false }),
+  shopProducts: (query: ShopProductsQuery = {}) =>
+    request<Paginated<Product>>("/shop/products", { query, auth: false }),
+  shopProduct: (id: string) => request<ProductDetail>(`/shop/products/${id}`, { auth: false }),
+  shopBrands: () => request<string[]>("/shop/brands", { auth: false }),
+
+  // Cart & checkout (auth)
+  cart: () => request<Cart>("/cart"),
+  addCartItem: (listingId: string, quantity: number) =>
+    request<Cart>("/cart/items", { method: "POST", body: { listingId, quantity } }),
+  updateCartItem: (id: string, quantity: number) =>
+    request<Cart>(`/cart/items/${id}`, { method: "PATCH", body: { quantity } }),
+  removeCartItem: (id: string) => request<Cart>(`/cart/items/${id}`, { method: "DELETE" }),
+  clearCart: () => request<Cart>("/cart", { method: "DELETE" }),
+  checkout: (payload: CheckoutPayload) => request<CheckoutResult>("/checkout", { method: "POST", body: payload }),
+
+  // Orders (OrderExtended: RFQ-awarded and direct shop orders)
+  orders: (page = 1) => request<Paginated<OrderExtended>>("/orders", { query: { page } }),
+  order: (id: string) => request<OrderExtended>(`/orders/${id}`),
   updateOrderStatus: (id: string, status: OrderStatus) =>
-    request<Order>(`/orders/${id}/status`, { method: "PATCH", body: { status } }),
+    request<OrderExtended>(`/orders/${id}/status`, { method: "PATCH", body: { status } }),
+  updateOrderPayment: (id: string, paymentStatus: PaymentStatus) =>
+    request<OrderExtended>(`/orders/${id}/payment`, { method: "PATCH", body: { paymentStatus } }),
 
   // Notifications
   notifications: async (unreadOnly = false) => {

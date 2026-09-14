@@ -11,3 +11,7 @@ export { Card, SectionHeader, KeyValue, Chip } from "./Card";
 export { MaterialSearchModal } from "./MaterialSearchModal";
 export { Sparkline } from "./Sparkline";
 export { RequireAuth } from "./RequireAuth";
+export { ProductImage, categoryEmoji } from "./ProductImage";
+export { ProductCard, StockPill, DealBadge } from "./ProductCard";
+export { QtyStepper } from "./QtyStepper";
+export { CartButton, CartBadge } from "./CartButton";

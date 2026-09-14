@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "@/lib/auth";
+import { CartProvider } from "@/lib/cart";
 import { I18nProvider } from "@/lib/i18n";
 import { colors } from "@/theme";
 
@@ -24,28 +25,34 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <I18nProvider>
           <AuthProvider>
-            <StatusBar style="dark" />
-            <Stack
-              screenOptions={{
-                headerTintColor: colors.primary,
-                headerTitleStyle: { color: colors.text, fontWeight: "600" },
-                headerStyle: { backgroundColor: colors.surface },
-                headerShadowVisible: false,
-                contentStyle: { backgroundColor: colors.background },
-                headerBackTitleVisible: false,
-              }}
-            >
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="(auth)/login" options={{ title: "Log in", presentation: "modal" }} />
-              <Stack.Screen name="(auth)/register" options={{ title: "Create account", presentation: "modal" }} />
-              <Stack.Screen name="material/[id]" options={{ title: "Material" }} />
-              <Stack.Screen name="boq" options={{ title: "BOQ price research" }} />
-              <Stack.Screen name="rfq/new" options={{ title: "New RFQ" }} />
-              <Stack.Screen name="rfq/[id]" options={{ title: "RFQ" }} />
-              <Stack.Screen name="order/[id]" options={{ title: "Order" }} />
-              <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
-              <Stack.Screen name="supplier/prices" options={{ title: "My price list" }} />
-            </Stack>
+            <CartProvider>
+              <StatusBar style="dark" />
+              <Stack
+                screenOptions={{
+                  headerTintColor: colors.primary,
+                  headerTitleStyle: { color: colors.text, fontWeight: "600" },
+                  headerStyle: { backgroundColor: colors.surface },
+                  headerShadowVisible: false,
+                  contentStyle: { backgroundColor: colors.background },
+                  headerBackTitleVisible: false,
+                }}
+              >
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="(auth)/login" options={{ title: "Log in", presentation: "modal" }} />
+                <Stack.Screen name="(auth)/register" options={{ title: "Create account", presentation: "modal" }} />
+                <Stack.Screen name="material/[id]" options={{ title: "Material" }} />
+                <Stack.Screen name="boq" options={{ title: "BOQ price research" }} />
+                <Stack.Screen name="rfq/new" options={{ title: "New RFQ" }} />
+                <Stack.Screen name="rfq/[id]" options={{ title: "RFQ" }} />
+                <Stack.Screen name="order/[id]" options={{ title: "Order" }} />
+                <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
+                <Stack.Screen name="supplier/prices" options={{ title: "My price list" }} />
+                <Stack.Screen name="shop/search" options={{ title: "Shop" }} />
+                <Stack.Screen name="shop/product/[id]" options={{ title: "Product" }} />
+                <Stack.Screen name="cart" options={{ title: "Cart" }} />
+                <Stack.Screen name="checkout" options={{ title: "Checkout" }} />
+              </Stack>
+            </CartProvider>
           </AuthProvider>
         </I18nProvider>
       </SafeAreaProvider>
