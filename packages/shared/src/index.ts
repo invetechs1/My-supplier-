@@ -1,0 +1,306 @@
+// Shared domain types for MySupplier (API, web, mobile).
+// Keep this file dependency-free so every app can import it directly.
+
+export type Role = "BUYER" | "SUPPLIER" | "ADMIN";
+export type CompanyType = "SUPPLIER" | "CONTRACTOR" | "CONSULTANT" | "OTHER";
+export type PriceSource = "SUPPLIER" | "MARKET" | "IMPORTED";
+export type RfqStatus = "OPEN" | "CLOSED" | "AWARDED" | "CANCELLED";
+export type BidStatus = "SUBMITTED" | "WITHDRAWN" | "ACCEPTED" | "REJECTED";
+export type OrderStatus = "PENDING" | "CONFIRMED" | "IN_TRANSIT" | "DELIVERED" | "CANCELLED";
+export type NotificationType = "NEW_RFQ" | "NEW_BID" | "BID_ACCEPTED" | "BID_REJECTED" | "ORDER_UPDATE" | "SYSTEM";
+
+export const CURRENCY = "SAR";
+
+export const SAUDI_CITIES = [
+  "Riyadh", "Jeddah", "Makkah", "Madinah", "Dammam", "Khobar", "Dhahran",
+  "Jubail", "Tabuk", "Abha", "Khamis Mushait", "Taif", "Buraidah", "Hail",
+  "Najran", "Jazan", "Yanbu", "Al Ahsa", "Qatif", "NEOM",
+] as const;
+export type SaudiCity = (typeof SAUDI_CITIES)[number];
+
+export const UNITS = ["ton", "kg", "bag", "m3", "m2", "m", "piece", "pallet", "roll", "litre", "drum", "sheet", "bundle"] as const;
+export type Unit = (typeof UNITS)[number];
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  phone?: string | null;
+  role: Role;
+  locale: "en" | "ar";
+  companyId?: string | null;
+  company?: Company | null;
+  createdAt: string;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  nameAr?: string | null;
+  type: CompanyType;
+  crNumber?: string | null;
+  vatNumber?: string | null;
+  city: string;
+  region?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  verified: boolean;
+  rating: number; // 0..5
+  ratingCount: number;
+  createdAt: string;
+}
+
+export interface Category {
+  id: string;
+  slug: string;
+  name: string;
+  nameAr: string;
+  parentId?: string | null;
+  icon?: string | null;
+  materialCount?: number;
+}
+
+export interface Material {
+  id: string;
+  sku: string;
+  name: string;
+  nameAr: string;
+  unit: Unit | string;
+  categoryId: string;
+  category?: Category;
+  brand?: string | null;
+  specs?: Record<string, string | number> | null;
+  imageUrl?: string | null;
+  description?: string | null;
+  // Aggregates (filled by the API when listing)
+  minPrice?: number | null;
+  avgPrice?: number | null;
+  maxPrice?: number | null;
+  supplierCount?: number;
+  lastUpdated?: string | null;
+}
+
+export interface PriceListing {
+  id: string;
+  materialId: string;
+  material?: Material;
+  companyId: string;
+  company?: Company;
+  price: number;
+  currency: string;
+  minQty: number;
+  leadTimeDays: number;
+  city: string;
+  source: PriceSource;
+  sourceName?: string | null;
+  validUntil?: string | null;
+  updatedAt: string;
+}
+
+export interface PriceSummary {
+  materialId: string;
+  min: number | null;
+  avg: number | null;
+  median: number | null;
+  max: number | null;
+  count: number;
+  cheapestListingId?: string | null;
+  lastUpdated?: string | null;
+}
+
+export interface PriceHistoryPoint {
+  date: string; // YYYY-MM-DD
+  avg: number;
+  min: number;
+  max: number;
+}
+
+export interface RfqItem {
+  id: string;
+  rfqId: string;
+  materialId?: string | null;
+  material?: Material | null;
+  description: string;
+  quantity: number;
+  unit: string;
+  notes?: string | null;
+}
+
+export interface Rfq {
+  id: string;
+  reference: string; // e.g. RFQ-2026-000123
+  buyerId: string;
+  buyer?: Pick<User, "id" | "name" | "company">;
+  title: string;
+  status: RfqStatus;
+  deliveryCity: string;
+  deliveryAddress?: string | null;
+  deliveryDate?: string | null;
+  closesAt: string;
+  notes?: string | null;
+  items: RfqItem[];
+  bidCount?: number;
+  lowestBid?: number | null;
+  awardedBidId?: string | null;
+  createdAt: string;
+}
+
+export interface BidItem {
+  id: string;
+  bidId: string;
+  rfqItemId: string;
+  unitPrice: number;
+  quantity: number;
+  leadTimeDays: number;
+  notes?: string | null;
+}
+
+export interface Bid {
+  id: string;
+  rfqId: string;
+  rfq?: Rfq;
+  companyId: string;
+  company?: Company;
+  totalPrice: number;
+  currency: string;
+  validUntil: string;
+  deliveryDays: number;
+  notes?: string | null;
+  status: BidStatus;
+  items: BidItem[];
+  createdAt: string;
+}
+
+export interface Order {
+  id: string;
+  reference: string; // ORD-2026-000045
+  rfqId: string;
+  bidId: string;
+  buyerId: string;
+  companyId: string;
+  company?: Company;
+  rfq?: Rfq;
+  bid?: Bid;
+  total: number;
+  currency: string;
+  status: OrderStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  link?: string | null;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface Paginated<T> {
+  data: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export interface ApiError {
+  error: string;
+  details?: unknown;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: User;
+}
+
+export interface PlatformStats {
+  materials: number;
+  suppliers: number;
+  priceListings: number;
+  openRfqs: number;
+  bids: number;
+  orders: number;
+  gmv: number; // total order value in SAR
+}
+
+export interface PriceIndexEntry {
+  category: Category;
+  avgPrice: number;
+  changePct30d: number; // e.g. -2.4
+  materialCount: number;
+}
+
+// Request payloads -----------------------------------------------------------
+
+export interface RegisterPayload {
+  email: string;
+  password: string;
+  name: string;
+  phone?: string;
+  role: Exclude<Role, "ADMIN">;
+  locale?: "en" | "ar";
+  company?: {
+    name: string;
+    nameAr?: string;
+    type: CompanyType;
+    city: string;
+    crNumber?: string;
+    vatNumber?: string;
+    phone?: string;
+  };
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface CreateRfqPayload {
+  title: string;
+  deliveryCity: string;
+  deliveryAddress?: string;
+  deliveryDate?: string;
+  closesAt: string;
+  notes?: string;
+  items: Array<{
+    materialId?: string;
+    description: string;
+    quantity: number;
+    unit: string;
+    notes?: string;
+  }>;
+}
+
+export interface CreateBidPayload {
+  validUntil: string;
+  deliveryDays: number;
+  notes?: string;
+  items: Array<{
+    rfqItemId: string;
+    unitPrice: number;
+    quantity?: number;
+    leadTimeDays?: number;
+    notes?: string;
+  }>;
+}
+
+export interface UpsertPricePayload {
+  materialId: string;
+  price: number;
+  minQty?: number;
+  leadTimeDays?: number;
+  city: string;
+  validUntil?: string;
+}
+
+export function formatSar(value: number | null | undefined, locale: "en" | "ar" = "en"): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  const formatted = new Intl.NumberFormat(locale === "ar" ? "ar-SA" : "en-SA", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+  }).format(value);
+  return locale === "ar" ? `${formatted} ر.س` : `SAR ${formatted}`;
+}

@@ -1,0 +1,56 @@
+name: CI
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: mysupplier, POSTGRES_PASSWORD: mysupplier, POSTGRES_DB: mysupplier }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mysupplier" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://mysupplier:mysupplier@localhost:5432/mysupplier?schema=public
+      JWT_SECRET: ci-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --filter @mysupplier/api...
+      - run: pnpm --filter @mysupplier/api prisma:generate
+      - run: pnpm --filter @mysupplier/api typecheck
+      - run: pnpm --filter @mysupplier/api test
+      - run: pnpm --filter @mysupplier/api prisma:migrate
+      - run: pnpm --filter @mysupplier/api prisma:seed
+      - run: pnpm --filter @mysupplier/api build
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --filter @mysupplier/web...
+      - run: pnpm --filter @mysupplier/web typecheck
+      - run: pnpm --filter @mysupplier/web build
+        env: { NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1 }
+
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --filter @mysupplier/mobile...
+      - run: pnpm --filter @mysupplier/mobile typecheck

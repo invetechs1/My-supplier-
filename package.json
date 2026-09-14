@@ -1,0 +1,17 @@
+{
+  "name": "mysupplier",
+  "private": true,
+  "version": "0.1.0",
+  "description": "MySupplier - Saudi building materials price discovery, RFQ and bidding platform",
+  "scripts": {
+    "dev:api": "pnpm --filter @mysupplier/api dev",
+    "dev:web": "pnpm --filter @mysupplier/web dev",
+    "dev:mobile": "pnpm --filter @mysupplier/mobile start",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "db:migrate": "pnpm --filter @mysupplier/api prisma:migrate",
+    "db:seed": "pnpm --filter @mysupplier/api prisma:seed"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "engines": { "node": ">=20" }
+}

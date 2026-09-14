@@ -1,0 +1,281 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  BUYER
+  SUPPLIER
+  ADMIN
+}
+
+enum CompanyType {
+  SUPPLIER
+  CONTRACTOR
+  CONSULTANT
+  OTHER
+}
+
+enum PriceSource {
+  SUPPLIER
+  MARKET
+  IMPORTED
+}
+
+enum RfqStatus {
+  OPEN
+  CLOSED
+  AWARDED
+  CANCELLED
+}
+
+enum BidStatus {
+  SUBMITTED
+  WITHDRAWN
+  ACCEPTED
+  REJECTED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum NotificationType {
+  NEW_RFQ
+  NEW_BID
+  BID_ACCEPTED
+  BID_REJECTED
+  ORDER_UPDATE
+  SYSTEM
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  name          String
+  phone         String?
+  role          Role           @default(BUYER)
+  locale        String         @default("en")
+  active        Boolean        @default(true)
+  companyId     String?
+  company       Company?       @relation(fields: [companyId], references: [id])
+  rfqs          Rfq[]
+  orders        Order[]
+  notifications Notification[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Company {
+  id          String         @id @default(cuid())
+  name        String
+  nameAr      String?
+  type        CompanyType    @default(SUPPLIER)
+  crNumber    String?
+  vatNumber   String?
+  city        String
+  region      String?
+  phone       String?
+  website     String?
+  verified    Boolean        @default(false)
+  rating      Float          @default(0)
+  ratingCount Int            @default(0)
+  users       User[]
+  listings    PriceListing[]
+  bids        Bid[]
+  orders      Order[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([city])
+  @@index([type, verified])
+}
+
+model Category {
+  id        String     @id @default(cuid())
+  slug      String     @unique
+  name      String
+  nameAr    String
+  icon      String?
+  parentId  String?
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  materials Material[]
+  createdAt DateTime   @default(now())
+}
+
+model Material {
+  id          String         @id @default(cuid())
+  sku         String         @unique
+  name        String
+  nameAr      String
+  unit        String
+  categoryId  String
+  category    Category       @relation(fields: [categoryId], references: [id])
+  brand       String?
+  specs       Json?
+  imageUrl    String?
+  description String?
+  active      Boolean        @default(true)
+  listings    PriceListing[]
+  rfqItems    RfqItem[]
+  history     PriceHistory[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([categoryId])
+  @@index([name])
+}
+
+model PriceListing {
+  id           String      @id @default(cuid())
+  materialId   String
+  material     Material    @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  companyId    String?
+  company      Company?    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  price        Decimal     @db.Decimal(14, 2)
+  currency     String      @default("SAR")
+  minQty       Float       @default(1)
+  leadTimeDays Int         @default(1)
+  city         String
+  source       PriceSource @default(SUPPLIER)
+  sourceName   String?
+  validUntil   DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@unique([materialId, companyId, city, sourceName])
+  @@index([materialId, city])
+  @@index([companyId])
+}
+
+model PriceHistory {
+  id         String   @id @default(cuid())
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  date       DateTime @db.Date
+  avg        Decimal  @db.Decimal(14, 2)
+  min        Decimal  @db.Decimal(14, 2)
+  max        Decimal  @db.Decimal(14, 2)
+
+  @@unique([materialId, date])
+}
+
+model Rfq {
+  id              String    @id @default(cuid())
+  reference       String    @unique
+  buyerId         String
+  buyer           User      @relation(fields: [buyerId], references: [id])
+  title           String
+  status          RfqStatus @default(OPEN)
+  deliveryCity    String
+  deliveryAddress String?
+  deliveryDate    DateTime?
+  closesAt        DateTime
+  notes           String?
+  awardedBidId    String?
+  items           RfqItem[]
+  bids            Bid[]
+  orders          Order[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status, closesAt])
+  @@index([buyerId])
+  @@index([deliveryCity])
+}
+
+model RfqItem {
+  id          String    @id @default(cuid())
+  rfqId       String
+  rfq         Rfq       @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  materialId  String?
+  material    Material? @relation(fields: [materialId], references: [id])
+  description String
+  quantity    Float
+  unit        String
+  notes       String?
+  bidItems    BidItem[]
+}
+
+model Bid {
+  id           String    @id @default(cuid())
+  rfqId        String
+  rfq          Rfq       @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  companyId    String
+  company      Company   @relation(fields: [companyId], references: [id])
+  totalPrice   Decimal   @db.Decimal(14, 2)
+  currency     String    @default("SAR")
+  validUntil   DateTime
+  deliveryDays Int       @default(7)
+  notes        String?
+  status       BidStatus @default(SUBMITTED)
+  items        BidItem[]
+  orders       Order[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([rfqId, companyId])
+  @@index([companyId, status])
+}
+
+model BidItem {
+  id           String  @id @default(cuid())
+  bidId        String
+  bid          Bid     @relation(fields: [bidId], references: [id], onDelete: Cascade)
+  rfqItemId    String
+  rfqItem      RfqItem @relation(fields: [rfqItemId], references: [id], onDelete: Cascade)
+  unitPrice    Decimal @db.Decimal(14, 2)
+  quantity     Float
+  leadTimeDays Int     @default(7)
+  notes        String?
+}
+
+model Order {
+  id        String      @id @default(cuid())
+  reference String      @unique
+  rfqId     String
+  rfq       Rfq         @relation(fields: [rfqId], references: [id])
+  bidId     String
+  bid       Bid         @relation(fields: [bidId], references: [id])
+  buyerId   String
+  buyer     User        @relation(fields: [buyerId], references: [id])
+  companyId String
+  company   Company     @relation(fields: [companyId], references: [id])
+  total     Decimal     @db.Decimal(14, 2)
+  currency  String      @default("SAR")
+  status    OrderStatus @default(PENDING)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([buyerId])
+  @@index([companyId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  link      String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+}
+
+model Counter {
+  key   String @id
+  value Int    @default(0)
+}
