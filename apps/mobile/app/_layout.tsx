@@ -1,0 +1,54 @@
+import React from "react";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { AuthProvider } from "@/lib/auth";
+import { I18nProvider } from "@/lib/i18n";
+import { colors } from "@/theme";
+
+export { ErrorBoundary } from "expo-router";
+
+export const unstable_settings = {
+  initialRouteName: "(tabs)",
+};
+
+/**
+ * Root layout. Unauthenticated users can browse everything under (tabs);
+ * screens that need an account (RFQ creation, bidding, orders, price list)
+ * use <RequireAuth> to send the user to the login screen and back.
+ */
+export default function RootLayout() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <I18nProvider>
+          <AuthProvider>
+            <StatusBar style="dark" />
+            <Stack
+              screenOptions={{
+                headerTintColor: colors.primary,
+                headerTitleStyle: { color: colors.text, fontWeight: "600" },
+                headerStyle: { backgroundColor: colors.surface },
+                headerShadowVisible: false,
+                contentStyle: { backgroundColor: colors.background },
+                headerBackTitleVisible: false,
+              }}
+            >
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="(auth)/login" options={{ title: "Log in", presentation: "modal" }} />
+              <Stack.Screen name="(auth)/register" options={{ title: "Create account", presentation: "modal" }} />
+              <Stack.Screen name="material/[id]" options={{ title: "Material" }} />
+              <Stack.Screen name="boq" options={{ title: "BOQ price research" }} />
+              <Stack.Screen name="rfq/new" options={{ title: "New RFQ" }} />
+              <Stack.Screen name="rfq/[id]" options={{ title: "RFQ" }} />
+              <Stack.Screen name="order/[id]" options={{ title: "Order" }} />
+              <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
+              <Stack.Screen name="supplier/prices" options={{ title: "My price list" }} />
+            </Stack>
+          </AuthProvider>
+        </I18nProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  );
+}
