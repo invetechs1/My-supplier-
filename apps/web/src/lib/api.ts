@@ -5,24 +5,34 @@ import type {
   BoqAnalysis,
   BoqLineInput,
   BoqToRfqPayload,
+  Cart,
   Category,
+  CheckoutPayload,
+  CheckoutResult,
   Company,
   CreateBidPayload,
   CreateRfqPayload,
+  Feed,
   LoginPayload,
   Material,
   Notification,
   Order,
+  OrderExtended,
   OrderStatus,
   Paginated,
+  PaymentStatus,
   PlatformStats,
   PriceHistoryPoint,
   PriceIndexEntry,
   PriceListing,
   PriceSummary,
+  Product,
+  ProductDetail,
   RegisterPayload,
   Rfq,
   Role,
+  ShopHome,
+  SupplierCatalogItem,
   UpsertPricePayload,
   User,
 } from "@mysupplier/shared";
@@ -170,6 +180,55 @@ export type MaterialsQuery = {
 
 export type MarketplaceRfq = Rfq & { myBidId?: string | null };
 
+export type ShopSort = "relevance" | "price_asc" | "price_desc" | "newest" | "popular";
+
+export type ShopProductsQuery = {
+  q?: string;
+  categoryId?: string;
+  city?: string;
+  brand?: string;
+  minPrice?: number | string;
+  maxPrice?: number | string;
+  inStock?: 1 | undefined;
+  sort?: ShopSort | string;
+  page?: number;
+  pageSize?: number;
+};
+
+/** A supplier's own listing; the API also returns tracked stock for it. */
+export type SupplierListing = PriceListing & { stock?: number | null };
+
+export interface SupplierPricePatch {
+  price?: number;
+  stock?: number | null;
+  minQty?: number;
+  leadTimeDays?: number;
+  validUntil?: string | null;
+}
+
+/** Row-level error returned by catalogue / feed imports (shape is loose on purpose). */
+export type ImportRowError = string | { index?: number; row?: number; sku?: string; name?: string; error?: string; message?: string };
+
+export interface CatalogImportResult {
+  created: number;
+  updated: number;
+  listings: number;
+  errors: ImportRowError[];
+}
+
+export interface FeedRow {
+  sku: string;
+  name: string;
+  nameAr?: string;
+  category: string;
+  unit: string;
+  brand?: string;
+  price: number;
+  city: string;
+  imageUrl?: string;
+  stock?: number;
+}
+
 export const api = {
   // Public
   health: () => request<{ ok: boolean }>("/health"),
@@ -221,11 +280,35 @@ export const api = {
     request<{ upserted: number }>("/supplier/prices/bulk", { method: "POST", body: { items } }),
   deletePrice: (id: string) => request<{ ok: boolean }>(`/supplier/prices/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
+  // Shop (public)
+  shopHome: () => request<ShopHome>("/shop/home"),
+  shopProducts: (query: ShopProductsQuery = {}) => request<Paginated<Product>>("/shop/products", { query }),
+  shopProduct: (id: string) => request<ProductDetail>(`/shop/products/${encodeURIComponent(id)}`),
+  shopBrands: () => request<string[]>("/shop/brands"),
+
+  // Cart & checkout (auth)
+  cart: () => request<Cart>("/cart"),
+  addCartItem: (listingId: string, quantity: number) =>
+    request<Cart>("/cart/items", { method: "POST", body: { listingId, quantity } }),
+  updateCartItem: (id: string, quantity: number) =>
+    request<Cart>(`/cart/items/${encodeURIComponent(id)}`, { method: "PATCH", body: { quantity } }),
+  removeCartItem: (id: string) => request<Cart>(`/cart/items/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  clearCart: () => request<Cart>("/cart", { method: "DELETE" }),
+  checkout: (payload: CheckoutPayload) => request<CheckoutResult>("/checkout", { method: "POST", body: payload }),
+
+  // Supplier catalogue
+  supplierCatalogImport: (items: SupplierCatalogItem[]) =>
+    request<CatalogImportResult>("/supplier/catalog/import", { method: "POST", body: { items } }),
+  updateSupplierPrice: (id: string, body: SupplierPricePatch) =>
+    request<SupplierListing>(`/supplier/prices/${encodeURIComponent(id)}`, { method: "PATCH", body }),
+
   // Orders
-  orders: (page = 1) => request<Paginated<Order>>("/orders", { query: { page } }),
-  order: (id: string) => request<Order>(`/orders/${encodeURIComponent(id)}`),
+  orders: (page = 1) => request<Paginated<OrderExtended>>("/orders", { query: { page } }),
+  order: (id: string) => request<OrderExtended>(`/orders/${encodeURIComponent(id)}`),
   updateOrderStatus: (id: string, status: OrderStatus) =>
-    request<Order>(`/orders/${encodeURIComponent(id)}/status`, { method: "PATCH", body: { status } }),
+    request<OrderExtended>(`/orders/${encodeURIComponent(id)}/status`, { method: "PATCH", body: { status } }),
+  updateOrderPayment: (id: string, paymentStatus: PaymentStatus) =>
+    request<OrderExtended>(`/orders/${encodeURIComponent(id)}/payment`, { method: "PATCH", body: { paymentStatus } }),
 
   // Notifications
   notifications: async (unreadOnly = false) => {
@@ -260,7 +343,25 @@ export const api = {
       method: "POST",
       body,
     }),
+
+  // Admin feeds
+  adminFeeds: () => request<Feed[]>("/admin/feeds"),
+  adminCreateFeed: (body: { name: string; url: string; format: "json" | "csv"; enabled?: boolean }) =>
+    request<Feed>("/admin/feeds", { method: "POST", body }),
+  adminRunFeed: (id: string) => request<CatalogImportResult>(`/admin/feeds/${encodeURIComponent(id)}/run`, { method: "POST" }),
+  adminDeleteFeed: (id: string) => request<{ ok: boolean }>(`/admin/feeds/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  adminFeedImport: (body: { sourceName: string; items: FeedRow[] }) =>
+    request<CatalogImportResult>("/admin/feeds/import", { method: "POST", body }),
 };
+
+/** Turn a loose import error row into a readable string. */
+export function importErrorText(err: ImportRowError): string {
+  if (typeof err === "string") return err;
+  const where = err.row ?? err.index;
+  const label = err.sku ?? err.name;
+  const msg = err.error ?? err.message ?? "Invalid row";
+  return `${where !== undefined ? `Row ${where}: ` : ""}${label ? `${label} — ` : ""}${msg}`;
+}
 
 export interface BoqAnalyzeBody {
   text?: string;

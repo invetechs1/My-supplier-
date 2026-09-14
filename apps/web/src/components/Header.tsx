@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { homeForRole, useAuth } from "@/lib/auth";
+import { useCart } from "@/lib/cart";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/format";
 
@@ -84,6 +85,58 @@ export function NotificationBell() {
   );
 }
 
+export function CartButton({ className }: { className?: string }) {
+  const { count } = useCart();
+  const { t } = useI18n();
+  return (
+    <Link
+      href="/cart"
+      className={cn("relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100", className)}
+      aria-label={`${t("nav.cart")}${count ? ` (${count})` : ""}`}
+      title={t("nav.cart")}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+      </svg>
+      {count > 0 && (
+        <span className="absolute -end-0.5 -top-0.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-bold text-white">
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+export function HeaderSearch({ className, autoFocus }: { className?: string; autoFocus?: boolean }) {
+  const { t } = useI18n();
+  const router = useRouter();
+  const [q, setQ] = useState("");
+  return (
+    <form
+      role="search"
+      className={cn("relative", className)}
+      onSubmit={(e) => {
+        e.preventDefault();
+        const term = q.trim();
+        router.push(term ? `/shop/products?q=${encodeURIComponent(term)}` : "/shop/products");
+      }}
+    >
+      <svg viewBox="0 0 20 20" fill="currentColor" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden>
+        <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
+      </svg>
+      <input
+        type="search"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder={t("nav.searchPlaceholder")}
+        aria-label={t("nav.searchPlaceholder")}
+        autoFocus={autoFocus}
+        className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 ps-9 pe-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-600/20"
+      />
+    </form>
+  );
+}
+
 function UserMenu() {
   const { user, logout } = useAuth();
   const { t } = useI18n();
@@ -154,6 +207,7 @@ export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const nav: Array<{ href: string; label: string; highlight?: boolean }> = [
+    { href: "/shop", label: t("nav.shop") },
     { href: "/materials", label: t("nav.materials") },
     { href: "/suppliers", label: t("nav.suppliers") },
     { href: "/compare", label: t("nav.compare") },
@@ -166,7 +220,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-8">
+        <div className="flex min-w-0 items-center gap-6">
           <Logo />
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
             {nav.map((item) => {
@@ -188,8 +242,10 @@ export function Header() {
             })}
           </nav>
         </div>
+        <HeaderSearch className="hidden w-full max-w-xs flex-1 lg:block" />
         <div className="flex items-center gap-2">
           <LangToggle className="hidden sm:inline-flex" />
+          <CartButton />
           <NotificationBell />
           {!loading && !user && (
             <>
@@ -217,12 +273,16 @@ export function Header() {
       </div>
       {mobileOpen && (
         <div className="border-t border-slate-200 bg-white px-4 py-3 md:hidden">
+          <HeaderSearch className="mb-3" />
           <nav className="flex flex-col gap-1" aria-label="Mobile">
             {nav.map((item) => (
               <Link key={item.href} href={item.href} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
                 {item.label}
               </Link>
             ))}
+            <Link href="/cart" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+              {t("nav.cart")}
+            </Link>
             {!user && (
               <Link href="/login" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
                 {t("nav.login")}
