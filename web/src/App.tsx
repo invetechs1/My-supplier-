@@ -1,0 +1,126 @@
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { useAuth } from './auth'
+import { useI18n } from './i18n'
+import { Portal, SiteLayout } from './components/Layout'
+import { Spinner } from './components/ui'
+import Home from './pages/Home'
+import Catalog from './pages/Catalog'
+import ProductPage from './pages/ProductPage'
+import ComparePage from './pages/ComparePage'
+import SuppliersPage from './pages/SuppliersPage'
+import SupplierProfilePage from './pages/SupplierProfilePage'
+import MarketPage from './pages/MarketPage'
+import Login from './pages/Login'
+import Register from './pages/Register'
+import NotificationsPage from './pages/NotificationsPage'
+import SettingsPage from './pages/SettingsPage'
+import BuyerHome from './pages/buyer/BuyerHome'
+import NewRFQ from './pages/buyer/NewRFQ'
+import MyRFQs from './pages/buyer/MyRFQs'
+import RFQDetail from './pages/RFQDetail'
+import BuyerOrders from './pages/buyer/BuyerOrders'
+import AlertsPage from './pages/buyer/AlertsPage'
+import SupplierDashboard from './pages/supplier/SupplierDashboard'
+import PriceList from './pages/supplier/PriceList'
+import OpenRFQs from './pages/supplier/OpenRFQs'
+import MyBids from './pages/supplier/MyBids'
+import SupplierOrders from './pages/supplier/SupplierOrders'
+import SupplierProfileEdit from './pages/supplier/SupplierProfileEdit'
+import AdminDashboard from './pages/admin/AdminDashboard'
+import AdminUsers from './pages/admin/AdminUsers'
+import AdminSuppliers from './pages/admin/AdminSuppliers'
+import AdminSources from './pages/admin/AdminSources'
+import AdminQuality from './pages/admin/AdminQuality'
+
+function Guard({ roles, children }: { roles: string[]; children: JSX.Element }) {
+  const { user, ready } = useAuth()
+  const loc = useLocation()
+  if (!ready) return <div className="container" style={{ padding: 40 }}><Spinner /></div>
+  if (!user) return <Navigate to="/login" state={{ from: loc.pathname }} replace />
+  if (!roles.includes(user.role)) return <Navigate to="/" replace />
+  return children
+}
+
+function BuyerPortal() {
+  const { t } = useI18n()
+  return <Portal links={[
+    { to: '/buyer', label: t('dashboard'), icon: '🏠' },
+    { to: '/buyer/rfq/new', label: t('new_rfq'), icon: '➕' },
+    { to: '/buyer/rfqs', label: t('my_rfqs'), icon: '📋' },
+    { to: '/buyer/orders', label: t('orders'), icon: '📦' },
+    { to: '/buyer/alerts', label: t('alerts'), icon: '🔔' },
+    { to: '/settings', label: t('settings'), icon: '⚙️' },
+  ]} />
+}
+function SupplierPortal() {
+  const { t } = useI18n()
+  return <Portal links={[
+    { to: '/supplier', label: t('dashboard'), icon: '📊' },
+    { to: '/supplier/prices', label: t('price_list'), icon: '🏷️' },
+    { to: '/supplier/rfqs', label: t('open_rfqs'), icon: '📨' },
+    { to: '/supplier/bids', label: t('my_bids'), icon: '📝' },
+    { to: '/supplier/orders', label: t('orders'), icon: '📦' },
+    { to: '/supplier/profile', label: t('profile'), icon: '🏢' },
+    { to: '/settings', label: t('settings'), icon: '⚙️' },
+  ]} />
+}
+function AdminPortal() {
+  const { t } = useI18n()
+  return <Portal links={[
+    { to: '/admin', label: t('dashboard'), icon: '📈' },
+    { to: '/admin/suppliers', label: t('suppliers'), icon: '🏢' },
+    { to: '/admin/users', label: t('users'), icon: '👥' },
+    { to: '/admin/sources', label: t('sources'), icon: '🔗' },
+    { to: '/admin/quality', label: t('data_quality'), icon: '🧪' },
+    { to: '/settings', label: t('settings'), icon: '⚙️' },
+  ]} />
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route element={<SiteLayout />}>
+        <Route index element={<Home />} />
+        <Route path="catalog" element={<Catalog />} />
+        <Route path="products/:id" element={<ProductPage />} />
+        <Route path="compare" element={<ComparePage />} />
+        <Route path="suppliers" element={<SuppliersPage />} />
+        <Route path="suppliers/:id" element={<SupplierProfilePage />} />
+        <Route path="market" element={<MarketPage />} />
+        <Route path="login" element={<Login />} />
+        <Route path="register" element={<Register />} />
+        <Route path="notifications" element={<Guard roles={['buyer', 'supplier', 'admin']}><NotificationsPage /></Guard>} />
+        <Route path="settings" element={<Guard roles={['buyer', 'supplier', 'admin']}><div className="container" style={{ padding: '20px 16px' }}><SettingsPage /></div></Guard>} />
+        <Route path="rfq/:id" element={<Guard roles={['buyer', 'supplier', 'admin']}><div className="container" style={{ padding: '20px 16px' }}><RFQDetail /></div></Guard>} />
+
+        <Route path="buyer" element={<Guard roles={['buyer', 'admin']}><BuyerPortal /></Guard>}>
+          <Route index element={<BuyerHome />} />
+          <Route path="rfq/new" element={<NewRFQ />} />
+          <Route path="rfqs" element={<MyRFQs />} />
+          <Route path="rfqs/:id" element={<RFQDetail />} />
+          <Route path="orders" element={<BuyerOrders />} />
+          <Route path="alerts" element={<AlertsPage />} />
+        </Route>
+
+        <Route path="supplier" element={<Guard roles={['supplier']}><SupplierPortal /></Guard>}>
+          <Route index element={<SupplierDashboard />} />
+          <Route path="prices" element={<PriceList />} />
+          <Route path="rfqs" element={<OpenRFQs />} />
+          <Route path="rfqs/:id" element={<RFQDetail />} />
+          <Route path="bids" element={<MyBids />} />
+          <Route path="orders" element={<SupplierOrders />} />
+          <Route path="profile" element={<SupplierProfileEdit />} />
+        </Route>
+
+        <Route path="admin" element={<Guard roles={['admin']}><AdminPortal /></Guard>}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="suppliers" element={<AdminSuppliers />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="sources" element={<AdminSources />} />
+          <Route path="quality" element={<AdminQuality />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
+  )
+}

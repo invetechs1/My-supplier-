@@ -1,0 +1,25 @@
+import { StyleSheet } from 'react-native';
+export const C = { primary: '#175934', primary2: '#2E9E5B', deep: '#0F3D24', soft: '#EDF5EF', light: '#C6E5D1', canvas: '#F5F8F6', card: '#fff', ink: '#182420', ink2: '#124A2C', muted: '#6B7A70', line: '#E1EAE3', warn: '#B3541E', warnSoft: '#FDF0E4', danger: '#A33333', dangerSoft: '#FBEAEA', info: '#2B4F8A', infoSoft: '#E8F0FA' };
+export const S = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: C.canvas },
+  pad: { padding: 14 },
+  card: { backgroundColor: C.card, borderRadius: 11, borderWidth: 1, borderColor: C.line, padding: 14, marginBottom: 10 },
+  h1: { fontSize: 22, fontWeight: '700', color: C.ink2, marginBottom: 6 },
+  h2: { fontSize: 17, fontWeight: '700', color: C.ink2, marginBottom: 6 },
+  text: { color: C.ink, fontSize: 14.5 },
+  muted: { color: C.muted, fontSize: 12.5 },
+  bold: { fontWeight: '700', color: C.ink },
+  price: { fontSize: 20, fontWeight: '700', color: C.primary },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  between: { justifyContent: 'space-between' },
+  input: { borderWidth: 1, borderColor: C.line, borderRadius: 8, padding: 10, backgroundColor: '#FAFCFA', fontSize: 15, color: C.ink, marginBottom: 10, textAlign: 'right' },
+  btn: { backgroundColor: C.primary, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8, alignItems: 'center' },
+  btnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  btnGhost: { backgroundColor: C.soft, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center' },
+  btnGhostText: { color: C.primary, fontWeight: '700' },
+  badge: { backgroundColor: C.soft, color: C.primary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, fontSize: 11.5, fontWeight: '700', overflow: 'hidden' },
+  label: { color: C.muted, fontSize: 12.5, marginBottom: 4 },
+  error: { backgroundColor: C.dangerSoft, color: C.danger, padding: 10, borderRadius: 8, marginBottom: 10 },
+  ok: { backgroundColor: C.soft, color: C.primary, padding: 10, borderRadius: 8, marginBottom: 10 },
+  hl: { backgroundColor: C.soft },
+});

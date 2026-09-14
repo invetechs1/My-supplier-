@@ -1,0 +1,9 @@
+{
+  "cli": { "version": ">= 12.0.0" },
+  "build": {
+    "development": { "developmentClient": true, "distribution": "internal" },
+    "preview": { "distribution": "internal", "env": { "API_BASE": "https://staging-api.mysupplier.sa" } },
+    "production": { "autoIncrement": true, "env": { "API_BASE": "https://api.mysupplier.sa" } }
+  },
+  "submit": { "production": {} }
+}

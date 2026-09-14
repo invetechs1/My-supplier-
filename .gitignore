@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+backend/data/
+*.db
+*.db-journal
+.pytest_cache/
+
+# Node
+node_modules/
+web/dist/
+mobile/.expo/
+mobile/dist/
+*.log
+
+# Env & secrets
+.env
+.env.local
+*.secret
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
