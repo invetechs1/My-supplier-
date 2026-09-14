@@ -13,6 +13,13 @@ plus an RFQ / bidding marketplace where registered suppliers compete for your or
 Docs: [API contract](docs/API.md) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md)
 
 ## What it does
+* **BOQ research (the "don't drive around" feature)** – anyone, even a guest, pastes or uploads a
+  bill of quantities in English or Arabic ("Rebar 16mm, 25, ton", "1200 bags OPC cement 50kg",
+  "حديد تسليح 12 مم 15 طن"). The engine matches every line to a catalogue material (with confidence and
+  alternatives), pulls every supplier's price for it, and answers: the best price and supplier
+  per line, the cheapest mixed basket, the best single supplier that can cover the whole BOQ,
+  savings versus the market average, and a per-supplier breakdown. One click turns the BOQ into an
+  RFQ so registered suppliers bid on it. Available on web (`/boq`) and mobile.
 * **Price discovery** – search 60+ seeded materials (cement, rebar, blocks, aggregates, tiles,
   paints, MEP, insulation, timber, gypsum, doors/windows). Each material shows the lowest,
   average, median and highest price, every supplier's listing, imported market reference prices,
