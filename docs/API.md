@@ -26,6 +26,34 @@ Roles: `BUYER` (contractor / anyone buying), `SUPPLIER` (must have a company), `
 | POST | `/boq/analyze` | `{ text? , lines?: BoqLineInput[], city?, verifiedOnly? }` -> `BoqAnalysis`: every line matched to a material (confidence + alternatives; pass `materialId` on a line to pin a match), all supplier offers sorted by price, `bestOffer` per line, `summary` (cheapestTotal, averageTotal, savings, bestSingleSupplier), `suppliers[]` breakdown (coverage %, total, lead time) |
 | POST | `/boq/to-rfq` | auth BUYER: `{ title, deliveryCity, deliveryAddress?, deliveryDate?, closesInDays=7, notes?, lines }` -> `Rfq` (suppliers notified) |
 
+## Shop (Amazon-style storefront, public)
+| GET | `/shop/home` | `ShopHome` – featured, deals (best price ≥5% under average), new arrivals, categories, stats |
+| GET | `/shop/products?q=&categoryId=&city=&brand=&minPrice=&maxPrice=&inStock=1&sort=relevance|price_asc|price_desc|newest|popular&page=&pageSize=` | `Paginated<Product>` (each with `bestOffer`, `offerCount`, `isDeal`, `inStock`) |
+| GET | `/shop/products/:id` | `ProductDetail` – all `offers` sorted by price (like "other sellers"), `summary`, `history`, `related` |
+| GET | `/shop/brands` | `string[]` |
+| GET | `/images/materials/:sku.svg` | generated product image (SVG) used when a material has no `imageUrl` |
+
+## Cart & checkout (auth: any role; buyers typically)
+| GET | `/cart` | `Cart` (totals include 15% VAT and delivery fee per supplier) |
+| POST | `/cart/items` | `{ listingId, quantity }` -> `Cart` (adds or increments; validates minQty and stock) |
+| PATCH | `/cart/items/:id` | `{ quantity }` -> `Cart` |
+| DELETE | `/cart/items/:id` | `Cart` |
+| DELETE | `/cart` | `Cart` (empty) |
+| POST | `/checkout` | `CheckoutPayload` -> `CheckoutResult`: one `DIRECT` order per supplier in the cart, cart emptied, suppliers notified |
+
+Orders (`/orders`) now return `OrderExtended` (with `type`, `items`, `subtotal`, `vat`, `deliveryFee`, `paymentStatus`, delivery details). Suppliers can `PATCH /orders/:id/status`; `PATCH /orders/:id/payment { paymentStatus }` is supplier/admin.
+
+## Supplier catalogue (role SUPPLIER)
+| POST | `/supplier/catalog/import` | `{ items: SupplierCatalogItem[] }` -> `{ created, updated, listings, errors[] }` creates new materials (source SUPPLIER) when the SKU/name is unknown and upserts the supplier's offer with stock |
+| PATCH | `/supplier/prices/:id` | `{ price?, stock?, minQty?, leadTimeDays?, validUntil? }` -> `PriceListing` |
+
+## Admin feeds – collecting construction products from external sources (role ADMIN)
+| GET | `/admin/feeds` | `Feed[]` |
+| POST | `/admin/feeds` | `{ name, url, format: "json"|"csv", enabled? }` -> `Feed`. Source must return rows `{ sku, name, nameAr?, category, unit, brand?, price, city, imageUrl?, stock? }` |
+| POST | `/admin/feeds/:id/run` | fetches the URL now -> `{ created, updated, listings, errors[] }` (materials are created with source FEED; prices stored as MARKET listings keyed by feed name). A daily job runs all enabled feeds. |
+| POST | `/admin/feeds/import` | same row format inline: `{ sourceName, items: [...] }` (no URL) |
+| DELETE | `/admin/feeds/:id` | `{ ok: true }` |
+
 ## Auth
 | POST | `/auth/register` | body `RegisterPayload` -> `AuthResponse` (SUPPLIER must include `company`) |
 | POST | `/auth/login` | body `LoginPayload` -> `AuthResponse` |

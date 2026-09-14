@@ -18,30 +18,40 @@ const categories = [
   { slug: "timber-formwork", name: "Timber & Formwork", nameAr: "الأخشاب والشدات", icon: "🪵" },
   { slug: "gypsum-ceilings", name: "Gypsum & Ceilings", nameAr: "الجبس والأسقف", icon: "⬜" },
   { slug: "doors-windows", name: "Doors, Windows & Glass", nameAr: "الأبواب والنوافذ والزجاج", icon: "🚪" },
+  { slug: "tools-equipment", name: "Tools & Equipment", nameAr: "العدد والمعدات", icon: "🛠️" },
+  { slug: "safety-ppe", name: "Safety & PPE", nameAr: "السلامة ومعدات الوقاية", icon: "🦺" },
+  { slug: "hardware-fasteners", name: "Hardware & Fasteners", nameAr: "الخردوات والمثبتات", icon: "🔩" },
+  { slug: "hvac", name: "HVAC & Ventilation", nameAr: "التكييف والتهوية", icon: "❄️" },
+  { slug: "sanitary-ware", name: "Sanitary Ware & Kitchens", nameAr: "الأدوات الصحية والمطابخ", icon: "🚿" },
+  { slug: "lighting", name: "Lighting & Switchgear", nameAr: "الإنارة والمفاتيح", icon: "💡" },
+  { slug: "scaffolding-access", name: "Scaffolding & Access", nameAr: "السقالات ومعدات الوصول", icon: "🪜" },
+  { slug: "roofing-cladding", name: "Roofing & Cladding", nameAr: "الأسقف والتكسيات", icon: "🏠" },
+  { slug: "chemicals-adhesives", name: "Chemicals, Adhesives & Admixtures", nameAr: "الكيماويات واللواصق والإضافات", icon: "🧪" },
+  { slug: "landscaping-precast", name: "Landscaping & Precast", nameAr: "تنسيق المواقع والخرسانة مسبقة الصب", icon: "🌳" },
 ];
 
-type M = { sku: string; name: string; nameAr: string; unit: string; cat: string; brand?: string; base: number; specs?: Record<string, string | number> };
+type M = { sku: string; name: string; nameAr: string; unit: string; cat: string; brand?: string; base: number; specs?: Record<string, string | number>; featured?: boolean; tags?: string[] };
 const materials: M[] = [
   // Cement & concrete
-  { sku: "CEM-OPC-50", name: "Ordinary Portland Cement Type I (50kg bag)", nameAr: "أسمنت بورتلاندي عادي نوع 1 (50 كجم)", unit: "bag", cat: "cement-concrete", brand: "Yamama Cement", base: 15.5, specs: { standard: "SASO 2847", weight_kg: 50 } },
+  { featured: true, sku: "CEM-OPC-50", name: "Ordinary Portland Cement Type I (50kg bag)", nameAr: "أسمنت بورتلاندي عادي نوع 1 (50 كجم)", unit: "bag", cat: "cement-concrete", brand: "Yamama Cement", base: 15.5, specs: { standard: "SASO 2847", weight_kg: 50 } },
   { sku: "CEM-SRC-50", name: "Sulphate Resistant Cement Type V (50kg bag)", nameAr: "أسمنت مقاوم للكبريتات نوع 5 (50 كجم)", unit: "bag", cat: "cement-concrete", brand: "Saudi Cement", base: 17.25, specs: { standard: "ASTM C150 Type V" } },
   { sku: "CEM-WHT-50", name: "White Cement (50kg bag)", nameAr: "أسمنت أبيض (50 كجم)", unit: "bag", cat: "cement-concrete", brand: "Riyadh Cement", base: 42, },
   { sku: "CEM-BULK-T", name: "Bulk OPC Cement (per ton)", nameAr: "أسمنت سائب (طن)", unit: "ton", cat: "cement-concrete", brand: "Qassim Cement", base: 255 },
   { sku: "RMC-C25", name: "Ready Mix Concrete C25 (per m³)", nameAr: "خرسانة جاهزة C25 (م³)", unit: "m3", cat: "cement-concrete", base: 215, specs: { strength_mpa: 25, slump_mm: 100 } },
-  { sku: "RMC-C30", name: "Ready Mix Concrete C30 (per m³)", nameAr: "خرسانة جاهزة C30 (م³)", unit: "m3", cat: "cement-concrete", base: 232, specs: { strength_mpa: 30 } },
+  { featured: true, sku: "RMC-C30", name: "Ready Mix Concrete C30 (per m³)", nameAr: "خرسانة جاهزة C30 (م³)", unit: "m3", cat: "cement-concrete", base: 232, specs: { strength_mpa: 30 } },
   { sku: "RMC-C40", name: "Ready Mix Concrete C40 (per m³)", nameAr: "خرسانة جاهزة C40 (م³)", unit: "m3", cat: "cement-concrete", base: 265, specs: { strength_mpa: 40 } },
   // Steel
   { sku: "RBR-8", name: "Deformed Rebar 8mm Grade 60 (per ton)", nameAr: "حديد تسليح 8 مم درجة 60 (طن)", unit: "ton", cat: "steel-rebar", brand: "SABIC Hadeed", base: 2780, specs: { grade: "B500B", diameter_mm: 8 } },
   { sku: "RBR-10", name: "Deformed Rebar 10mm Grade 60 (per ton)", nameAr: "حديد تسليح 10 مم (طن)", unit: "ton", cat: "steel-rebar", brand: "SABIC Hadeed", base: 2720, specs: { diameter_mm: 10 } },
   { sku: "RBR-12", name: "Deformed Rebar 12mm Grade 60 (per ton)", nameAr: "حديد تسليح 12 مم (طن)", unit: "ton", cat: "steel-rebar", brand: "Rajhi Steel", base: 2690, specs: { diameter_mm: 12 } },
-  { sku: "RBR-16", name: "Deformed Rebar 16mm Grade 60 (per ton)", nameAr: "حديد تسليح 16 مم (طن)", unit: "ton", cat: "steel-rebar", brand: "Rajhi Steel", base: 2660, specs: { diameter_mm: 16 } },
+  { featured: true, sku: "RBR-16", name: "Deformed Rebar 16mm Grade 60 (per ton)", nameAr: "حديد تسليح 16 مم (طن)", unit: "ton", cat: "steel-rebar", brand: "Rajhi Steel", base: 2660, specs: { diameter_mm: 16 } },
   { sku: "RBR-20", name: "Deformed Rebar 20mm Grade 60 (per ton)", nameAr: "حديد تسليح 20 مم (طن)", unit: "ton", cat: "steel-rebar", brand: "Ittefaq Steel", base: 2650, specs: { diameter_mm: 20 } },
   { sku: "RBR-25", name: "Deformed Rebar 25mm Grade 60 (per ton)", nameAr: "حديد تسليح 25 مم (طن)", unit: "ton", cat: "steel-rebar", brand: "Ittefaq Steel", base: 2650, specs: { diameter_mm: 25 } },
   { sku: "STL-MESH-A142", name: "Welded Wire Mesh A142 (6m x 2.4m sheet)", nameAr: "شبك حديد ملحوم A142", unit: "sheet", cat: "steel-rebar", base: 165 },
   { sku: "STL-IPE-200", name: "IPE 200 Steel Beam (per ton)", nameAr: "كمرة حديد IPE 200 (طن)", unit: "ton", cat: "steel-rebar", base: 3350 },
   { sku: "STL-HSS-50", name: "Square Hollow Section 50x50x3mm (6m)", nameAr: "ماسورة مربعة 50×50×3 مم (6م)", unit: "piece", cat: "steel-rebar", base: 78 },
   // Blocks
-  { sku: "BLK-HOL-20", name: "Hollow Concrete Block 20cm (40x20x20)", nameAr: "بلوك أسمنتي مفرغ 20 سم", unit: "piece", cat: "blocks-bricks", base: 2.85 },
+  { featured: true, sku: "BLK-HOL-20", name: "Hollow Concrete Block 20cm (40x20x20)", nameAr: "بلوك أسمنتي مفرغ 20 سم", unit: "piece", cat: "blocks-bricks", base: 2.85 },
   { sku: "BLK-HOL-15", name: "Hollow Concrete Block 15cm (40x20x15)", nameAr: "بلوك أسمنتي مفرغ 15 سم", unit: "piece", cat: "blocks-bricks", base: 2.45 },
   { sku: "BLK-SOL-10", name: "Solid Concrete Block 10cm", nameAr: "بلوك أسمنتي مصمت 10 سم", unit: "piece", cat: "blocks-bricks", base: 2.1 },
   { sku: "BLK-INS-20", name: "Insulated Thermal Block 20cm", nameAr: "بلوك عازل حراري 20 سم", unit: "piece", cat: "blocks-bricks", base: 6.4 },
@@ -56,14 +66,14 @@ const materials: M[] = [
   { sku: "SND-RED", name: "Red Sand / Fill (per m³)", nameAr: "رمل أحمر / دفان (م³)", unit: "m3", cat: "aggregates-sand", base: 32 },
   { sku: "AGG-SUB", name: "Sub-base Material Class A (per m³)", nameAr: "طبقة أساس فئة أ (م³)", unit: "m3", cat: "aggregates-sand", base: 42 },
   // Tiles
-  { sku: "TIL-POR-60", name: "Porcelain Tile 60x60 Matt (per m²)", nameAr: "بورسلان 60×60 مطفي (م²)", unit: "m2", cat: "tiles-flooring", brand: "Saudi Ceramics", base: 48 },
+  { featured: true, sku: "TIL-POR-60", name: "Porcelain Tile 60x60 Matt (per m²)", nameAr: "بورسلان 60×60 مطفي (م²)", unit: "m2", cat: "tiles-flooring", brand: "Saudi Ceramics", base: 48 },
   { sku: "TIL-POR-120", name: "Porcelain Tile 120x60 Polished (per m²)", nameAr: "بورسلان 120×60 لامع (م²)", unit: "m2", cat: "tiles-flooring", brand: "RAK Ceramics", base: 79 },
   { sku: "TIL-CER-30", name: "Ceramic Wall Tile 30x60 (per m²)", nameAr: "سيراميك جدران 30×60 (م²)", unit: "m2", cat: "tiles-flooring", brand: "Saudi Ceramics", base: 32 },
   { sku: "MRB-CAR", name: "Carrara Marble Slab 2cm (per m²)", nameAr: "رخام كرارا 2 سم (م²)", unit: "m2", cat: "tiles-flooring", base: 260 },
   { sku: "GRT-BLK", name: "Black Granite 2cm (per m²)", nameAr: "جرانيت أسود 2 سم (م²)", unit: "m2", cat: "tiles-flooring", base: 190 },
   { sku: "TIL-ADH-25", name: "Tile Adhesive C2 (25kg bag)", nameAr: "لاصق بلاط C2 (25 كجم)", unit: "bag", cat: "tiles-flooring", brand: "Weber Saudi", base: 28 },
   // Paints
-  { sku: "PNT-EMU-INT", name: "Interior Emulsion Paint (18L drum)", nameAr: "دهان داخلي إيملشن (18 لتر)", unit: "drum", cat: "paints-coatings", brand: "Jotun", base: 235 },
+  { featured: true, sku: "PNT-EMU-INT", name: "Interior Emulsion Paint (18L drum)", nameAr: "دهان داخلي إيملشن (18 لتر)", unit: "drum", cat: "paints-coatings", brand: "Jotun", base: 235 },
   { sku: "PNT-EXT-ACR", name: "Exterior Acrylic Paint (18L drum)", nameAr: "دهان خارجي أكريليك (18 لتر)", unit: "drum", cat: "paints-coatings", brand: "National Paints", base: 290 },
   { sku: "PNT-PRM", name: "Wall Primer Sealer (18L drum)", nameAr: "أساس جدران (18 لتر)", unit: "drum", cat: "paints-coatings", brand: "Sipes", base: 150 },
   { sku: "PNT-PUT-25", name: "Wall Putty (25kg bag)", nameAr: "معجون جدران (25 كجم)", unit: "bag", cat: "paints-coatings", brand: "Sipes", base: 38 },
@@ -71,19 +81,19 @@ const materials: M[] = [
   // Plumbing
   { sku: "PVC-110", name: "uPVC Drainage Pipe 110mm (6m)", nameAr: "ماسورة صرف uPVC 110 مم (6م)", unit: "piece", cat: "plumbing", brand: "Saudi Pipes", base: 62 },
   { sku: "PVC-160", name: "uPVC Drainage Pipe 160mm (6m)", nameAr: "ماسورة صرف uPVC 160 مم (6م)", unit: "piece", cat: "plumbing", brand: "Amiantit", base: 128 },
-  { sku: "PPR-25", name: "PPR Pipe PN20 25mm (4m)", nameAr: "ماسورة PPR PN20 25 مم (4م)", unit: "piece", cat: "plumbing", brand: "Aquatherm", base: 21 },
+  { featured: true, sku: "PPR-25", name: "PPR Pipe PN20 25mm (4m)", nameAr: "ماسورة PPR PN20 25 مم (4م)", unit: "piece", cat: "plumbing", brand: "Aquatherm", base: 21 },
   { sku: "PPR-32", name: "PPR Pipe PN20 32mm (4m)", nameAr: "ماسورة PPR PN20 32 مم (4م)", unit: "piece", cat: "plumbing", brand: "Aquatherm", base: 34 },
   { sku: "HDPE-63", name: "HDPE Pipe PE100 63mm PN16 (per m)", nameAr: "ماسورة HDPE 63 مم (م)", unit: "m", cat: "plumbing", base: 19 },
   { sku: "WTR-TNK-2000", name: "Water Tank Polyethylene 2000L", nameAr: "خزان مياه بولي إيثيلين 2000 لتر", unit: "piece", cat: "plumbing", brand: "Al Rashed", base: 880 },
   // Electrical
-  { sku: "CBL-2.5", name: "Copper Cable 2.5mm² Single Core (100m roll)", nameAr: "كابل نحاس 2.5 مم² (100م)", unit: "roll", cat: "electrical", brand: "Riyadh Cables", base: 245 },
+  { featured: true, sku: "CBL-2.5", name: "Copper Cable 2.5mm² Single Core (100m roll)", nameAr: "كابل نحاس 2.5 مم² (100م)", unit: "roll", cat: "electrical", brand: "Riyadh Cables", base: 245 },
   { sku: "CBL-4", name: "Copper Cable 4mm² Single Core (100m roll)", nameAr: "كابل نحاس 4 مم² (100م)", unit: "roll", cat: "electrical", brand: "Riyadh Cables", base: 385 },
   { sku: "CBL-16-4C", name: "Armoured Cable 4x16mm² (per m)", nameAr: "كابل مسلح 4×16 مم² (م)", unit: "m", cat: "electrical", brand: "Saudi Cable", base: 54 },
   { sku: "CND-20", name: "PVC Conduit 20mm (3m)", nameAr: "ماسورة كهرباء PVC 20 مم (3م)", unit: "piece", cat: "electrical", base: 4.2 },
   { sku: "DB-12W", name: "Distribution Board 12-way", nameAr: "لوحة توزيع 12 خط", unit: "piece", cat: "electrical", brand: "Schneider", base: 420 },
   { sku: "MCB-32", name: "MCB 32A Single Pole", nameAr: "قاطع 32 أمبير", unit: "piece", cat: "electrical", brand: "ABB", base: 28 },
   // Insulation
-  { sku: "INS-XPS-50", name: "XPS Insulation Board 50mm (per m²)", nameAr: "لوح عزل XPS 50 مم (م²)", unit: "m2", cat: "insulation-waterproofing", brand: "Dow", base: 24 },
+  { featured: true, sku: "INS-XPS-50", name: "XPS Insulation Board 50mm (per m²)", nameAr: "لوح عزل XPS 50 مم (م²)", unit: "m2", cat: "insulation-waterproofing", brand: "Dow", base: 24 },
   { sku: "INS-PU-50", name: "Polyurethane Board 50mm (per m²)", nameAr: "لوح بولي يوريثان 50 مم (م²)", unit: "m2", cat: "insulation-waterproofing", base: 34 },
   { sku: "WP-MEM-4", name: "Bituminous Membrane 4mm (10m² roll)", nameAr: "لفة عزل بيتوميني 4 مم (10 م²)", unit: "roll", cat: "insulation-waterproofing", brand: "Bitumat", base: 145 },
   { sku: "WP-CEM-20", name: "Cementitious Waterproofing (20kg)", nameAr: "عزل أسمنتي (20 كجم)", unit: "bag", cat: "insulation-waterproofing", brand: "Sika", base: 165 },
@@ -94,7 +104,7 @@ const materials: M[] = [
   { sku: "TMB-4x4", name: "Timber 4x4\" x 4m (white wood)", nameAr: "خشب أبيض 4×4 بوصة (4م)", unit: "piece", cat: "timber-formwork", base: 58 },
   { sku: "SCF-PROP", name: "Steel Adjustable Prop 3.5m", nameAr: "جاك حديد 3.5 م", unit: "piece", cat: "timber-formwork", base: 95 },
   // Gypsum
-  { sku: "GYP-BRD-12", name: "Gypsum Board 12.5mm (120x240cm)", nameAr: "لوح جبس 12.5 مم", unit: "sheet", cat: "gypsum-ceilings", brand: "Gyproc", base: 29 },
+  { featured: true, sku: "GYP-BRD-12", name: "Gypsum Board 12.5mm (120x240cm)", nameAr: "لوح جبس 12.5 مم", unit: "sheet", cat: "gypsum-ceilings", brand: "Gyproc", base: 29 },
   { sku: "GYP-MR-12", name: "Moisture Resistant Gypsum Board 12.5mm", nameAr: "لوح جبس مقاوم للرطوبة 12.5 مم", unit: "sheet", cat: "gypsum-ceilings", brand: "Knauf", base: 41 },
   { sku: "GYP-PLS-25", name: "Gypsum Plaster (25kg bag)", nameAr: "جبس بورد لصق (25 كجم)", unit: "bag", cat: "gypsum-ceilings", base: 17 },
   { sku: "CLG-TILE-60", name: "Mineral Fiber Ceiling Tile 60x60 (per m²)", nameAr: "سقف مستعار 60×60 (م²)", unit: "m2", cat: "gypsum-ceilings", brand: "Armstrong", base: 38 },
@@ -103,6 +113,73 @@ const materials: M[] = [
   { sku: "DR-WD-INT", name: "Interior Wooden Door (complete set)", nameAr: "باب خشب داخلي (طقم كامل)", unit: "piece", cat: "doors-windows", base: 950 },
   { sku: "WIN-ALU-DG", name: "Aluminium Window Double Glazed (per m²)", nameAr: "نافذة ألمنيوم زجاج مزدوج (م²)", unit: "m2", cat: "doors-windows", brand: "Alupco", base: 620 },
   { sku: "GLS-TMP-10", name: "Tempered Glass 10mm Clear (per m²)", nameAr: "زجاج مقسى 10 مم (م²)", unit: "m2", cat: "doors-windows", base: 210 },
+  // Tools & equipment
+  { sku: "TL-DRL-HAM", name: "Rotary Hammer Drill SDS-Plus 800W", nameAr: "دريل هيلتي 800 واط", unit: "piece", cat: "tools-equipment", brand: "Bosch", base: 690, featured: true, tags: ["drill", "hilti"] },
+  { sku: "TL-GRD-115", name: "Angle Grinder 115mm 900W", nameAr: "صاروخ جلخ 115 مم", unit: "piece", cat: "tools-equipment", brand: "Makita", base: 260 },
+  { sku: "TL-MIX-350", name: "Concrete Mixer 350L Diesel", nameAr: "خلاطة خرسانة 350 لتر ديزل", unit: "piece", cat: "tools-equipment", base: 7800 },
+  { sku: "TL-VIB-45", name: "Concrete Vibrator 45mm Poker + Motor", nameAr: "هزاز خرسانة 45 مم", unit: "piece", cat: "tools-equipment", base: 1450 },
+  { sku: "TL-LVL-LAS", name: "Laser Level Cross-Line Green", nameAr: "ميزان ليزر أخضر", unit: "piece", cat: "tools-equipment", brand: "DeWalt", base: 540 },
+  { sku: "TL-WHB", name: "Wheelbarrow Heavy Duty 100L", nameAr: "عربة يد 100 لتر", unit: "piece", cat: "tools-equipment", base: 185 },
+  { sku: "TL-CUT-TIL", name: "Manual Tile Cutter 800mm", nameAr: "قطاعة بلاط يدوية 80 سم", unit: "piece", cat: "tools-equipment", brand: "Rubi", base: 720 },
+  // Safety
+  { sku: "PPE-HLM", name: "Safety Helmet with Ratchet (EN 397)", nameAr: "خوذة سلامة", unit: "piece", cat: "safety-ppe", brand: "3M", base: 28, featured: true, tags: ["helmet", "hard hat"] },
+  { sku: "PPE-VST", name: "Hi-Vis Safety Vest Class 2", nameAr: "سترة عاكسة", unit: "piece", cat: "safety-ppe", base: 12 },
+  { sku: "PPE-BOOT", name: "Steel Toe Safety Boots S3", nameAr: "حذاء سلامة S3", unit: "piece", cat: "safety-ppe", brand: "Safety Jogger", base: 145 },
+  { sku: "PPE-GLV", name: "Nitrile Coated Work Gloves (12 pairs)", nameAr: "قفازات عمل (12 زوج)", unit: "bundle", cat: "safety-ppe", base: 48 },
+  { sku: "PPE-HRN", name: "Full Body Safety Harness + Lanyard", nameAr: "حزام أمان كامل مع حبل", unit: "piece", cat: "safety-ppe", base: 210 },
+  { sku: "PPE-CONE", name: "Traffic Cone 75cm Reflective", nameAr: "قمع مرور 75 سم", unit: "piece", cat: "safety-ppe", base: 32 },
+  // Hardware & fasteners
+  { sku: "HW-ANC-M12", name: "Expansion Anchor Bolt M12x100 (box of 50)", nameAr: "مسمار فيشر M12 (50 حبة)", unit: "piece", cat: "hardware-fasteners", brand: "Hilti", base: 165 },
+  { sku: "HW-SCR-DW", name: "Drywall Screws 25mm (box of 1000)", nameAr: "براغي جبس 25 مم (1000)", unit: "piece", cat: "hardware-fasteners", base: 34 },
+  { sku: "HW-NAIL-3", name: "Common Wire Nails 3 inch (25kg)", nameAr: "مسامير 3 بوصة (25 كجم)", unit: "piece", cat: "hardware-fasteners", base: 95 },
+  { sku: "HW-TW-16", name: "Binding Wire 16 gauge (25kg coil)", nameAr: "سلك رباط 16 (25 كجم)", unit: "piece", cat: "hardware-fasteners", base: 110 },
+  { sku: "HW-BLT-HDG", name: "HDG Bolt Nut Washer M16x60 (box of 25)", nameAr: "برغي مجلفن M16 (25)", unit: "piece", cat: "hardware-fasteners", base: 88 },
+  { sku: "HW-CHM-ANC", name: "Chemical Anchor Epoxy 400ml", nameAr: "كيميكال أنكر 400 مل", unit: "piece", cat: "hardware-fasteners", brand: "Fischer", base: 78 },
+  // HVAC
+  { sku: "HV-SPL-24", name: "Split AC 24,000 BTU Inverter", nameAr: "مكيف سبليت 24 ألف وحدة انفرتر", unit: "piece", cat: "hvac", brand: "Gree", base: 2650, featured: true, tags: ["ac", "air conditioner"] },
+  { sku: "HV-SPL-18", name: "Split AC 18,000 BTU", nameAr: "مكيف سبليت 18 ألف وحدة", unit: "piece", cat: "hvac", brand: "LG", base: 1950 },
+  { sku: "HV-DCT-GI", name: "GI Duct Sheet 0.8mm (per m²)", nameAr: "صاج دكت مجلفن 0.8 مم (م²)", unit: "m2", cat: "hvac", base: 62 },
+  { sku: "HV-CU-3/8", name: "Copper Pipe 3/8 inch (15m coil)", nameAr: "ماسورة نحاس 3/8 بوصة (15م)", unit: "roll", cat: "hvac", base: 240 },
+  { sku: "HV-EXF-12", name: "Exhaust Fan 12 inch Wall Mounted", nameAr: "شفاط هواء 12 بوصة", unit: "piece", cat: "hvac", base: 165 },
+  // Sanitary
+  { sku: "SN-WC-WH", name: "Wall-Hung WC with Concealed Cistern", nameAr: "كرسي معلق مع صندوق مخفي", unit: "piece", cat: "sanitary-ware", brand: "Ideal Standard", base: 1450, featured: true },
+  { sku: "SN-WB-60", name: "Washbasin 60cm with Pedestal", nameAr: "مغسلة 60 سم مع قاعدة", unit: "piece", cat: "sanitary-ware", brand: "Saudi Ceramics", base: 380 },
+  { sku: "SN-MIX-BAS", name: "Basin Mixer Chrome", nameAr: "خلاط مغسلة كروم", unit: "piece", cat: "sanitary-ware", brand: "Grohe", base: 420 },
+  { sku: "SN-SHW-SET", name: "Shower Set Rain Head + Hand Shower", nameAr: "طقم دش مطري", unit: "piece", cat: "sanitary-ware", base: 560 },
+  { sku: "SN-WH-50", name: "Electric Water Heater 50L", nameAr: "سخان مياه كهربائي 50 لتر", unit: "piece", cat: "sanitary-ware", brand: "Ariston", base: 520 },
+  { sku: "SN-SNK-SS", name: "Stainless Steel Kitchen Sink Double Bowl", nameAr: "حوض مطبخ ستانلس حوضين", unit: "piece", cat: "sanitary-ware", base: 480 },
+  // Lighting
+  { sku: "LT-PNL-60", name: "LED Panel 60x60 40W 6500K", nameAr: "لوح إضاءة LED 60×60 40 واط", unit: "piece", cat: "lighting", brand: "Philips", base: 85, featured: true },
+  { sku: "LT-FLD-100", name: "LED Flood Light 100W IP65", nameAr: "كشاف LED 100 واط", unit: "piece", cat: "lighting", base: 120 },
+  { sku: "LT-DWN-12", name: "LED Downlight 12W Recessed", nameAr: "سبوت لايت LED 12 واط", unit: "piece", cat: "lighting", base: 22 },
+  { sku: "LT-SW-1G", name: "1-Gang 2-Way Switch 10A", nameAr: "مفتاح إنارة مفرد", unit: "piece", cat: "lighting", brand: "Legrand", base: 14 },
+  { sku: "LT-SKT-13", name: "13A Switched Socket Outlet", nameAr: "فيش كهرباء 13 أمبير", unit: "piece", cat: "lighting", brand: "MK", base: 18 },
+  // Scaffolding
+  { sku: "SC-FRM-1.7", name: "Scaffold H-Frame 1.7m x 1.2m", nameAr: "إطار سقالة 1.7×1.2 م", unit: "piece", cat: "scaffolding-access", base: 145 },
+  { sku: "SC-TUBE-6", name: "Scaffold Tube 48.3mm x 6m", nameAr: "ماسورة سقالة 6 م", unit: "piece", cat: "scaffolding-access", base: 118 },
+  { sku: "SC-CPL-SW", name: "Swivel Coupler (box of 25)", nameAr: "كوبلر دوار (25)", unit: "piece", cat: "scaffolding-access", base: 210 },
+  { sku: "SC-PLK-AL", name: "Aluminium Scaffold Plank 3m", nameAr: "لوح سقالة ألمنيوم 3 م", unit: "piece", cat: "scaffolding-access", base: 480 },
+  { sku: "SC-LDR-6", name: "Aluminium Extension Ladder 6m", nameAr: "سلم ألمنيوم 6 م", unit: "piece", cat: "scaffolding-access", base: 620 },
+  // Roofing & cladding
+  { sku: "RF-SND-50", name: "Sandwich Panel PU 50mm Roof (per m²)", nameAr: "ساندوتش بانل 50 مم سقف (م²)", unit: "m2", cat: "roofing-cladding", brand: "Kirby", base: 92, featured: true },
+  { sku: "RF-ACP-4", name: "Aluminium Composite Panel 4mm (per m²)", nameAr: "كلادينج ألمنيوم 4 مم (م²)", unit: "m2", cat: "roofing-cladding", brand: "Alucobond", base: 135 },
+  { sku: "RF-GI-SHT", name: "Corrugated GI Roof Sheet 0.5mm (per m²)", nameAr: "صاج مموج مجلفن 0.5 مم (م²)", unit: "m2", cat: "roofing-cladding", base: 38 },
+  { sku: "RF-CLAY-TL", name: "Clay Roof Tile (per m²)", nameAr: "قرميد طيني (م²)", unit: "m2", cat: "roofing-cladding", base: 95 },
+  { sku: "RF-GRP-LIN", name: "GRP Roofing Liner 1.5mm (per m²)", nameAr: "بطانة فيبرجلاس 1.5 مم (م²)", unit: "m2", cat: "roofing-cladding", base: 48 },
+  // Chemicals
+  { sku: "CH-SP-ADM", name: "Superplasticizer Admixture (200L drum)", nameAr: "ملدن خرسانة (200 لتر)", unit: "drum", cat: "chemicals-adhesives", brand: "Sika", base: 1650 },
+  { sku: "CH-CUR-20", name: "Concrete Curing Compound (20L)", nameAr: "مركب معالجة خرسانة (20 لتر)", unit: "drum", cat: "chemicals-adhesives", brand: "Fosroc", base: 190 },
+  { sku: "CH-GRT-25", name: "Non-Shrink Grout (25kg)", nameAr: "جراوت غير منكمش (25 كجم)", unit: "bag", cat: "chemicals-adhesives", brand: "BASF", base: 45 },
+  { sku: "CH-EPX-ADH", name: "Epoxy Bonding Adhesive 5kg Kit", nameAr: "لاصق إيبوكسي 5 كجم", unit: "piece", cat: "chemicals-adhesives", brand: "Sika", base: 260 },
+  { sku: "CH-SIL-300", name: "Silicone Sealant Neutral 300ml (box of 24)", nameAr: "سيليكون 300 مل (24)", unit: "piece", cat: "chemicals-adhesives", base: 220 },
+  { sku: "CH-BIT-PRM", name: "Bitumen Primer (20L)", nameAr: "برايمر بيتومين (20 لتر)", unit: "drum", cat: "chemicals-adhesives", brand: "Bitumat", base: 165 },
+  // Landscaping & precast
+  { sku: "LS-PVR-8", name: "Interlock Paver 8cm Heavy Duty (per m²)", nameAr: "إنترلوك 8 سم ثقيل (م²)", unit: "m2", cat: "landscaping-precast", base: 34 },
+  { sku: "LS-MH-RNG", name: "Precast Manhole Ring 1200mm", nameAr: "حلقة منهول خرسانية 1200 مم", unit: "piece", cat: "landscaping-precast", base: 780 },
+  { sku: "LS-BAR-NJ", name: "New Jersey Concrete Barrier 3m", nameAr: "حاجز خرساني نيوجيرسي 3 م", unit: "piece", cat: "landscaping-precast", base: 1350 },
+  { sku: "LS-PIPE-RC", name: "RC Pipe 600mm Class III (2.5m)", nameAr: "ماسورة خرسانية مسلحة 600 مم", unit: "piece", cat: "landscaping-precast", base: 920 },
+  { sku: "LS-SOIL", name: "Agricultural Soil (per m³)", nameAr: "تربة زراعية (م³)", unit: "m3", cat: "landscaping-precast", base: 65 },
+  { sku: "LS-GRS-ART", name: "Artificial Grass 35mm (per m²)", nameAr: "عشب صناعي 35 مم (م²)", unit: "m2", cat: "landscaping-precast", base: 48 },
 ];
 
 const suppliers = [
@@ -118,7 +195,12 @@ const suppliers = [
   { name: "Asir Doors & Glass Works", nameAr: "عسير للأبواب والزجاج", city: "Abha", region: "Southern", verified: true, rating: 4.0, ratingCount: 31, factor: 1.05, cats: ["doors-windows", "timber-formwork"] },
   { name: "Jubail Industrial Supplies", nameAr: "الجبيل للتوريدات الصناعية", city: "Jubail", region: "Eastern", verified: true, rating: 4.6, ratingCount: 88, factor: 1.02, cats: ["steel-rebar", "electrical", "insulation-waterproofing", "doors-windows"] },
   { name: "Qassim Ready Mix", nameAr: "القصيم للخرسانة الجاهزة", city: "Buraidah", region: "Central", verified: true, rating: 4.4, ratingCount: 54, factor: 0.96, cats: ["cement-concrete", "aggregates-sand"] },
-  { name: "Demo Supplier Co.", nameAr: "شركة المورد التجريبي", city: "Riyadh", region: "Central", verified: true, rating: 4.8, ratingCount: 19, factor: 0.995, cats: ["cement-concrete", "steel-rebar", "blocks-bricks", "aggregates-sand", "tiles-flooring", "paints-coatings", "plumbing", "electrical"] },
+  { name: "Demo Supplier Co.", nameAr: "شركة المورد التجريبي", city: "Riyadh", region: "Central", verified: true, rating: 4.8, ratingCount: 19, factor: 0.995, cats: ["cement-concrete", "steel-rebar", "blocks-bricks", "aggregates-sand", "tiles-flooring", "paints-coatings", "plumbing", "electrical", "tools-equipment", "safety-ppe", "hardware-fasteners", "lighting"] },
+  { name: "Riyadh Tools & Hardware Mart", nameAr: "الرياض للعدد والخردوات", city: "Riyadh", region: "Central", verified: true, rating: 4.5, ratingCount: 302, factor: 1.0, cats: ["tools-equipment", "safety-ppe", "hardware-fasteners", "scaffolding-access", "chemicals-adhesives"] },
+  { name: "Jeddah HVAC & Sanitary House", nameAr: "جدة للتكييف والأدوات الصحية", city: "Jeddah", region: "Western", verified: true, rating: 4.4, ratingCount: 121, factor: 1.01, cats: ["hvac", "sanitary-ware", "lighting", "plumbing"] },
+  { name: "Dammam Roofing & Cladding Systems", nameAr: "الدمام لأنظمة الأسقف والتكسيات", city: "Dammam", region: "Eastern", verified: true, rating: 4.3, ratingCount: 58, factor: 0.99, cats: ["roofing-cladding", "insulation-waterproofing", "scaffolding-access"] },
+  { name: "Al Khobar Precast & Landscape", nameAr: "الخبر للخرسانة مسبقة الصب", city: "Khobar", region: "Eastern", verified: false, rating: 4.0, ratingCount: 14, factor: 0.97, cats: ["landscaping-precast", "blocks-bricks", "chemicals-adhesives"] },
+  { name: "Makkah Electrical & Lighting", nameAr: "مكة للكهرباء والإنارة", city: "Makkah", region: "Western", verified: true, rating: 4.2, ratingCount: 47, factor: 1.02, cats: ["electrical", "lighting", "hvac", "safety-ppe"] },
 ];
 
 // Deterministic pseudo-random so the seed is reproducible.
@@ -136,6 +218,10 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 async function main() {
   console.log("Seeding MySupplier…");
   await prisma.notification.deleteMany();
+  await prisma.cartItem.deleteMany();
+  await prisma.cart.deleteMany();
+  await prisma.feed.deleteMany();
+  await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
   await prisma.bidItem.deleteMany();
   await prisma.bid.deleteMany();
@@ -162,6 +248,7 @@ async function main() {
         sku: m.sku, name: m.name, nameAr: m.nameAr, unit: m.unit, brand: m.brand,
         categoryId: catBySlug.get(m.cat)!, specs: m.specs ?? Prisma.JsonNull,
         description: `${m.name} — market reference price around SAR ${m.base} per ${m.unit}.`,
+        featured: m.featured ?? false, tags: m.tags ?? [], popularity: Math.floor(rand() * 500),
       },
     });
     materialRows.push({ ...m, id: created.id });
@@ -193,7 +280,7 @@ async function main() {
   // Price listings: each supplier lists most materials in its categories, in its own city
   // (and sometimes a neighbouring major city).
   const listings: Prisma.PriceListingCreateManyInput[] = [];
-  const neighbours: Record<string, string[]> = { Riyadh: ["Riyadh"], Jeddah: ["Jeddah", "Makkah"], Dammam: ["Dammam", "Khobar"], Khobar: ["Khobar", "Dammam"], Madinah: ["Madinah", "Yanbu"], Tabuk: ["Tabuk"], Abha: ["Abha", "Khamis Mushait"], Jubail: ["Jubail", "Dammam"], Buraidah: ["Buraidah", "Riyadh"] };
+  const neighbours: Record<string, string[]> = { Makkah: ["Makkah", "Jeddah"], Riyadh: ["Riyadh"], Jeddah: ["Jeddah", "Makkah"], Dammam: ["Dammam", "Khobar"], Khobar: ["Khobar", "Dammam"], Madinah: ["Madinah", "Yanbu"], Tabuk: ["Tabuk"], Abha: ["Abha", "Khamis Mushait"], Jubail: ["Jubail", "Dammam"], Buraidah: ["Buraidah", "Riyadh"] };
   const now = Date.now();
   for (const c of companyIds) {
     for (const m of materialRows) {
@@ -203,8 +290,9 @@ async function main() {
         listings.push({
           materialId: m.id, companyId: c.id, city,
           price: round2(m.base * c.factor * jitter(0.06) * (city === c.city ? 1 : 1.03)),
-          minQty: m.unit === "ton" || m.unit === "m3" ? 5 : m.unit === "piece" ? 100 : 10,
+          minQty: m.unit === "ton" || m.unit === "m3" ? 5 : m.unit === "piece" ? (m.base >= 50 ? 1 : 100) : m.base >= 100 ? 1 : 10,
           leadTimeDays: 1 + Math.floor(rand() * 6),
+          stock: rand() < 0.2 ? null : Math.floor(rand() * 5000) + 20,
           source: "SUPPLIER",
           updatedAt: new Date(now - Math.floor(rand() * 20) * 86400000),
           validUntil: new Date(now + (30 + Math.floor(rand() * 60)) * 86400000),
@@ -291,7 +379,8 @@ async function main() {
   const winning = await bidFor(rfq3, qassim.id, 0.97, 3, "ACCEPTED");
   await bidFor(rfq3, riyadhSuppliers[0].id, 1.01, 5, "REJECTED");
   await prisma.rfq.update({ where: { id: rfq3.id }, data: { awardedBidId: winning.id } });
-  await prisma.order.create({ data: { reference: ref("ORD"), rfqId: rfq3.id, bidId: winning.id, buyerId: buyer.id, companyId: qassim.id, total: winning.totalPrice, status: "CONFIRMED" } });
+  await prisma.order.create({ data: { reference: ref("ORD"), type: "RFQ", rfqId: rfq3.id, bidId: winning.id, buyerId: buyer.id, companyId: qassim.id, subtotal: winning.totalPrice, total: winning.totalPrice, status: "CONFIRMED", paymentMethod: "BANK_TRANSFER", deliveryCity: "Riyadh", items: { create: [{ materialId: byPk("RMC-C30").id, name: byPk("RMC-C30").name, unit: "m3", unitPrice: round2(byPk("RMC-C30").base * 0.97), quantity: 640, lineTotal: winning.totalPrice }] } } });
+  await prisma.feed.create({ data: { name: "Example JSON feed (edit URL)", url: "https://example.com/construction-prices.json", format: "json", enabled: false, lastStatus: "never run" } });
   await prisma.counter.createMany({ data: [{ key: `RFQ-${new Date().getFullYear()}`, value: 3 }, { key: `ORD-${new Date().getFullYear()}`, value: 1 }] });
 
   await prisma.notification.createMany({ data: [

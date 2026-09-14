@@ -383,3 +383,142 @@ export interface BoqToRfqPayload {
   notes?: string;
   lines: BoqLineInput[];
 }
+
+// Shop / e-commerce ---------------------------------------------------------------
+
+export type OrderType = "RFQ" | "DIRECT";
+export type PaymentMethod = "COD" | "BANK_TRANSFER" | "CARD";
+export type PaymentStatus = "UNPAID" | "PAID" | "REFUNDED";
+export type MaterialSource = "CURATED" | "SUPPLIER" | "FEED";
+
+export const VAT_RATE = 0.15;
+
+/** A material enriched for the storefront. */
+export interface Product extends Material {
+  tags?: string[];
+  featured?: boolean;
+  source?: MaterialSource;
+  bestOffer?: ShopOffer | null;
+  offerCount?: number;
+  inStock?: boolean;
+  isDeal?: boolean; // best price is >= 5% below the average of all offers
+}
+
+export interface ShopOffer {
+  listingId: string;
+  companyId: string | null;
+  companyName: string;
+  verified: boolean;
+  rating: number;
+  city: string;
+  price: number;
+  minQty: number;
+  leadTimeDays: number;
+  stock: number | null; // null = not tracked / on request
+  source: PriceSource | string;
+  sourceName?: string | null;
+}
+
+export interface ProductDetail extends Product {
+  offers: ShopOffer[];
+  summary: PriceSummary;
+  history: PriceHistoryPoint[];
+  related: Product[];
+}
+
+export interface ShopHome {
+  featured: Product[];
+  deals: Product[];
+  newArrivals: Product[];
+  categories: Category[];
+  stats: PlatformStats;
+}
+
+export interface CartItem {
+  id: string;
+  listingId: string;
+  quantity: number;
+  offer: ShopOffer;
+  material: Material;
+  lineTotal: number;
+}
+
+export interface Cart {
+  id: string;
+  items: CartItem[];
+  subtotal: number;
+  vat: number;
+  deliveryFee: number;
+  total: number;
+  supplierCount: number;
+  currency: string;
+}
+
+export interface OrderItem {
+  id: string;
+  orderId: string;
+  materialId: string | null;
+  material?: Material | null;
+  listingId?: string | null;
+  name: string;
+  unit: string;
+  unitPrice: number;
+  quantity: number;
+  lineTotal: number;
+}
+
+/** Extra fields present on every order (RFQ-awarded and direct). */
+export interface OrderExtended extends Order {
+  type: OrderType;
+  items: OrderItem[];
+  subtotal: number;
+  vat: number;
+  deliveryFee: number;
+  paymentMethod?: PaymentMethod | null;
+  paymentStatus: PaymentStatus;
+  deliveryCity?: string | null;
+  deliveryAddress?: string | null;
+  contactPhone?: string | null;
+  notes?: string | null;
+}
+
+export interface CheckoutPayload {
+  deliveryCity: string;
+  deliveryAddress: string;
+  contactPhone: string;
+  paymentMethod: PaymentMethod;
+  notes?: string;
+}
+
+export interface CheckoutResult {
+  orders: OrderExtended[];
+  total: number;
+}
+
+export interface SupplierCatalogItem {
+  sku?: string;
+  name: string;
+  nameAr?: string;
+  categorySlug: string;
+  unit: string;
+  brand?: string;
+  description?: string;
+  imageUrl?: string;
+  price: number;
+  city: string;
+  stock?: number;
+  minQty?: number;
+  leadTimeDays?: number;
+}
+
+export interface Feed {
+  id: string;
+  name: string;
+  url: string;
+  format: "json" | "csv";
+  enabled: boolean;
+  lastRunAt?: string | null;
+  lastStatus?: string | null;
+  lastItemCount: number;
+  createdAt: string;
+}

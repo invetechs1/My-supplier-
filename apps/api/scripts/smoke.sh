@@ -35,3 +35,8 @@ echo; echo "--- compare"; M2=$(curl -s "$B/materials?q=CEM-OPC-50" | j "d['data'
 
 echo "--- boq analyze"; curl -s -X POST $B/boq/analyze -H 'content-type: application/json' -d '{"city":"Riyadh","text":"Rebar 16mm, 25, ton\n1200 bags OPC cement 50kg\nحديد تسليح 12 مم 15 طن"}' | j "d['matchedLines'], d['summary']['cheapestTotal'] > 0, d['summary']['bestSingleSupplier']['supplierName']"
 echo "BOQ OK"
+echo "--- shop home"; curl -s $B/shop/home | j "len(d['featured']) > 0, len(d['categories'])"
+PID=$(curl -s "$B/shop/products?q=helmet" | j "d['data'][0]['id']"); LID=$(curl -s $B/shop/products/$PID | j "[o for o in d['offers'] if o['source']=='SUPPLIER'][0]['listingId']")
+echo "--- cart + checkout"; curl -s -X POST $B/cart/items -H "authorization: Bearer $BT" -H 'content-type: application/json' -d "{\"listingId\":\"$LID\",\"quantity\":200}" | j "d['total'] > 0"
+curl -s -X POST $B/checkout -H "authorization: Bearer $BT" -H 'content-type: application/json' -d '{"deliveryCity":"Riyadh","deliveryAddress":"Smoke street 1","contactPhone":"+966500000000","paymentMethod":"COD"}' | j "[(o['type'], o['paymentStatus']) for o in d['orders']]"
+echo "SHOP OK"

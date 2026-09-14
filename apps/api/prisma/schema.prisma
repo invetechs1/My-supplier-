@@ -48,6 +48,29 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum OrderType {
+  RFQ
+  DIRECT
+}
+
+enum PaymentMethod {
+  COD
+  BANK_TRANSFER
+  CARD
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  REFUNDED
+}
+
+enum MaterialSource {
+  CURATED
+  SUPPLIER
+  FEED
+}
+
 enum NotificationType {
   NEW_RFQ
   NEW_BID
@@ -71,6 +94,7 @@ model User {
   rfqs          Rfq[]
   orders        Order[]
   notifications Notification[]
+  cart          Cart?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -126,14 +150,20 @@ model Material {
   imageUrl    String?
   description String?
   active      Boolean        @default(true)
+  tags        String[]       @default([])
+  featured    Boolean        @default(false)
+  source      MaterialSource @default(CURATED)
+  popularity  Int            @default(0)
   listings    PriceListing[]
   rfqItems    RfqItem[]
   history     PriceHistory[]
+  orderItems  OrderItem[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
   @@index([categoryId])
   @@index([name])
+  @@index([featured])
 }
 
 model PriceListing {
@@ -150,6 +180,9 @@ model PriceListing {
   source       PriceSource @default(SUPPLIER)
   sourceName   String?
   validUntil   DateTime?
+  stock        Int?
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -241,24 +274,84 @@ model BidItem {
 }
 
 model Order {
-  id        String      @id @default(cuid())
-  reference String      @unique
-  rfqId     String
-  rfq       Rfq         @relation(fields: [rfqId], references: [id])
-  bidId     String
-  bid       Bid         @relation(fields: [bidId], references: [id])
-  buyerId   String
-  buyer     User        @relation(fields: [buyerId], references: [id])
-  companyId String
-  company   Company     @relation(fields: [companyId], references: [id])
-  total     Decimal     @db.Decimal(14, 2)
-  currency  String      @default("SAR")
-  status    OrderStatus @default(PENDING)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id              String         @id @default(cuid())
+  reference       String         @unique
+  type            OrderType      @default(RFQ)
+  rfqId           String?
+  rfq             Rfq?           @relation(fields: [rfqId], references: [id])
+  bidId           String?
+  bid             Bid?           @relation(fields: [bidId], references: [id])
+  buyerId         String
+  buyer           User           @relation(fields: [buyerId], references: [id])
+  companyId       String
+  company         Company        @relation(fields: [companyId], references: [id])
+  items           OrderItem[]
+  subtotal        Decimal        @default(0) @db.Decimal(14, 2)
+  vat             Decimal        @default(0) @db.Decimal(14, 2)
+  deliveryFee     Decimal        @default(0) @db.Decimal(14, 2)
+  total           Decimal        @db.Decimal(14, 2)
+  currency        String         @default("SAR")
+  status          OrderStatus    @default(PENDING)
+  paymentMethod   PaymentMethod?
+  paymentStatus   PaymentStatus  @default(UNPAID)
+  deliveryCity    String?
+  deliveryAddress String?
+  contactPhone    String?
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@index([buyerId])
   @@index([companyId])
+  @@index([type, status])
+}
+
+model OrderItem {
+  id         String        @id @default(cuid())
+  orderId    String
+  order      Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  materialId String?
+  material   Material?     @relation(fields: [materialId], references: [id])
+  listingId  String?
+  listing    PriceListing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  name       String
+  unit       String
+  unitPrice  Decimal       @db.Decimal(14, 2)
+  quantity   Float
+  lineTotal  Decimal       @db.Decimal(14, 2)
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String       @id @default(cuid())
+  cartId    String
+  cart      Cart         @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  listingId String
+  listing   PriceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  quantity  Float
+  createdAt DateTime     @default(now())
+
+  @@unique([cartId, listingId])
+}
+
+model Feed {
+  id            String    @id @default(cuid())
+  name          String    @unique
+  url           String
+  format        String    @default("json")
+  enabled       Boolean   @default(true)
+  lastRunAt     DateTime?
+  lastStatus    String?
+  lastItemCount Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model Notification {

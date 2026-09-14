@@ -13,6 +13,7 @@ const router = Router();
 
 const orderInclude = {
   company: true,
+  items: { include: { material: true } },
   rfq: { include: { items: { include: { material: true } } } },
   bid: { include: { items: true } },
   buyer: { select: { id: true, name: true, email: true, phone: true, company: true } },
@@ -78,6 +79,19 @@ router.patch(
       body: `Updated by ${user.name}.`,
       link: user.role === "BUYER" ? `/supplier/orders/${order.id}` : `/dashboard/orders/${order.id}`,
     });
+    res.json(serialize(updated));
+  }),
+);
+
+router.patch(
+  "/orders/:id/payment",
+  requireAuth("SUPPLIER", "ADMIN"),
+  asyncHandler(async (req, res) => {
+    const { paymentStatus } = z.object({ paymentStatus: z.enum(["UNPAID", "PAID", "REFUNDED"]) }).parse(req.body);
+    const order = await prisma.order.findFirst({ where: { id: req.params.id, ...scope(req) } });
+    if (!order) throw notFound("Order not found");
+    const updated = await prisma.order.update({ where: { id: order.id }, data: { paymentStatus }, include: orderInclude });
+    await notify({ userIds: [order.buyerId], type: "ORDER_UPDATE", title: `Order ${order.reference} marked ${paymentStatus.toLowerCase()}`, body: `Updated by ${req.user!.name}.`, link: `/dashboard/orders/${order.id}` });
     res.json(serialize(updated));
   }),
 );

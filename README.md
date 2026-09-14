@@ -13,6 +13,15 @@ plus an RFQ / bidding marketplace where registered suppliers compete for your or
 Docs: [API contract](docs/API.md) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md)
 
 ## What it does
+* **Construction-only e-commerce (Amazon-style)** – `/shop` storefront with categories, deals,
+  featured and new products; product pages with a buy box for the best offer and an "other
+  sellers" table showing every supplier's live price, stock, lead time and city; cart, VAT
+  (15%) and delivery fees, split checkout that creates one order per supplier, payment method
+  (cash on delivery, bank transfer, card placeholder) and order tracking. Reference prices from
+  market sources are shown next to real offers but are not purchasable.
+* **Catalogue growth engine** – suppliers add their own products and stock ("Sell on
+  MySupplier", single form or CSV), and admins register external feeds (JSON or CSV URLs) that
+  are imported daily, so the catalogue keeps collecting construction products from every source.
 * **BOQ research (the "don't drive around" feature)** – anyone, even a guest, pastes or uploads a
   bill of quantities in English or Arabic ("Rebar 16mm, 25, ton", "1200 bags OPC cement 50kg",
   "حديد تسليح 12 مم 15 طن"). The engine matches every line to a catalogue material (with confidence and
@@ -20,8 +29,9 @@ Docs: [API contract](docs/API.md) · [Architecture](docs/ARCHITECTURE.md) · [Ro
   per line, the cheapest mixed basket, the best single supplier that can cover the whole BOQ,
   savings versus the market average, and a per-supplier breakdown. One click turns the BOQ into an
   RFQ so registered suppliers bid on it. Available on web (`/boq`) and mobile.
-* **Price discovery** – search 60+ seeded materials (cement, rebar, blocks, aggregates, tiles,
-  paints, MEP, insulation, timber, gypsum, doors/windows). Each material shows the lowest,
+* **Price discovery** – search 120+ seeded products across 22 categories (cement, rebar, blocks, aggregates, tiles,
+  paints, MEP, insulation, timber, gypsum, doors/windows, tools, PPE, hardware, HVAC, sanitary,
+  lighting, scaffolding, roofing, chemicals, precast). Each material shows the lowest,
   average, median and highest price, every supplier's listing, imported market reference prices,
   a 120-day price chart, and a category-level price index with 30-day change.
 * **Compare** up to 10 items side by side, filter by city.

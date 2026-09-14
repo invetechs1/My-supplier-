@@ -57,6 +57,29 @@
    lead time). "Best single supplier" = most coverage, then lowest total.
 5. **Act** – `/boq/to-rfq` converts the reviewed lines into an RFQ and notifies matching suppliers.
 
+## Storefront, cart and checkout
+* `enrichMaterials` (services/shop.ts) turns listings into storefront fields: `bestOffer` (cheapest
+  purchasable supplier offer), `offerCount`, `supplierCount`, `inStock`, `isDeal` (≥5 % below the
+  average of all offers). Market-reference listings are displayed but never purchasable.
+* Cart is server-side per user (`Cart`/`CartItem`, keyed by listing). Adds and updates re-validate
+  min quantity and stock against the live offer.
+* Checkout splits the cart by supplier and creates one `DIRECT` order per supplier inside a
+  transaction: `OrderItem`s snapshot name/unit/price, stock is decremented, VAT 15 % and a delivery
+  fee (same city vs other city) are applied, and suppliers are notified. Payment method is recorded
+  and `paymentStatus` is updated by the supplier/admin (gateway integration is the next step).
+* Product images: `GET /images/materials/:sku.svg` renders a deterministic SVG so every product has
+  a visual until suppliers upload photos (`imageUrl`).
+
+## Catalogue growth (collecting construction products from everywhere)
+`importCatalog` (services/catalogImport.ts) is the single ingestion path:
+* **Suppliers** – `POST /supplier/catalog/import` creates materials (source `SUPPLIER`) or matches
+  existing SKUs/names and upserts the supplier's offer with stock.
+* **Feeds** – admins register URLs (`Feed` model, JSON or CSV); `runFeed` fetches, parses, creates
+  materials (source `FEED`) and MARKET listings keyed by feed name. A daily job runs all enabled
+  feeds before the price-history snapshot. Inline imports use the same row format.
+* Scrapers or partner ETL jobs can call the same endpoints, so onboarding a new price source is
+  configuration, not code.
+
 ## Bidding flow
 `Buyer creates RFQ` → suppliers in the delivery city or that stock the requested materials are
 notified → suppliers bid per line item → buyer sees ranked bids → `accept` (transaction: bid

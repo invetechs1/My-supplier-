@@ -1,5 +1,6 @@
 import { prisma } from "../lib/prisma";
 import { snapshotHistory } from "../services/catalog";
+import { runAllFeeds } from "../services/catalogImport";
 
 /** Snapshots daily price aggregates so the price index and charts have history. */
 export async function runSnapshot() {
@@ -10,8 +11,13 @@ export async function runSnapshot() {
 
 export function startDailySnapshotJob() {
   const everyMs = 24 * 60 * 60 * 1000;
+  const tick = () => {
+    runAllFeeds()
+      .catch((e) => console.error("feeds failed", e))
+      .finally(() => runSnapshot().catch((e) => console.error("snapshot failed", e)));
+  };
   setTimeout(() => {
-    runSnapshot().catch((e) => console.error("snapshot failed", e));
-    setInterval(() => runSnapshot().catch((e) => console.error("snapshot failed", e)), everyMs);
+    tick();
+    setInterval(tick, everyMs);
   }, 60_000).unref();
 }

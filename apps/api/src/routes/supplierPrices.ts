@@ -7,6 +7,7 @@ import { notFound } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import { paged, paginate } from "../lib/pagination";
 import { snapshotHistory } from "../services/catalog";
+import { importCatalog, type ImportRow } from "../services/catalogImport";
 
 const router = Router();
 
@@ -93,6 +94,41 @@ router.delete(
     if (!listing || listing.companyId !== companyId) throw notFound("Listing not found");
     await prisma.priceListing.delete({ where: { id: listing.id } });
     res.json({ ok: true });
+  }),
+);
+
+router.patch(
+  "/supplier/prices/:id",
+  requireAuth("SUPPLIER"),
+  asyncHandler(async (req, res) => {
+    const companyId = requireCompany(req);
+    const data = z
+      .object({ price: z.coerce.number().positive().optional(), stock: z.coerce.number().int().nonnegative().nullable().optional(), minQty: z.coerce.number().positive().optional(), leadTimeDays: z.coerce.number().int().min(0).optional(), validUntil: z.coerce.date().nullable().optional() })
+      .parse(req.body);
+    const listing = await prisma.priceListing.findUnique({ where: { id: req.params.id } });
+    if (!listing || listing.companyId !== companyId) throw notFound("Listing not found");
+    const updated = await prisma.priceListing.update({ where: { id: listing.id }, data, include: { material: { include: { category: true } } } });
+    if (data.price !== undefined) await snapshotHistory([listing.materialId]);
+    res.json(serialize(updated));
+  }),
+);
+
+const catalogItem = z.object({
+  sku: z.string().optional(), name: z.string().min(2), nameAr: z.string().optional(), categorySlug: z.string().min(2), unit: z.string().min(1),
+  brand: z.string().optional(), description: z.string().optional(), imageUrl: z.string().url().optional(), price: z.coerce.number().positive(),
+  city: z.string().min(2), stock: z.coerce.number().int().nonnegative().optional(), minQty: z.coerce.number().positive().optional(), leadTimeDays: z.coerce.number().int().min(0).optional(),
+});
+
+/** "Sell on MySupplier": suppliers add products (new or existing) with their own offer and stock. */
+router.post(
+  "/supplier/catalog/import",
+  requireAuth("SUPPLIER"),
+  asyncHandler(async (req, res) => {
+    const companyId = requireCompany(req);
+    const { items } = z.object({ items: z.array(catalogItem).min(1).max(1000) }).parse(req.body);
+    const company = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+    const rows: ImportRow[] = items.map(({ categorySlug, ...rest }) => ({ ...rest, category: categorySlug }));
+    res.json(await importCatalog(rows, { companyId, sourceName: company.name, materialSource: "SUPPLIER" }));
   }),
 );
 

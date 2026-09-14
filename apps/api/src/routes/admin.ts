@@ -9,7 +9,7 @@ import { paged, paginate } from "../lib/pagination";
 import { platformStats, priceIndex, snapshotHistory } from "../services/catalog";
 
 const router = Router();
-router.use(requireAuth("ADMIN"));
+router.use("/admin", requireAuth("ADMIN"));
 
 router.get(
   "/admin/stats",
