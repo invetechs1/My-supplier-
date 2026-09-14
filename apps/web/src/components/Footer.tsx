@@ -16,6 +16,7 @@ export function Footer() {
         <div>
           <h4 className="text-sm font-semibold text-slate-900">Marketplace</h4>
           <ul className="mt-3 space-y-2 text-sm text-slate-600">
+            <li><Link href="/shop" className="hover:text-brand-600">{t("nav.shop")}</Link></li>
             <li><Link href="/materials" className="hover:text-brand-600">{t("nav.materials")}</Link></li>
             <li><Link href="/suppliers" className="hover:text-brand-600">{t("nav.suppliers")}</Link></li>
             <li><Link href="/compare" className="hover:text-brand-600">{t("nav.compare")}</Link></li>
