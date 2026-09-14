@@ -54,7 +54,7 @@ export function PriceChart({ data }: { data: HistoryPoint[] }) {
       <text x={P} y={12} fontSize="11" fill="#6B7A70" className="num">{fmtMoney(max)}</text>
       <text x={P} y={H - 8} fontSize="11" fill="#6B7A70" className="num">{fmtMoney(min)}</text>
       <text x={W - P} y={H - 8} fontSize="11" fill="#6B7A70" textAnchor="end">{data[data.length - 1].date}</text>
-      <text x={P + 60} y={H - 8} fontSize="11" fill="#6B7A70">{data[0].date}</text>
+      <text x={W / 2} y={H - 8} fontSize="11" fill="#6B7A70" textAnchor="middle">{data[0].date}</text>
     </svg>
   )
 }

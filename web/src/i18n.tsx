@@ -206,5 +206,5 @@ export function fmtMoney(v: number | null | undefined, digits = 2): string {
 export function fmtDate(s: string | null | undefined, lang: Lang = 'ar'): string {
   if (!s) return '—'
   const d = new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z')
-  return d.toLocaleDateString(lang === 'ar' ? 'ar-SA-u-nu-latn' : 'en-GB', { year: 'numeric', month: 'short', day: 'numeric' })
+  return d.toLocaleDateString(lang === 'ar' ? 'ar-SA-u-nu-latn-ca-gregory' : 'en-GB', { year: 'numeric', month: 'short', day: 'numeric' })
 }
