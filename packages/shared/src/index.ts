@@ -304,3 +304,82 @@ export function formatSar(value: number | null | undefined, locale: "en" | "ar" 
   }).format(value);
   return locale === "ar" ? `${formatted} ر.س` : `SAR ${formatted}`;
 }
+
+// BOQ research -----------------------------------------------------------------
+
+export interface BoqLineInput {
+  description: string;
+  quantity: number;
+  unit?: string;
+  materialId?: string; // pin a match chosen by the user
+}
+
+export interface BoqOffer {
+  listingId: string;
+  supplierId: string; // company id, or "market:<source>" for imported reference prices
+  supplierName: string;
+  verified: boolean;
+  city: string;
+  price: number;
+  minQty: number;
+  leadTimeDays: number;
+  source: PriceSource | string;
+  lineTotal: number;
+}
+
+export interface BoqLineResult {
+  index: number;
+  description: string;
+  quantity: number;
+  unit: string;
+  match: { material: Material; confidence: number } | null;
+  alternatives: Array<{ material: Material; confidence: number }>;
+  unitMismatch: boolean;
+  bestOffer: BoqOffer | null;
+  avgUnitPrice: number | null;
+  offerCount: number;
+  supplierCount: number;
+  offers: BoqOffer[];
+}
+
+export interface BoqSupplierBreakdown {
+  supplierId: string;
+  supplierName: string;
+  verified: boolean;
+  city: string;
+  linesCovered: number;
+  coveragePct: number;
+  total: number;
+  avgLeadTimeDays: number;
+  lines: Array<{ index: number; listingId: string; unitPrice: number; lineTotal: number }>;
+}
+
+export interface BoqAnalysis {
+  city: string | null;
+  generatedAt: string;
+  lineCount: number;
+  matchedLines: number;
+  unmatchedLines: number;
+  summary: {
+    cheapestTotal: number;
+    averageTotal: number;
+    highestTotal: number;
+    savingsVsAverage: number;
+    savingsVsHighest: number;
+    distinctSuppliersInCheapest: number;
+    bestSingleSupplier: BoqSupplierBreakdown | null;
+  };
+  cheapestPerLine: Array<{ index: number; listingId: string; supplierId: string; supplierName: string; unitPrice: number; lineTotal: number }>;
+  suppliers: BoqSupplierBreakdown[];
+  lines: BoqLineResult[];
+}
+
+export interface BoqToRfqPayload {
+  title: string;
+  deliveryCity: string;
+  deliveryAddress?: string;
+  deliveryDate?: string;
+  closesInDays?: number;
+  notes?: string;
+  lines: BoqLineInput[];
+}

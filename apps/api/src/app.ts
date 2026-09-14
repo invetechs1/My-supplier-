@@ -13,6 +13,7 @@ import supplierPriceRoutes from "./routes/supplierPrices";
 import orderRoutes from "./routes/orders";
 import notificationRoutes from "./routes/notifications";
 import adminRoutes from "./routes/admin";
+import boqRoutes from "./routes/boq";
 
 export function createApp() {
   const app = express();
@@ -31,6 +32,7 @@ export function createApp() {
 
   const api = express.Router();
   api.use(catalogRoutes);
+  api.use(boqRoutes);
   api.use("/auth", authRoutes);
   api.use(rfqRoutes);
   api.use(supplierPriceRoutes);
