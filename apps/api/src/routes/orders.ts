@@ -15,6 +15,7 @@ const router = Router();
 const orderInclude = {
   company: true,
   items: { include: { material: true } },
+  review: { include: { buyer: { select: { id: true, name: true, company: { select: { id: true, name: true } } } } } },
   rfq: { include: { items: { include: { material: true } } } },
   bid: { include: { items: true } },
   buyer: { select: { id: true, name: true, email: true, phone: true, company: true } },

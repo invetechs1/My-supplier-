@@ -315,6 +315,22 @@ router.get(
   }),
 );
 
+router.get(
+  "/supplier/inventory/:listingId",
+  ...supplier,
+  asyncHandler(async (req, res, next) => {
+    if (req.params.listingId === "export.csv") return next();
+    const companyId = requireCompany(req);
+    const [listing, company, reserved, sold] = await Promise.all([
+      prisma.priceListing.findFirst({ where: { id: req.params.listingId, companyId }, include: inventoryInclude }),
+      prisma.company.findUniqueOrThrow({ where: { id: companyId } }), reservedByListing(companyId), soldLast30dByListing(companyId),
+    ]);
+    if (!listing) throw notFound("Listing not found");
+    const r = reserved.get(listing.id) ?? 0;
+    res.json(serialize({ listing, stock: listing.stock, reserved: r, available: listing.stock === null ? null : Math.max(0, listing.stock - r), lowStock: listing.stock !== null && listing.stock <= company.lowStockThreshold, soldLast30d: sold.get(listing.id) ?? 0 }));
+  }),
+);
+
 router.patch(
   "/supplier/inventory/:listingId",
   ...supplier, requireCompanyRole("OWNER", "MANAGER", "WAREHOUSE", "SALES"),

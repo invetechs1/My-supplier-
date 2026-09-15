@@ -41,7 +41,7 @@ Roles: `BUYER` (contractor / anyone buying), `SUPPLIER` (must have a company), `
 | DELETE | `/cart` | `Cart` (empty) |
 | POST | `/checkout` | `CheckoutPayload` -> `CheckoutResult`: one `DIRECT` order per supplier in the cart, cart emptied, suppliers notified |
 
-Orders (`/orders`) now return `OrderExtended` (with `type`, `items`, `subtotal`, `vat`, `deliveryFee`, `paymentStatus`, delivery details). Suppliers can `PATCH /orders/:id/status`; `PATCH /orders/:id/payment { paymentStatus }` is supplier/admin.
+Orders (`/orders`) now return `OrderExtended` (with `review` embedded when one exists) (with `type`, `items`, `subtotal`, `vat`, `deliveryFee`, `paymentStatus`, delivery details). Suppliers can `PATCH /orders/:id/status`; `PATCH /orders/:id/payment { paymentStatus }` is supplier/admin.
 
 ## Supplier catalogue (role SUPPLIER)
 | POST | `/supplier/catalog/import` | `{ items: SupplierCatalogItem[] }` -> `{ created, updated, listings, errors[] }` creates new materials (source SUPPLIER) when the SKU/name is unknown and upserts the supplier's offer with stock |
@@ -138,6 +138,7 @@ Uploaded files are served from `/uploads/...` (local disk `UPLOAD_DIR`; switch t
 | GET | `/supplier/inventory?q=&branchId=&lowStock=1&page=` | `Paginated<InventoryItem>` |
 | PATCH | `/supplier/inventory/:listingId` | `{ stock: number | null, branchId? }` sets the level (records an ADJUST movement) |
 | POST | `/supplier/inventory/:listingId/movements` | `{ type: "IN"|"OUT"|"ADJUST", quantity, reason? }` -> `StockMovement` |
+| GET | `/supplier/inventory/:listingId` | `InventoryItem` |
 | GET | `/supplier/inventory/:listingId/movements` | `StockMovement[]` (latest 100) |
 | GET | `/supplier/inventory/export.csv` | CSV of all listings with stock |
 Checkout records `OUT` movements per order item; cancelling a PENDING/CONFIRMED order records `RELEASE` and restores stock. Low-stock items (stock ≤ company threshold) raise a `SYSTEM` notification to WAREHOUSE/OWNER users once per day.
