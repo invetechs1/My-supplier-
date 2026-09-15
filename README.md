@@ -10,7 +10,7 @@ plus an RFQ / bidding marketplace where registered suppliers compete for your or
 | iOS & Android app | `apps/mobile` | Expo SDK 51, expo-router |
 | Shared types | `packages/shared` | TypeScript |
 
-Docs: [API contract](docs/API.md) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md)
+Docs: [API contract](docs/API.md) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · **[Go-live runbook](deploy/GO-LIVE.md)**
 
 ## What it does
 * **Construction-only e-commerce (Amazon-style)** – `/shop` storefront with categories, deals,
@@ -71,6 +71,21 @@ pnpm --filter @mysupplier/web typecheck && pnpm --filter @mysupplier/web build
 pnpm --filter @mysupplier/mobile typecheck
 ```
 CI (`.github/workflows/ci.yml`) runs migrations + seed against a real Postgres, then builds all apps.
+
+## Production deployment
+`deploy/` contains a single-server production stack: Caddy (automatic HTTPS), the web and API
+containers, PostgreSQL with nightly backups, deploy/backup/restore scripts and a step-by-step
+[go-live runbook](deploy/GO-LIVE.md) covering domain, payments (Moyasar), email, app-store
+submission and the launch checklist.
+
+```bash
+cd deploy && cp .env.production.example .env   # fill in domains, secrets, SMTP, Moyasar, legal entity
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Production features: Mada/Visa/Apple Pay via Moyasar, ZATCA phase-1 tax invoices with QR, push
+notifications (Expo) and transactional email, password reset, account deletion, health endpoint,
+sitemap, security headers and rate limiting.
 
 ## Environment
 | Variable | Where | Purpose |
