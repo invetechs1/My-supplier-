@@ -48,6 +48,8 @@ const dictionary = {
     "nav.logout": "Log out",
     "nav.dashboard": "Dashboard",
     "nav.notifications": "Notifications",
+    "nav.account": "Account",
+    "nav.help": "Help",
     "hero.title": "Real construction material prices across Saudi Arabia",
     "hero.subtitle":
       "Compare live supplier prices for cement, steel, aggregates and more. Request quotes, receive competitive bids and award orders in one place.",
@@ -161,6 +163,8 @@ const dictionary = {
     "nav.logout": "تسجيل الخروج",
     "nav.dashboard": "لوحة التحكم",
     "nav.notifications": "الإشعارات",
+    "nav.account": "الحساب",
+    "nav.help": "المساعدة",
     "hero.title": "أسعار حقيقية لمواد البناء في جميع أنحاء المملكة العربية السعودية",
     "hero.subtitle":
       "قارن أسعار الموردين المباشرة للإسمنت والحديد والركام وغيرها. اطلب عروض الأسعار، واستقبل العطاءات التنافسية، وأرسِ الطلبات في مكان واحد.",

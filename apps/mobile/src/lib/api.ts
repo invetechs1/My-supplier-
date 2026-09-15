@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store";
+import { storage } from "./storage";
 import type {
   ApiError,
   AuthResponse,
@@ -13,6 +13,8 @@ import type {
   Company,
   CreateBidPayload,
   CreateRfqPayload,
+  DeviceRegistration,
+  InvoiceData,
   LoginPayload,
   Material,
   Notification,
@@ -20,6 +22,9 @@ import type {
   OrderExtended,
   OrderStatus,
   Paginated,
+  PaymentConfig,
+  PaymentIntent,
+  PaymentRecord,
   PaymentStatus,
   Product,
   ProductDetail,
@@ -38,6 +43,9 @@ import type {
 export const API_URL: string =
   process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000/api/v1";
 
+/** Public web app (terms, privacy, password reset pages). */
+export const WEB_URL: string = process.env.EXPO_PUBLIC_WEB_URL || "https://mysupplier.sa";
+
 export const TOKEN_KEY = "mysupplier.token";
 
 export class ApiRequestError extends Error {
@@ -52,20 +60,22 @@ export class ApiRequestError extends Error {
 }
 
 export async function getStoredToken(): Promise<string | null> {
-  try {
-    return await SecureStore.getItemAsync(TOKEN_KEY);
-  } catch {
-    return null;
-  }
+  return storage.getItem(TOKEN_KEY);
 }
 
 export async function setStoredToken(token: string | null): Promise<void> {
-  try {
-    if (token) await SecureStore.setItemAsync(TOKEN_KEY, token);
-    else await SecureStore.deleteItemAsync(TOKEN_KEY);
-  } catch {
-    // SecureStore can be unavailable on web; fail silently.
-  }
+  if (token) await storage.setItem(TOKEN_KEY, token);
+  else await storage.deleteItem(TOKEN_KEY);
+}
+
+/** Printable invoice URL (token in the query because browsers can't send headers on navigation). */
+export function invoiceHtmlUrl(orderId: string, token: string): string {
+  return `${API_URL}/orders/${encodeURIComponent(orderId)}/invoice.html?token=${encodeURIComponent(token)}`;
+}
+
+/** Hosted card-payment page served by the API (Moyasar form); redirects back to `mysupplier://payment`. */
+export function paymentPageUrl(orderId: string, token: string): string {
+  return `${API_URL}/payments/${encodeURIComponent(orderId)}/page?token=${encodeURIComponent(token)}`;
 }
 
 type Query = Record<string, string | number | boolean | undefined | null>;
@@ -231,6 +241,32 @@ export const api = {
   me: () => request<User>("/auth/me"),
   updateMe: (body: { name?: string; phone?: string; locale?: "en" | "ar" }) =>
     request<User>("/auth/me", { method: "PATCH", body }),
+  forgotPassword: (email: string) =>
+    request<{ ok: true }>("/auth/forgot-password", { method: "POST", body: { email }, auth: false }),
+  resetPassword: (token: string, password: string) =>
+    request<{ ok: true }>("/auth/reset-password", { method: "POST", body: { token, password }, auth: false }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: true }>("/auth/change-password", { method: "POST", body: { currentPassword, newPassword } }),
+  deleteAccount: () => request<{ ok: true }>("/auth/me", { method: "DELETE" }),
+
+  // Devices (Expo push tokens)
+  registerDevice: (body: DeviceRegistration) => request<{ ok: true }>("/devices", { method: "POST", body }),
+  unregisterDevice: (token: string) =>
+    request<{ ok: true }>(`/devices/${encodeURIComponent(token)}`, { method: "DELETE" }),
+
+  // Payments (Moyasar-ready)
+  paymentConfig: () => request<PaymentConfig>("/payments/config", { auth: false }),
+  createPaymentIntent: (orderId: string) =>
+    request<PaymentIntent>(`/payments/${orderId}/intent`, { method: "POST" }),
+  verifyPayment: (orderId: string, paymentId: string) =>
+    request<{ order: OrderExtended; payment: PaymentRecord }>(`/payments/${orderId}/verify`, {
+      method: "POST",
+      body: { paymentId },
+    }),
+  orderPayments: (orderId: string) => request<PaymentRecord[]>(`/payments/${orderId}`),
+
+  // Invoices (ZATCA simplified tax invoice)
+  invoice: (orderId: string) => request<InvoiceData>(`/orders/${orderId}/invoice`),
 
   // Buyer
   createRfq: (payload: CreateRfqPayload) => request<Rfq>("/rfqs", { method: "POST", body: payload }),

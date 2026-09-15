@@ -80,6 +80,10 @@ export default function LoginScreen() {
         error={error}
       />
 
+      <Pressable onPress={() => router.push({ pathname: "/(auth)/forgot-password", params: email ? { email } : {} })} style={styles.forgot} hitSlop={6}>
+        <Text style={styles.link}>Forgot password?</Text>
+      </Pressable>
+
       <Button title="Log in" onPress={onSubmit} loading={submitting} fullWidth size="lg" />
 
       <View style={styles.demoRow}>
@@ -119,6 +123,7 @@ const styles = StyleSheet.create({
   toggle: { color: colors.primary, fontWeight: "600", fontSize: 13 },
   demoRow: { flexDirection: "row", gap: spacing.md, alignItems: "center", marginTop: spacing.lg, justifyContent: "center" },
   demoLink: { color: colors.primary, fontWeight: "600", fontSize: 12 },
+  forgot: { alignSelf: "flex-end", marginTop: -spacing.xs, marginBottom: spacing.lg },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: spacing.xl },
   link: { color: colors.primary, fontWeight: "600", fontSize: 13 },
   skip: { alignItems: "center", marginTop: spacing.xl },

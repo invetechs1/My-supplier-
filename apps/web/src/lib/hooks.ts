@@ -82,3 +82,15 @@ export function useFlash(timeout = 4000): [Flash | null, (flash: Flash | null) =
   }, []);
   return [flash, setFlash];
 }
+
+/** Client pages cannot export `metadata`; set the document title from an effect instead. */
+export function usePageTitle(title: string | null | undefined): void {
+  useEffect(() => {
+    if (typeof document === "undefined" || !title) return;
+    const previous = document.title;
+    document.title = `${title} · MySupplier`;
+    return () => {
+      document.title = previous;
+    };
+  }, [title]);
+}

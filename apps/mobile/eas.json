@@ -1,20 +1,42 @@
 {
-  "cli": { "version": ">= 10.0.0" },
+  "cli": { "version": ">= 10.0.0", "appVersionSource": "local" },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "env": { "EXPO_PUBLIC_API_URL": "http://localhost:4000/api/v1" }
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://localhost:4000/api/v1",
+        "EXPO_PUBLIC_WEB_URL": "http://localhost:3000"
+      }
     },
     "preview": {
       "distribution": "internal",
       "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://staging-api.mysupplier.sa/api/v1" }
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://staging-api.mysupplier.sa/api/v1",
+        "EXPO_PUBLIC_WEB_URL": "https://staging.mysupplier.sa"
+      }
     },
     "production": {
       "autoIncrement": true,
-      "env": { "EXPO_PUBLIC_API_URL": "https://api.mysupplier.sa/api/v1" }
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.mysupplier.sa/api/v1",
+        "EXPO_PUBLIC_WEB_URL": "https://mysupplier.sa"
+      }
     }
   },
-  "submit": { "production": {} }
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "REPLACE_ME@mysupplier.sa",
+        "ascAppId": "REPLACE_ME_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "REPLACE_ME_TEAM_ID"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
+  }
 }

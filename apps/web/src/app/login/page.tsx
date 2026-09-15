@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { api, errorMessage } from "@/lib/api";
 import { homeForRole, useAuth } from "@/lib/auth";
+import { usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { Alert, Button, Card, Input, LoadingBlock } from "@/components/ui";
 
@@ -15,6 +16,7 @@ function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") || params.get("redirect");
+  usePageTitle(t("auth.login"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -55,6 +57,9 @@ function LoginInner() {
           {error && <Alert>{error}</Alert>}
           <Input label={t("auth.email")} name="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           <Input label={t("auth.password")} name="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <div className="flex justify-end">
+            <Link href="/forgot-password" className="text-xs font-semibold text-brand-700 hover:underline">Forgot password?</Link>
+          </div>
           <Button type="submit" className="w-full" loading={submitting}>{t("auth.login")}</Button>
         </form>
         <p className="mt-4 text-center text-sm text-slate-500">

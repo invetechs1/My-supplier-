@@ -3,7 +3,9 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import * as WebBrowser from "expo-web-browser";
 import { AuthProvider } from "@/lib/auth";
+import { useNotificationTapHandler } from "@/lib/push";
 import { CartProvider } from "@/lib/cart";
 import { I18nProvider } from "@/lib/i18n";
 import { colors } from "@/theme";
@@ -13,6 +15,16 @@ export { ErrorBoundary } from "expo-router";
 export const unstable_settings = {
   initialRouteName: "(tabs)",
 };
+
+// On web, closes the popup opened by openAuthSessionAsync once the payment
+// page redirects back to the app. No-op on native.
+WebBrowser.maybeCompleteAuthSession();
+
+/** Navigates when a push notification is tapped (data.link -> app route). */
+function NotificationTapHandler() {
+  useNotificationTapHandler();
+  return null;
+}
 
 /**
  * Root layout. Unauthenticated users can browse everything under (tabs);
@@ -27,6 +39,7 @@ export default function RootLayout() {
           <AuthProvider>
             <CartProvider>
               <StatusBar style="dark" />
+              <NotificationTapHandler />
               <Stack
                 screenOptions={{
                   headerTintColor: colors.primary,
@@ -40,6 +53,9 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="(auth)/login" options={{ title: "Log in", presentation: "modal" }} />
                 <Stack.Screen name="(auth)/register" options={{ title: "Create account", presentation: "modal" }} />
+                <Stack.Screen name="(auth)/forgot-password" options={{ title: "Reset password", presentation: "modal" }} />
+                <Stack.Screen name="account" options={{ title: "Account" }} />
+                <Stack.Screen name="payment" options={{ title: "Payment" }} />
                 <Stack.Screen name="material/[id]" options={{ title: "Material" }} />
                 <Stack.Screen name="boq" options={{ title: "BOQ price research" }} />
                 <Stack.Screen name="rfq/new" options={{ title: "New RFQ" }} />

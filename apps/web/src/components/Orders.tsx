@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { OrderExtended, OrderStatus, PaymentMethod, PaymentStatus } from "@mysupplier/shared";
-import { api, errorMessage } from "@/lib/api";
+import { api, errorMessage, invoiceHtmlUrl } from "@/lib/api";
 import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
-import { cn, formatDateTime, formatSar } from "@/lib/format";
-import { Alert, Badge, Button, Card, CardHeader, EmptyState, FlashMessage, LoadingBlock, PageHeader, Pagination, StatusBadge, Table, type Column } from "./ui";
+import { BANK_TRANSFER_DETAILS, usePaymentConfig } from "@/lib/payments";
+import { cn, formatDate, formatDateTime, formatSar } from "@/lib/format";
+import { Alert, Badge, Button, Card, CardHeader, EmptyState, FlashMessage, LinkButton, LoadingBlock, PageHeader, Pagination, StatusBadge, Table, type Column } from "./ui";
 
 export type OrderPerspective = "buyer" | "supplier" | "admin";
 
@@ -114,9 +115,79 @@ export function OrdersList({ perspective, basePath }: { perspective: OrderPerspe
   );
 }
 
+/** Static bank-transfer instructions; the order reference must be quoted so the supplier can match the payment. */
+export function BankTransferInstructions({ order }: { order: OrderExtended }) {
+  const { lang } = useI18n();
+  return (
+    <Card>
+      <CardHeader title="Bank transfer instructions" subtitle="Transfer the order total and quote the reference. The order is confirmed once the payment is received." />
+      <dl className="grid gap-x-6 gap-y-3 px-5 py-4 text-sm sm:grid-cols-2">
+        <div><dt className="text-slate-500">Bank</dt><dd className="font-medium text-slate-900">{BANK_TRANSFER_DETAILS.bankName}</dd></div>
+        <div><dt className="text-slate-500">Account name</dt><dd className="font-medium text-slate-900">{BANK_TRANSFER_DETAILS.accountName}</dd></div>
+        <div><dt className="text-slate-500">IBAN</dt><dd className="font-mono font-medium text-slate-900" dir="ltr">{BANK_TRANSFER_DETAILS.iban}</dd></div>
+        <div><dt className="text-slate-500">SWIFT / BIC</dt><dd className="font-mono font-medium text-slate-900" dir="ltr">{BANK_TRANSFER_DETAILS.swift}</dd></div>
+        <div><dt className="text-slate-500">Amount</dt><dd className="font-semibold tabular-nums text-brand-700">{formatSar(order.total, lang)}</dd></div>
+        <div><dt className="text-slate-500">Payment reference</dt><dd className="font-mono font-semibold text-slate-900" dir="ltr">{order.reference}</dd></div>
+      </dl>
+      <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+        Send the transfer receipt to <a href="mailto:payments@mysupplier.sa" className="font-semibold text-brand-700 hover:underline">payments@mysupplier.sa</a> quoting the reference to speed up confirmation.
+      </p>
+    </Card>
+  );
+}
+
+/** Compact ZATCA invoice preview (GET /orders/:id/invoice) with a link to the printable HTML version. */
+export function InvoicePreview({ orderId }: { orderId: string }) {
+  const { lang } = useI18n();
+  const invoice = useAsync(() => api.invoice(orderId), [orderId]);
+  const openInvoice = () => window.open(invoiceHtmlUrl(orderId), "_blank", "noopener,noreferrer");
+
+  return (
+    <Card>
+      <CardHeader
+        title="Tax invoice"
+        subtitle="Simplified tax invoice (ZATCA phase 1)"
+        action={
+          <Button variant="outline" size="sm" onClick={openInvoice}>
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
+              <path fillRule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clipRule="evenodd" />
+              <path fillRule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clipRule="evenodd" />
+            </svg>
+            View invoice
+          </Button>
+        }
+      />
+      {invoice.loading ? (
+        <LoadingBlock className="py-6" />
+      ) : invoice.error || !invoice.data ? (
+        <div className="px-5 py-4">
+          <Alert kind="info" onRetry={invoice.reload}>{invoice.error ?? "Invoice not available yet."}</Alert>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-start gap-5 px-5 py-4 text-sm">
+          <dl className="min-w-0 flex-1 space-y-2">
+            <div><dt className="text-slate-500">Invoice number</dt><dd className="font-mono font-medium text-slate-900" dir="ltr">{invoice.data.invoiceNumber}</dd></div>
+            <div><dt className="text-slate-500">Issued</dt><dd className="font-medium text-slate-900">{formatDate(invoice.data.issuedAt, lang)}</dd></div>
+            <div><dt className="text-slate-500">Seller</dt><dd className="font-medium text-slate-900">{invoice.data.seller?.name}</dd></div>
+            <div><dt className="text-slate-500">Seller VAT number</dt><dd className="font-mono font-medium text-slate-900" dir="ltr">{invoice.data.seller?.vatNumber ?? "—"}</dd></div>
+            <div><dt className="text-slate-500">Total incl. VAT</dt><dd className="font-semibold tabular-nums text-slate-900">{formatSar(invoice.data.order?.total, lang)}</dd></div>
+          </dl>
+          {invoice.data.qrSvg && (
+            <div className="shrink-0">
+              <div className="h-[120px] w-[120px] overflow-hidden rounded-lg border border-slate-200 bg-white p-1 [&_svg]:h-full [&_svg]:w-full" dangerouslySetInnerHTML={{ __html: invoice.data.qrSvg }} aria-label="ZATCA QR code" role="img" />
+              <p className="mt-1 text-center text-[10px] text-slate-400">ZATCA QR</p>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function OrderDetail({ id, perspective, backHref }: { id: string; perspective: OrderPerspective; backHref: string }) {
   const { lang } = useI18n();
   const state = useAsync(() => api.order(id), [id]);
+  const { config: paymentConfig } = usePaymentConfig();
   const [flash, setFlash] = useFlash();
   const [busy, setBusy] = useState<OrderStatus | "PAID" | null>(null);
 
@@ -158,6 +229,8 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
   const canSupplierAct = (perspective === "supplier" || perspective === "admin") && nextStatus;
   const canBuyerCancel = (perspective === "buyer" || perspective === "admin") && o.status === "PENDING";
   const canMarkPaid = (perspective === "supplier" || perspective === "admin") && o.paymentStatus !== "PAID" && o.status !== "CANCELLED";
+  const canPayByCard = perspective === "buyer" && o.paymentStatus === "UNPAID" && o.paymentMethod === "CARD" && o.status !== "CANCELLED" && !!paymentConfig?.cardPaymentsEnabled;
+  const showBankInstructions = o.paymentMethod === "BANK_TRANSFER" && o.paymentStatus === "UNPAID" && o.status !== "CANCELLED";
 
   const orderItems = o.items ?? [];
   const bidItems = o.bid?.items ?? [];
@@ -187,6 +260,14 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
           <>
             <StatusBadge status={o.status} />
             <PaymentStatusBadge status={o.paymentStatus} />
+            <Button variant="outline" onClick={() => window.open(invoiceHtmlUrl(o.id), "_blank", "noopener,noreferrer")}>
+              View invoice
+            </Button>
+            {canPayByCard && (
+              <LinkButton href={`/pay/${o.id}`} variant="accent">
+                Pay now
+              </LinkButton>
+            )}
             {canMarkPaid && (
               <Button variant="outline" onClick={markPaid} loading={busy === "PAID"}>
                 Mark as paid
@@ -210,6 +291,18 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
       <Card className="p-5">
         <OrderStatusTimeline status={o.status} />
       </Card>
+
+      {canPayByCard && (
+        <Alert kind="warning" className="mt-6">
+          <span className="font-semibold">Payment pending.</span> This order is awaiting card payment.{" "}
+          <Link href={`/pay/${o.id}`} className="font-semibold underline underline-offset-2">Pay {formatSar(o.total, lang)} now</Link>
+        </Alert>
+      )}
+      {showBankInstructions && (
+        <div className="mt-6">
+          <BankTransferInstructions order={o} />
+        </div>
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -323,6 +416,7 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
               <div><dt className="text-slate-500">Status</dt><dd className="mt-0.5"><PaymentStatusBadge status={o.paymentStatus} /></dd></div>
             </dl>
           </Card>
+          <InvoicePreview orderId={o.id} />
           <Card>
             <CardHeader title="Delivery" />
             <dl className="space-y-2 px-5 py-4 text-sm">

@@ -1,15 +1,18 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import type { OrderExtended, OrderStatus, PaymentMethod } from "@mysupplier/shared";
+import * as WebBrowser from "expo-web-browser";
+import { SvgXml } from "react-native-svg";
+import type { OrderExtended, OrderStatus, PaymentConfig, PaymentMethod } from "@mysupplier/shared";
 import { Screen, Button, StatusBadge, Card, SectionHeader, KeyValue, LoadingView, ErrorView, RequireAuth, ProductImage } from "@/components";
-import { api, getErrorMessage } from "@/lib/api";
+import { api, getErrorMessage, invoiceHtmlUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { formatDate, formatDateTime, formatSar } from "@/lib/format";
+import { startCardPayment } from "@/lib/payments";
 import { useApi } from "@/hooks/useApi";
-import { colors, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography } from "@/theme";
 
 const STEPS: Array<{ status: OrderStatus; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { status: "PENDING", label: "Order placed", icon: "receipt-outline" },
@@ -39,10 +42,28 @@ function OrderDetailContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useI18n();
-  const { user, isSupplier } = useAuth();
+  const { user, isSupplier, token } = useAuth();
   const { data, loading, error, refreshing, reload, refresh, setData } = useApi(() => api.order(id), [id], Boolean(id));
   const [busy, setBusy] = useState(false);
   const [payBusy, setPayBusy] = useState(false);
+  const [cardBusy, setCardBusy] = useState(false);
+  const [cardError, setCardError] = useState<string | null>(null);
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null);
+  // ZATCA simplified invoice (number + QR); available for every order the caller may see.
+  const invoice = useApi(() => api.invoice(id), [id, data?.paymentStatus, data?.status], Boolean(id) && Boolean(data));
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .paymentConfig()
+      .then((cfg) => {
+        if (!cancelled) setPaymentConfig(cfg);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -114,6 +135,30 @@ function OrderDetailContent() {
   };
 
   const next = NEXT[order.status];
+  const cardEnabled = Boolean(paymentConfig?.cardPaymentsEnabled);
+
+  const payByCard = async () => {
+    if (!token) return;
+    setCardBusy(true);
+    setCardError(null);
+    try {
+      const outcome = await startCardPayment(order.id, token);
+      if (outcome.kind === "returned") {
+        router.push({ pathname: "/payment", params: { order: outcome.orderId, id: outcome.paymentId ?? "", status: outcome.status ?? "" } });
+      }
+      // The gateway webhook may have landed already; refresh quietly either way.
+      api.order(order.id).then(setData).catch(() => undefined);
+    } catch (err) {
+      setCardError(getErrorMessage(err));
+    } finally {
+      setCardBusy(false);
+    }
+  };
+
+  const openInvoice = () => {
+    if (!token) return;
+    WebBrowser.openBrowserAsync(invoiceHtmlUrl(order.id, token)).catch(() => undefined);
+  };
 
   return (
     <Screen scroll refreshing={refreshing} onRefresh={refresh} edges={["bottom", "left", "right"]}>
@@ -214,9 +259,66 @@ function OrderDetailContent() {
           </View>
           <StatusBadge status={paymentStatus} />
         </View>
+        {isBuyer && order.paymentMethod === "CARD" && paymentStatus === "UNPAID" && !cancelled ? (
+          <>
+            <Button
+              title={`${t("payNow")} · ${formatSar(order.total)}`}
+              icon="card-outline"
+              fullWidth
+              loading={cardBusy}
+              disabled={paymentConfig !== null && !cardEnabled}
+              onPress={payByCard}
+              style={{ marginTop: spacing.md }}
+            />
+            <Text style={[typography.caption, { marginTop: spacing.sm, textAlign: "center" }]}>
+              {paymentConfig !== null && !cardEnabled ? t("cardUnavailable") : t("cardOnlineHint")}
+            </Text>
+            {cardError ? <Text style={[typography.caption, { color: colors.danger, marginTop: spacing.xs, textAlign: "center" }]}>{cardError}</Text> : null}
+          </>
+        ) : null}
+        {order.paymentMethod === "BANK_TRANSFER" && paymentStatus === "UNPAID" && !cancelled ? (
+          <View style={styles.bankBox}>
+            <View style={styles.bankHead}>
+              <Ionicons name="business-outline" size={16} color={colors.primary} />
+              <Text style={styles.bankTitle}>{t("bankTransferInstructions")}</Text>
+            </View>
+            <KeyValue label="Beneficiary" value={order.company?.name ?? "Supplier"} />
+            <KeyValue label="Amount" value={formatSar(order.total)} />
+            <KeyValue label="Transfer reference" value={order.reference} />
+            <Text style={[typography.caption, { marginTop: spacing.sm }]}>
+              Transfer the amount to the supplier's bank account (IBAN shared on the order confirmation / invoice) and quote the reference above so the supplier can match it. The supplier marks the order as paid once funds arrive.
+            </Text>
+          </View>
+        ) : null}
         {(isOrderSupplier || isAdmin) && paymentStatus === "UNPAID" && !cancelled ? (
           <Button title={t("markAsPaid")} variant="secondary" icon="cash-outline" fullWidth loading={payBusy} onPress={markPaid} style={{ marginTop: spacing.md }} />
         ) : null}
+      </Card>
+
+      <SectionHeader title={t("invoice")} />
+      <Card>
+        <View style={styles.invoiceRow}>
+          <View style={{ flex: 1 }}>
+            {invoice.data ? (
+              <>
+                <Text style={typography.caption}>{t("invoiceNumber")}</Text>
+                <Text style={styles.invoiceNumber}>{invoice.data.invoiceNumber}</Text>
+                <Text style={typography.caption}>Issued {formatDate(invoice.data.issuedAt)}</Text>
+                {invoice.data.seller.vatNumber ? <Text style={typography.caption}>Seller VAT {invoice.data.seller.vatNumber}</Text> : null}
+              </>
+            ) : invoice.loading ? (
+              <Text style={typography.bodySmall}>Preparing invoice…</Text>
+            ) : (
+              <Text style={typography.bodySmall}>{invoice.error ? "Invoice not available yet" : "Simplified tax invoice (ZATCA phase 1)"}</Text>
+            )}
+          </View>
+          {invoice.data?.qrSvg ? (
+            <View style={styles.qrWrap} accessibilityLabel="ZATCA invoice QR code">
+              <SvgXml xml={invoice.data.qrSvg} width={96} height={96} />
+            </View>
+          ) : null}
+        </View>
+        <Button title={t("viewInvoice")} variant="outline" icon="document-text-outline" fullWidth onPress={openInvoice} style={{ marginTop: spacing.md }} />
       </Card>
 
       <SectionHeader title={t("deliveryDetails")} />
@@ -337,6 +439,12 @@ const styles = StyleSheet.create({
   stepLabel: { ...typography.body, color: colors.textMuted, fontWeight: "500" },
   paymentRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   paymentMethod: { ...typography.body, fontWeight: "600" },
+  bankBox: { marginTop: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primaryLight },
+  bankHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.xs },
+  bankTitle: { ...typography.label, color: colors.primary },
+  invoiceRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  invoiceNumber: { ...typography.h3, marginTop: 2, marginBottom: 2 },
+  qrWrap: { width: 104, height: 104, padding: 4, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
   itemRow: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.sm, gap: spacing.md },
   itemRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   itemDesc: { ...typography.body, fontWeight: "500" },

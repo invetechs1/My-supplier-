@@ -2,13 +2,14 @@ import React, { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
-import { SAUDI_CITIES, type CheckoutResult, type PaymentMethod } from "@mysupplier/shared";
+import { SAUDI_CITIES, type CheckoutResult, type OrderExtended, type PaymentConfig, type PaymentMethod } from "@mysupplier/shared";
 import { Screen, Button, Card, KeyValue, TextField, PickerField, PickerModal, EmptyState, LoadingView, RequireAuth, StatusBadge } from "@/components";
 import { api, getErrorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCart } from "@/lib/cart";
 import { useI18n } from "@/lib/i18n";
 import { formatSar } from "@/lib/format";
+import { startCardPayment } from "@/lib/payments";
 import { colors, radius, spacing, typography } from "@/theme";
 
 const CITY_OPTIONS = SAUDI_CITIES.map((c) => ({ value: c, label: c }));
@@ -16,8 +17,29 @@ const CITY_OPTIONS = SAUDI_CITIES.map((c) => ({ value: c, label: c }));
 function CheckoutForm() {
   const router = useRouter();
   const { t } = useI18n();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { items, groups, summary, loading, refresh } = useCart();
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null);
+  const [paying, setPaying] = useState<string | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+  const cardEnabled = Boolean(paymentConfig?.cardPaymentsEnabled);
+
+  // Card payments are offered only when the gateway is configured server-side.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .paymentConfig()
+      .then((cfg) => {
+        if (!cancelled) setPaymentConfig(cfg);
+      })
+      .catch(() => {
+        if (!cancelled) setPaymentConfig({ provider: "MANUAL", cardPaymentsEnabled: false, currency: "SAR", methods: ["COD", "BANK_TRANSFER"] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
 
   const [city, setCity] = useState<string>(user?.company?.city ?? "");
   const [cityOpen, setCityOpen] = useState(false);
@@ -35,11 +57,37 @@ function CheckoutForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.phone]);
 
-  const PAYMENT_OPTIONS: Array<{ value: PaymentMethod; label: string; hint?: string; icon: "cash-outline" | "business-outline" | "card-outline" }> = [
+  useEffect(() => {
+    if (paymentConfig && !cardEnabled && payment === "CARD") setPayment("COD");
+  }, [paymentConfig, cardEnabled, payment]);
+
+  const PAYMENT_OPTIONS: Array<{ value: PaymentMethod; label: string; hint?: string; icon: "cash-outline" | "business-outline" | "card-outline"; disabled?: boolean }> = [
     { value: "COD", label: t("cod"), icon: "cash-outline" },
-    { value: "BANK_TRANSFER", label: t("bankTransfer"), icon: "business-outline" },
-    { value: "CARD", label: t("card"), hint: t("cardHint"), icon: "card-outline" },
+    { value: "BANK_TRANSFER", label: t("bankTransfer"), hint: "Bank details and the order reference are shown after checkout", icon: "business-outline" },
+    { value: "CARD", label: t("card"), hint: cardEnabled ? t("cardOnlineHint") : t("cardUnavailable"), icon: "card-outline", disabled: !cardEnabled },
   ];
+
+  /** Run the hosted card payment for one order; verify on return and update the result list. */
+  const payOrder = async (order: OrderExtended) => {
+    if (!token) return;
+    setPaying(order.id);
+    setPayError(null);
+    try {
+      const outcome = await startCardPayment(order.id, token);
+      if (outcome.kind === "returned") {
+        router.push({ pathname: "/payment", params: { order: outcome.orderId, id: outcome.paymentId ?? "", status: outcome.status ?? "" } });
+        // Refresh this order so the success list reflects the payment.
+        api
+          .order(order.id)
+          .then((fresh) => setResult((prev) => (prev ? { ...prev, orders: prev.orders.map((o) => (o.id === fresh.id ? fresh : o)) } : prev)))
+          .catch(() => undefined);
+      }
+    } catch (err) {
+      setPayError(getErrorMessage(err));
+    } finally {
+      setPaying(null);
+    }
+  };
 
   const validate = () => {
     const next: typeof errors = {};
@@ -64,6 +112,10 @@ function CheckoutForm() {
       });
       setResult(res);
       void refresh();
+      if (payment === "CARD" && res.orders.length > 0) {
+        // Start with the first order; the rest get "Pay now" buttons below.
+        void payOrder(res.orders[0]);
+      }
     } catch (err) {
       setSubmitError(getErrorMessage(err));
     } finally {
@@ -99,12 +151,30 @@ function CheckoutForm() {
                 <Text style={styles.orderTotal}>{formatSar(o.total)}</Text>
               </View>
             </View>
+            {o.paymentMethod === "CARD" && (o.paymentStatus ?? "UNPAID") === "UNPAID" ? (
+              <Button
+                title={`${t("payNow")} · ${formatSar(o.total)}`}
+                icon="card-outline"
+                fullWidth
+                loading={paying === o.id}
+                disabled={paying !== null && paying !== o.id}
+                onPress={() => payOrder(o)}
+                style={{ marginTop: spacing.md }}
+              />
+            ) : null}
+            {o.paymentStatus === "PAID" ? (
+              <View style={[styles.orderLink, { justifyContent: "flex-start" }]}>
+                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                <Text style={[styles.orderLinkText, { color: colors.success }]}>{t("paid")}</Text>
+              </View>
+            ) : null}
             <View style={styles.orderLink}>
               <Text style={styles.orderLinkText}>{t("viewOrder")}</Text>
               <Ionicons name="chevron-forward" size={16} color={colors.primary} />
             </View>
           </Card>
         ))}
+        {payError ? <Text style={styles.error}>{payError}</Text> : null}
         <Button title={t("orders")} icon="cube-outline" size="lg" fullWidth onPress={() => router.replace("/(tabs)/orders")} style={{ marginTop: spacing.md }} />
         <Button title={t("continueShopping")} variant="ghost" onPress={() => router.replace("/(tabs)/shop")} style={{ marginTop: spacing.sm }} />
       </Screen>
@@ -156,11 +226,18 @@ function CheckoutForm() {
         {PAYMENT_OPTIONS.map((opt) => {
           const active = payment === opt.value;
           return (
-            <Pressable key={opt.value} onPress={() => setPayment(opt.value)} style={[styles.segmentItem, active && styles.segmentItemActive]}>
-              <Ionicons name={opt.icon} size={18} color={active ? "#fff" : colors.textSecondary} />
-              <Text style={[styles.segmentText, active && styles.segmentTextActive]} numberOfLines={2}>
+            <Pressable
+              key={opt.value}
+              onPress={() => !opt.disabled && setPayment(opt.value)}
+              disabled={opt.disabled}
+              accessibilityState={{ selected: active, disabled: opt.disabled }}
+              style={[styles.segmentItem, active && styles.segmentItemActive, opt.disabled && styles.segmentItemDisabled]}
+            >
+              <Ionicons name={opt.icon} size={18} color={active ? "#fff" : opt.disabled ? colors.textMuted : colors.textSecondary} />
+              <Text style={[styles.segmentText, active && styles.segmentTextActive, opt.disabled && { color: colors.textMuted }]} numberOfLines={2}>
                 {opt.label}
               </Text>
+              {opt.disabled ? <Text style={styles.soon}>Soon</Text> : null}
             </Pressable>
           );
         })}
@@ -232,6 +309,8 @@ const styles = StyleSheet.create({
     minHeight: 68,
   },
   segmentItemActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  segmentItemDisabled: { backgroundColor: colors.neutralLight, borderStyle: "dashed" },
+  soon: { fontSize: 10, fontWeight: "700", color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 },
   segmentText: { fontSize: 12, fontWeight: "600", color: colors.textSecondary, textAlign: "center" },
   segmentTextActive: { color: "#fff" },
   groupRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: 6 },

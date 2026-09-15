@@ -32,6 +32,7 @@ const I = {
   upload: <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />,
   cart: <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />,
   rss: <path strokeLinecap="round" strokeLinejoin="round" d="M12.75 19.5v-.75a7.5 7.5 0 00-7.5-7.5H4.5m0-6.75h.75c7.87 0 14.25 6.38 14.25 14.25v.75M6 18.75a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />,
+  user: <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />,
 };
 
 function Icon({ children }: { children: React.ReactNode }) {
@@ -48,6 +49,7 @@ export const buyerNav: NavItem[] = [
   { href: "/dashboard/rfqs/new", labelKey: "dash.newRfq", exact: true, icon: <Icon>{I.plus}</Icon> },
   { href: "/dashboard/orders", labelKey: "dash.orders", icon: <Icon>{I.box}</Icon> },
   { href: "/dashboard/notifications", labelKey: "dash.notifications", icon: <Icon>{I.bell}</Icon> },
+  { href: "/account", labelKey: "nav.account", icon: <Icon>{I.user}</Icon> },
 ];
 
 export const supplierNav: NavItem[] = [
@@ -58,6 +60,7 @@ export const supplierNav: NavItem[] = [
   { href: "/supplier/catalog", labelKey: "sup.catalog", icon: <Icon>{I.cart}</Icon> },
   { href: "/supplier/orders", labelKey: "sup.orders", icon: <Icon>{I.box}</Icon> },
   { href: "/supplier/notifications", labelKey: "dash.notifications", icon: <Icon>{I.bell}</Icon> },
+  { href: "/account", labelKey: "nav.account", icon: <Icon>{I.user}</Icon> },
 ];
 
 export const adminNav: NavItem[] = [
@@ -68,6 +71,7 @@ export const adminNav: NavItem[] = [
   { href: "/admin/categories", labelKey: "admin.categories", icon: <Icon>{I.tag}</Icon> },
   { href: "/admin/imports", labelKey: "admin.imports", icon: <Icon>{I.upload}</Icon> },
   { href: "/admin/feeds", labelKey: "admin.feeds", icon: <Icon>{I.rss}</Icon> },
+  { href: "/account", labelKey: "nav.account", icon: <Icon>{I.user}</Icon> },
 ];
 
 interface SidebarLayoutProps {

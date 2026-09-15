@@ -183,6 +183,9 @@ function UserMenu() {
           <Link href={homeForRole(user.role)} className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setOpen(false)}>
             {t("nav.dashboard")}
           </Link>
+          <Link href="/account" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setOpen(false)}>
+            {t("nav.account")}
+          </Link>
           <button
             type="button"
             className="block w-full px-4 py-2 text-start text-sm text-red-600 hover:bg-red-50"
@@ -219,7 +222,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-6">
           <Logo />
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
@@ -243,7 +246,7 @@ export function Header() {
           </nav>
         </div>
         <HeaderSearch className="hidden w-full max-w-xs flex-1 lg:block" />
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <LangToggle className="hidden sm:inline-flex" />
           <CartButton />
           <NotificationBell />
@@ -252,7 +255,7 @@ export function Header() {
               <Link href="/login" className="hidden rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 sm:block">
                 {t("nav.login")}
               </Link>
-              <Link href="/register" className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700">
+              <Link href="/register" className="whitespace-nowrap rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 sm:px-4">
                 {t("nav.register")}
               </Link>
             </>
@@ -283,11 +286,28 @@ export function Header() {
             <Link href="/cart" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
               {t("nav.cart")}
             </Link>
-            {!user && (
-              <Link href="/login" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
-                {t("nav.login")}
-              </Link>
+            {user ? (
+              <>
+                <Link href={homeForRole(user.role)} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  {t("nav.dashboard")}
+                </Link>
+                <Link href="/account" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  {t("nav.account")}
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  {t("nav.login")}
+                </Link>
+                <Link href="/register" className="rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50">
+                  {t("nav.register")}
+                </Link>
+              </>
             )}
+            <Link href="/help" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+              {t("nav.help")}
+            </Link>
           </nav>
           <div className="mt-3 flex items-center justify-between">
             <LangToggle />

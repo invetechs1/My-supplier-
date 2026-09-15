@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { LoginPayload, RegisterPayload, User } from "@mysupplier/shared";
 import { api, getStoredToken, setStoredToken, ApiRequestError } from "./api";
+import { registerForPushAsync, unregisterPushAsync } from "./push";
 
 interface AuthContextValue {
   token: string | null;
@@ -36,6 +37,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const me = await api.me();
           if (!cancelled) setUser(me);
+          // Best-effort: (re)register this device for push on every app start.
+          void registerForPushAsync(stored);
         } catch (err) {
           // Only drop the token when the server says it is invalid; keep it on
           // network errors so an offline start does not log the user out.
@@ -57,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await setStoredToken(nextToken);
     setToken(nextToken);
     setUser(nextUser);
+    void registerForPushAsync(nextToken);
   }, []);
 
   const login = useCallback(
@@ -78,6 +82,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    // Remove the push token while the JWT is still valid, then drop the session.
+    await unregisterPushAsync();
     await setStoredToken(null);
     setToken(null);
     setUser(null);

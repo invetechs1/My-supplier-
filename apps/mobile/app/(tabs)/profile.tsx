@@ -1,9 +1,11 @@
 import React, { useCallback, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
+import Constants from "expo-constants";
+import * as WebBrowser from "expo-web-browser";
 import { Screen, Button, Card, SectionHeader, KeyValue, StatusBadge } from "@/components";
-import { api } from "@/lib/api";
+import { api, WEB_URL } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n, type Locale } from "@/lib/i18n";
 import { formatDate } from "@/lib/format";
@@ -76,11 +78,20 @@ export default function ProfileScreen() {
     }
   };
 
-  const confirmLogout = () =>
+  const confirmLogout = () => {
+    if (Platform.OS === "web") {
+      void logout();
+      return;
+    }
     Alert.alert(t("logout"), "You can keep browsing prices without an account.", [
       { text: "Cancel", style: "cancel" },
       { text: t("logout"), style: "destructive", onPress: () => logout() },
     ]);
+  };
+
+  const openWeb = (path: string) => {
+    WebBrowser.openBrowserAsync(`${WEB_URL}${path}`).catch(() => undefined);
+  };
 
   const initials = (user?.name ?? "?")
     .split(" ")
@@ -173,12 +184,23 @@ export default function ProfileScreen() {
       </View>
 
       {isAuthenticated ? (
-        <View style={[styles.group, { marginTop: spacing.lg }]}>
-          <Row icon="log-out-outline" label={t("logout")} onPress={confirmLogout} danger />
-        </View>
+        <>
+          <SectionHeader title={t("account")} />
+          <View style={styles.group}>
+            <Row icon="person-circle-outline" label={t("accountSettings")} onPress={() => router.push("/account")} />
+            <Row icon="log-out-outline" label={t("logout")} onPress={confirmLogout} danger />
+          </View>
+        </>
       ) : null}
 
-      <Text style={styles.version}>MySupplier mobile · v0.1.0</Text>
+      <SectionHeader title="About" />
+      <View style={styles.group}>
+        <Row icon="document-outline" label={t("terms")} onPress={() => openWeb("/terms")} />
+        <Row icon="shield-checkmark-outline" label={t("privacy")} onPress={() => openWeb("/privacy")} />
+        <Row icon="help-circle-outline" label="Help & support" onPress={() => openWeb("/contact")} />
+      </View>
+
+      <Text style={styles.version}>MySupplier · v{Constants.expoConfig?.version ?? "1.0.0"}</Text>
     </Screen>
   );
 }

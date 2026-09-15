@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as SecureStore from "expo-secure-store";
+import { storage } from "./storage";
 import { VAT_RATE, type Cart, type CartItem, type Material, type ShopOffer } from "@mysupplier/shared";
 import { api } from "./api";
 import { useAuth } from "./auth";
@@ -79,7 +79,7 @@ function slimMaterial(m: Material): Material {
 
 async function readGuestCart(): Promise<LocalCartItem[]> {
   try {
-    const raw = await SecureStore.getItemAsync(GUEST_CART_KEY);
+    const raw = await storage.getItem(GUEST_CART_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -94,8 +94,8 @@ async function readGuestCart(): Promise<LocalCartItem[]> {
 
 async function writeGuestCart(items: LocalCartItem[]): Promise<void> {
   try {
-    if (items.length === 0) await SecureStore.deleteItemAsync(GUEST_CART_KEY);
-    else await SecureStore.setItemAsync(GUEST_CART_KEY, JSON.stringify(items));
+    if (items.length === 0) await storage.deleteItem(GUEST_CART_KEY);
+    else await storage.setItem(GUEST_CART_KEY, JSON.stringify(items));
   } catch {
     // SecureStore unavailable (web / private mode): keep the in-memory cart only.
   }

@@ -13,6 +13,8 @@ import type {
   CreateBidPayload,
   CreateRfqPayload,
   Feed,
+  HealthStatus,
+  InvoiceData,
   LoginPayload,
   Material,
   Notification,
@@ -20,6 +22,9 @@ import type {
   OrderExtended,
   OrderStatus,
   Paginated,
+  PaymentConfig,
+  PaymentIntent,
+  PaymentRecord,
   PaymentStatus,
   PlatformStats,
   PriceHistoryPoint,
@@ -38,6 +43,7 @@ import type {
 } from "@mysupplier/shared";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
 export const TOKEN_KEY = "ms_token";
 
 export class ApiRequestError extends Error {
@@ -231,7 +237,7 @@ export interface FeedRow {
 
 export const api = {
   // Public
-  health: () => request<{ ok: boolean }>("/health"),
+  health: () => request<HealthStatus>("/health"),
   stats: () => request<PlatformStats>("/stats"),
   priceIndex: () => request<PriceIndexEntry[]>("/price-index"),
   categories: () => request<Category[]>("/categories"),
@@ -255,6 +261,12 @@ export const api = {
   me: () => request<User>("/auth/me"),
   updateMe: (body: { name?: string; phone?: string; locale?: "en" | "ar" }) =>
     request<User>("/auth/me", { method: "PATCH", body }),
+  forgotPassword: (email: string) => request<{ ok: boolean }>("/auth/forgot-password", { method: "POST", body: { email } }),
+  resetPassword: (token: string, password: string) =>
+    request<{ ok: boolean }>("/auth/reset-password", { method: "POST", body: { token, password } }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/change-password", { method: "POST", body: { currentPassword, newPassword } }),
+  deleteMe: () => request<{ ok: boolean }>("/auth/me", { method: "DELETE" }),
 
   // Buyer
   createRfq: (payload: CreateRfqPayload) => request<Rfq>("/rfqs", { method: "POST", body: payload }),
@@ -309,6 +321,18 @@ export const api = {
     request<OrderExtended>(`/orders/${encodeURIComponent(id)}/status`, { method: "PATCH", body: { status } }),
   updateOrderPayment: (id: string, paymentStatus: PaymentStatus) =>
     request<OrderExtended>(`/orders/${encodeURIComponent(id)}/payment`, { method: "PATCH", body: { paymentStatus } }),
+  invoice: (id: string) => request<InvoiceData>(`/orders/${encodeURIComponent(id)}/invoice`),
+
+  // Payments (Moyasar)
+  paymentsConfig: () => request<PaymentConfig>("/payments/config"),
+  createPaymentIntent: (orderId: string) =>
+    request<PaymentIntent>(`/payments/${encodeURIComponent(orderId)}/intent`, { method: "POST" }),
+  verifyPayment: (orderId: string, paymentId: string) =>
+    request<{ order: OrderExtended; payment: PaymentRecord }>(`/payments/${encodeURIComponent(orderId)}/verify`, {
+      method: "POST",
+      body: { paymentId },
+    }),
+  payments: (orderId: string) => request<PaymentRecord[]>(`/payments/${encodeURIComponent(orderId)}`),
 
   // Notifications
   notifications: async (unreadOnly = false) => {
@@ -353,6 +377,12 @@ export const api = {
   adminFeedImport: (body: { sourceName: string; items: FeedRow[] }) =>
     request<CatalogImportResult>("/admin/feeds/import", { method: "POST", body }),
 };
+
+/** Printable invoice URL; the JWT travels in the query because browsers can't send headers on navigation. */
+export function invoiceHtmlUrl(orderId: string): string {
+  const token = getToken();
+  return `${API_URL}/orders/${encodeURIComponent(orderId)}/invoice.html${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+}
 
 /** Turn a loose import error row into a readable string. */
 export function importErrorText(err: ImportRowError): string {

@@ -11,3 +11,6 @@ web-build/
 .env
 .env.local
 expo-env.d.ts
+
+# Google Play service account used by `eas submit` (never commit)
+google-play-service-account.json
