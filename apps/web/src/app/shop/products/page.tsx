@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { SAUDI_CITIES, type Category } from "@mysupplier/shared";
 import { api } from "@/lib/api";
-import { useAsync } from "@/lib/hooks";
+import { useAsync, usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/format";
 import { Alert, Button, Card, EmptyState, Input, LoadingBlock, Pagination, Select } from "@/components/ui";
@@ -64,6 +64,7 @@ function CategoryTree({ categories, selected, onSelect, lang }: { categories: Ca
 
 function ProductsInner() {
   const { t, lang } = useI18n();
+  usePageTitle(t("shop.allProducts"));
   const router = useRouter();
   const params = useSearchParams();
 

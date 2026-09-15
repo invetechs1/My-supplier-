@@ -15,3 +15,4 @@ export { ProductImage, categoryEmoji } from "./ProductImage";
 export { ProductCard, StockPill, DealBadge } from "./ProductCard";
 export { QtyStepper } from "./QtyStepper";
 export { CartButton, CartBadge } from "./CartButton";
+export { SvgImage } from "./SvgImage";

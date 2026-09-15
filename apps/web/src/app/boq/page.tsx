@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { BoqAnalysis, BoqLineInput } from "@mysupplier/shared";
 import { api, errorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/format";
 import { Alert, Button, Card, CardHeader, LinkButton, PageHeader, Spinner } from "@/components/ui";
@@ -23,6 +24,7 @@ function csvEscape(v: string | number | null | undefined): string {
 
 export default function BoqPage() {
   const { t, lang } = useI18n();
+  usePageTitle(t("boq.title"));
   const { user } = useAuth();
 
   const [input, setInput] = useState<BoqInputValue>({ text: "", city: "", verifiedOnly: false });

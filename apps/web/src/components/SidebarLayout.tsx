@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Role } from "@mysupplier/shared";
 import { homeForRole, useAuth } from "@/lib/auth";
+import { usePageTitle } from "@/lib/hooks";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/format";
 import { LoadingBlock } from "./ui";
@@ -90,6 +91,8 @@ export function SidebarLayout({ items, allow, title, children }: SidebarLayoutPr
   const [open, setOpen] = useState(false);
 
   const permitted = !!user && (allow.includes(user.role) || user.role === "ADMIN");
+  const activeItem = items.find((item) => (item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`)));
+  usePageTitle(activeItem ? `${t(activeItem.labelKey)} · ${title}` : title);
 
   useEffect(() => {
     if (loading) return;

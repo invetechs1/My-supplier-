@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import type { CartItem } from "@mysupplier/shared";
 import { useAuth } from "@/lib/auth";
 import { GUEST_DELIVERY_FEE_PER_SUPPLIER, clampQty, minQtyFor, supplierKey, useCart } from "@/lib/cart";
+import { usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatSar } from "@/lib/format";
 import { Alert, Button, Card, CardHeader, EmptyState, LinkButton, LoadingBlock, PageHeader, VerifiedBadge } from "@/components/ui";
@@ -62,6 +63,7 @@ function QtyStepper({ item, onChange, disabled }: { item: CartItem; onChange: (q
 
 export default function CartPage() {
   const { t, lang } = useI18n();
+  usePageTitle(t("cart.title"));
   const router = useRouter();
   const { user } = useAuth();
   const { cart, items, loading, busy, error, isGuest, update, remove, clear, reload } = useCart();

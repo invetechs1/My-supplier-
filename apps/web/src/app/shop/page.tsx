@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Category } from "@mysupplier/shared";
 import { api } from "@/lib/api";
-import { useAsync } from "@/lib/hooks";
+import { useAsync, usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { cn, formatNumber } from "@/lib/format";
 import { Alert, Card, EmptyState, LinkButton, LoadingBlock } from "@/components/ui";
@@ -125,6 +125,7 @@ const TRUST = [
 
 export default function ShopHomePage() {
   const { t, lang } = useI18n();
+  usePageTitle(t("shop.title"));
   const home = useAsync(() => api.shopHome(), []);
 
   return (

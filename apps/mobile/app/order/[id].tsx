@@ -3,9 +3,8 @@ import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { SvgXml } from "react-native-svg";
 import type { OrderExtended, OrderStatus, PaymentConfig, PaymentMethod } from "@mysupplier/shared";
-import { Screen, Button, StatusBadge, Card, SectionHeader, KeyValue, LoadingView, ErrorView, RequireAuth, ProductImage } from "@/components";
+import { Screen, Button, StatusBadge, Card, SectionHeader, KeyValue, LoadingView, ErrorView, RequireAuth, ProductImage, SvgImage } from "@/components";
 import { api, getErrorMessage, invoiceHtmlUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -313,8 +312,8 @@ function OrderDetailContent() {
             )}
           </View>
           {invoice.data?.qrSvg ? (
-            <View style={styles.qrWrap} accessibilityLabel="ZATCA invoice QR code">
-              <SvgXml xml={invoice.data.qrSvg} width={96} height={96} />
+            <View style={styles.qrWrap}>
+              <SvgImage xml={invoice.data.qrSvg} width={96} height={96} accessibilityLabel="ZATCA invoice QR code" />
             </View>
           ) : null}
         </View>

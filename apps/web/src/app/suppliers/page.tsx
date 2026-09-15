@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { SAUDI_CITIES } from "@mysupplier/shared";
 import { api } from "@/lib/api";
-import { useAsync } from "@/lib/hooks";
+import { useAsync, usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { Alert, Badge, Button, Card, EmptyState, Input, LoadingBlock, PageHeader, Select, VerifiedBadge } from "@/components/ui";
 
@@ -23,6 +23,7 @@ function Stars({ rating }: { rating: number }) {
 
 function SuppliersInner() {
   const { t } = useI18n();
+  usePageTitle(t("suppliers.title"));
   const router = useRouter();
   const params = useSearchParams();
   const q = params.get("q") ?? "";

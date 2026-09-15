@@ -7,6 +7,7 @@ import { Suspense, useEffect, useState } from "react";
 import { SAUDI_CITIES, type CompanyType, type RegisterPayload } from "@mysupplier/shared";
 import { api, errorMessage } from "@/lib/api";
 import { homeForRole, useAuth } from "@/lib/auth";
+import { usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/format";
 import { Alert, Button, Card, Input, LoadingBlock, Select } from "@/components/ui";
@@ -24,9 +25,11 @@ function RegisterInner() {
   const [role, setRole] = useState<"BUYER" | "SUPPLIER">(params.get("role") === "SUPPLIER" ? "SUPPLIER" : "BUYER");
   const [form, setForm] = useState({ name: "", email: "", password: "", phone: "" });
   const [company, setCompany] = useState({ name: "", nameAr: "", type: "SUPPLIER" as CompanyType, city: "Riyadh", crNumber: "", vatNumber: "", phone: "" });
+  const [agree, setAgree] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  usePageTitle(t("auth.register"));
 
   useEffect(() => {
     if (!loading && user) router.replace(homeForRole(user.role));
@@ -43,6 +46,7 @@ function RegisterInner() {
       if (company.crNumber && !/^\d{10}$/.test(company.crNumber)) next.crNumber = "CR number is usually 10 digits.";
       if (company.vatNumber && !/^\d{15}$/.test(company.vatNumber)) next.vatNumber = "VAT number is 15 digits.";
     }
+    if (!agree) next.agree = "You must accept the Terms and Privacy Policy to create an account.";
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -136,6 +140,18 @@ function RegisterInner() {
               </div>
             </div>
           )}
+
+          <div>
+            <label className="flex items-start gap-3 text-sm text-slate-700">
+              <input type="checkbox" name="agree" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600" required />
+              <span>
+                I agree to the{" "}
+                <Link href="/terms" target="_blank" className="font-semibold text-brand-700 hover:underline">Terms of Service</Link> and{" "}
+                <Link href="/privacy" target="_blank" className="font-semibold text-brand-700 hover:underline">Privacy Policy</Link>.
+              </span>
+            </label>
+            {errors.agree && <p className="mt-1 text-xs text-red-600">{errors.agree}</p>}
+          </div>
 
           <Button type="submit" className="w-full" loading={submitting}>{t("auth.register")}</Button>
         </form>

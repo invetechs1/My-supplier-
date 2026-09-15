@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { SAUDI_CITIES, type Material } from "@mysupplier/shared";
 import { api } from "@/lib/api";
-import { useAsync } from "@/lib/hooks";
+import { useAsync, usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { cn, formatSar, timeAgo } from "@/lib/format";
 import { Alert, Button, Card, EmptyState, LinkButton, LoadingBlock, PageHeader, Select, VerifiedBadge } from "@/components/ui";
@@ -14,6 +14,7 @@ import { MaterialAutocomplete } from "@/components/MaterialAutocomplete";
 
 function CompareInner() {
   const { t, lang } = useI18n();
+  usePageTitle(t("materials.compare"));
   const router = useRouter();
   const params = useSearchParams();
   const ids = useMemo(() => (params.get("ids") ?? "").split(",").map((s) => s.trim()).filter(Boolean), [params]);

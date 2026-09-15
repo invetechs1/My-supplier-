@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { SAUDI_CITIES, type Material } from "@mysupplier/shared";
 import { api } from "@/lib/api";
-import { useAsync } from "@/lib/hooks";
+import { useAsync, usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { cn, formatSar, timeAgo } from "@/lib/format";
 import { Alert, Button, Card, EmptyState, Input, LoadingBlock, Pagination, Select } from "@/components/ui";
@@ -19,6 +19,7 @@ const SORTS = [
 
 function MaterialsInner() {
   const { t, lang } = useI18n();
+  usePageTitle(t("materials.title"));
   const router = useRouter();
   const params = useSearchParams();
 

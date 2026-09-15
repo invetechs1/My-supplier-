@@ -29,9 +29,12 @@ export function ContactForm() {
     }
     const topic = TOPICS.find((t) => t.value === form.topic)?.label ?? "Enquiry";
     const subject = `[MySupplier] ${topic}${form.reference ? ` – ${form.reference.trim()}` : ""}`;
-    const body = [form.message.trim(), "", "—", form.name.trim() && `Name: ${form.name.trim()}`, form.email.trim() && `Email: ${form.email.trim()}`, form.reference.trim() && `Reference: ${form.reference.trim()}`]
-      .filter((line) => line !== false && line !== undefined)
-      .join("\n");
+    const details = [
+      form.name.trim() ? `Name: ${form.name.trim()}` : null,
+      form.email.trim() ? `Email: ${form.email.trim()}` : null,
+      form.reference.trim() ? `Reference: ${form.reference.trim()}` : null,
+    ].filter((line): line is string => !!line);
+    const body = [form.message.trim(), "", "—", ...details].join("\n");
     window.location.href = `mailto:${COMPANY.supportEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     setOpened(true);
   };
