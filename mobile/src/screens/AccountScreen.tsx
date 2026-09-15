@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import { api } from '../api';
+import { api, Payout } from '../api';
 import { lang, money, setLang, t } from '../i18n';
 import { useLoad, useStore } from '../store';
 import { S } from '../theme';
@@ -10,6 +10,8 @@ export default function AccountScreen({ navigation }: any) {
   const { user, logout, unread } = useStore();
   const [, force] = useState(0);
   const dash = useLoad(() => user?.role === 'supplier' ? api.get<any>('/suppliers/me/dashboard') : Promise.resolve(null), [user?.id]);
+  const fin = useLoad(() => user?.role === 'supplier' ? api.get<any>('/payments/supplier/summary') : Promise.resolve(null), [user?.id]);
+  const payouts = useLoad(() => user?.role === 'supplier' ? api.get<Payout[]>('/payments/payouts/mine') : Promise.resolve([]), [user?.id]);
   return (
     <ScrollView style={S.screen} contentContainerStyle={S.pad}>
       {user ? (
@@ -20,6 +22,12 @@ export default function AccountScreen({ navigation }: any) {
             <View style={[S.row, { flexWrap: 'wrap', marginTop: 12 }]}>
               <Stat label={t('price_list')} value={dash.data.offers} /><Stat label={t('bids')} value={dash.data.bids} />
               <Stat label={t('orders')} value={dash.data.orders} /><Stat label={t('total')} value={money(dash.data.revenue, 0)} />
+            </View>
+          )}
+          {user.role === 'supplier' && fin.data && (
+            <View style={[S.card, { marginTop: 12 }]}><Text style={S.h2}>{t('payouts')}</Text>
+              <Text style={S.text}>{t('in_escrow')}: <Text style={S.bold}>{money(fin.data.in_escrow)}</Text> · {t('payouts_pending')}: <Text style={S.bold}>{money(fin.data.payouts_pending)}</Text></Text>
+              {(payouts.data || []).slice(0, 5).map(x => <Text key={x.id} style={S.muted}>#{x.order_id} — {money(x.amount)} — {t(x.status)} {x.reference}</Text>)}
             </View>
           )}
           <View style={{ height: 12 }} />

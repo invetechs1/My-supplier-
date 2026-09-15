@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, loadToken, setToken, User } from './api';
+import { registerForPush } from './push';
 
 interface QuoteItem { product_id: number; name_ar: string; name_en: string; unit: string; quantity: number }
 interface Ctx { user: User | null; ready: boolean; login: (e: string, p: string) => Promise<User>; register: (b: any) => Promise<User>; logout: () => Promise<void>;
@@ -16,7 +17,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try { const q = await AsyncStorage.getItem('ms_quote'); if (q) setQuote(JSON.parse(q)); } catch {}
-      if (await loadToken()) { try { setUser(await api.get<User>('/auth/me')); refreshUnread(); } catch { await setToken(null); } }
+      if (await loadToken()) { try { setUser(await api.get<User>('/auth/me')); refreshUnread(); registerForPush(); } catch { await setToken(null); } }
       setReady(true);
     })();
   }, [refreshUnread]);
@@ -24,7 +25,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const persist = (q: QuoteItem[]) => { setQuote(q); AsyncStorage.setItem('ms_quote', JSON.stringify(q)).catch(() => {}); };
   const value: Ctx = {
     user, ready, unread, refreshUnread,
-    login: async (email, password) => { const r = await api.post<{ access_token: string; user: User }>('/auth/login', { email, password }); await setToken(r.access_token); setUser(r.user); refreshUnread(); return r.user; },
+    login: async (email, password) => { const r = await api.post<{ access_token: string; user: User }>('/auth/login', { email, password }); await setToken(r.access_token); setUser(r.user); refreshUnread(); registerForPush(); return r.user; },
     register: async (body) => { const r = await api.post<{ access_token: string; user: User }>('/auth/register', body); await setToken(r.access_token); setUser(r.user); return r.user; },
     logout: async () => { await setToken(null); setUser(null); setUnread(0); },
     quote,

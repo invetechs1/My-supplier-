@@ -58,3 +58,21 @@ Base URL: `/api/v1`. Auth: `Authorization: Bearer <token>` from `/auth/login` or
 
 ## Admin (role=admin)
 `GET /admin/dashboard` · `GET/PATCH /admin/users` · `GET /admin/suppliers?verified=` · `POST /admin/suppliers/{id}/verify?verified=&plan=` · `POST/PUT /admin/categories` · `DELETE /admin/products/{id}` (deactivate) · `GET /admin/price-alerts` (stale + outliers) · `GET/POST/DELETE /admin/sources` · `POST /admin/sources/{id}/fetch` · `POST /admin/sources/{id}/upload` · `GET /admin/audit`.
+
+## Payments (v1.1)
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| POST | /payments/checkout | buyer | `{order_id, method: mada|card|applepay|stcpay|bank_transfer}` → payment with `checkout_url` or `bank_instructions` |
+| GET | /payments/mine · /payments/order/{id} | buyer / parties | |
+| POST | /payments/{id}/sync · /payments/{id}/cancel | buyer | reconcile with gateway / cancel open attempt |
+| POST | /payments/webhook/moyasar | gateway | `X-Webhook-Secret` header or `secret_token` body |
+| GET | /payments/invoices/order/{id} · /payments/invoices/{id}.html | parties | JSON / printable with QR |
+| GET | /payments/payouts/mine · /payments/supplier/summary | supplier | |
+| GET | /admin/finance · /admin/payments · /admin/payouts | admin | |
+| POST | /admin/payments/{id}/confirm-transfer · /admin/payments/{id}/refund · /admin/payouts/{id}/paid | admin | |
+
+## OTP & account (v1.1)
+`POST /auth/otp/request {destination, purpose, channel?}` · `POST /auth/otp/verify {destination, code, purpose}` · `POST /auth/password/reset {verification_token, new_password}` · `POST /auth/verify-contact?verification_token=` · `PATCH /auth/me/notifications {notify_email, notify_sms, notify_whatsapp, notify_push}`. `/auth/register` accepts `otp_token`.
+
+## Notifications & ops (v1.1)
+`POST /notifications/devices {token, platform, device_name}` · `DELETE /notifications/devices/{token}` · `GET /notifications/deliveries` · admin: `GET /admin/deliveries?status=` · `POST /admin/deliveries/{id}/retry` · `GET /admin/jobs` · `POST /admin/jobs/{name}/run`.

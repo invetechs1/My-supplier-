@@ -23,6 +23,13 @@ Building-materials price comparison, RFQ (request-for-quotation) and supplier-bi
 - Receive **open RFQs** in their specialties, submit / update / withdraw bids, see win-rate, orders, pipeline and revenue on their dashboard.
 - Confirm → deliver orders; collect ratings.
 
+**Payments, OTP, notifications (v1.1)**
+- **Escrow payments**: pay an order by mada / card / Apple Pay / STC Pay (Moyasar hosted page) or bank transfer; funds are held by the platform and released to the supplier after delivery, minus the platform fee. Payouts, refunds, ZATCA-style tax invoices with QR, platform-fee invoices, admin finance dashboard.
+- **OTP**: SMS/WhatsApp/email one-time codes for registration, passwordless phone login, password reset and phone verification (Unifonic / Twilio / SMTP; console mode for dev).
+- **Notifications**: every event goes to in-app + email + SMS + WhatsApp + Expo push according to the user's preferences, through an outbox with retries and an admin delivery log.
+- **Background jobs**: RFQ expiry, price alerts, daily external feed fetching, payment expiry. Rate limiting, Alembic migrations.
+- Details and env variables: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+
 **For the platform (admin dashboard)**
 - KPIs: users, suppliers pending verification, products, offers, RFQs, bids, orders, GMV, estimated take-rate revenue, 30-day series.
 - Supplier verification & plans (free / pro / enterprise), user management, category management.
@@ -67,7 +74,7 @@ Store builds: `eas build -p ios|android --profile production` (set `apiBase` in 
 
 ### 4. Tests
 ```bash
-cd backend && python -m pytest -q      # 8 end-to-end scenarios (auth, catalog, import, RFQ→bid→award→order→review, admin)
+cd backend && python -m pytest -q      # 14 end-to-end scenarios (auth, catalog, import, RFQ→bid→award→order→review, admin, payments, OTP, notifications, jobs)
 cd web && npm run typecheck
 cd mobile && npm run typecheck
 ```
@@ -83,7 +90,9 @@ backend/app/
   models.py          Users, suppliers, categories, products, offers, price history, sources,
                      RFQs, RFQ items, bids, orders, reviews, notifications, alerts, audit
   routers/           auth · catalog · market · suppliers · rfq · orders · notifications · admin
-  services/          pricing (aggregation/index/trends) · ingestion (CSV/JSON feeds) · matching · notify
+  services/          pricing · ingestion (CSV/JSON feeds) · matching · notify · channels (email/SMS/WhatsApp/push outbox)
+                     payments (mock/Moyasar, escrow, payouts, invoices) · otp · jobs (scheduler)
+backend/migrations/  Alembic migrations
   seed.py            Saudi building-materials catalog + demo data
 backend/tests/       pytest end-to-end suite
 web/src/             pages/ (public, buyer/, supplier/, admin/), components/, api.ts, i18n.tsx, auth.tsx

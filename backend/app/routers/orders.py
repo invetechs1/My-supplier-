@@ -6,7 +6,8 @@ from ..db import get_db
 from ..models import ORDER_TRANSITIONS, Offer, Order, OrderItem, Review, Supplier, User, utcnow
 from ..schemas import DirectOrderIn, OrderOut, OrderStatusIn, ReviewIn
 from ..security import get_current_user, get_my_supplier, require_buyer
-from ..services import pricing
+from ..models import Payment
+from ..services import payments, pricing
 from ..services.notify import notify
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -84,6 +85,12 @@ def update_status(order_id: int, body: OrderStatusIn, user: User = Depends(get_c
     if body.notes:
         o.notes = (o.notes + "\n" + body.notes).strip()
     o.updated_at = utcnow()
+    if body.status == "delivered":
+        payments.release_escrow(db, o)
+    elif body.status == "cancelled":
+        paid = db.query(Payment).filter(Payment.order_id == o.id, Payment.status == "paid").first()
+        if paid:
+            payments.refund(db, paid, user)
     target = o.buyer_id if is_supplier else o.supplier.user_id
     if target:
         notify(db, target, f"تحديث حالة الطلب #{o.id}: {body.status}", body.notes, "order", "order", o.id)

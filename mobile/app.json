@@ -7,11 +7,40 @@
     "scheme": "mysupplier",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "splash": { "backgroundColor": "#0F3D24", "resizeMode": "contain" },
-    "ios": { "supportsTablet": true, "bundleIdentifier": "sa.mysupplier.app", "infoPlist": { "CFBundleAllowMixedLocalizations": true } },
-    "android": { "package": "sa.mysupplier.app", "adaptiveIcon": { "backgroundColor": "#0F3D24" }, "permissions": [] },
-    "web": { "bundler": "metro" },
-    "extra": { "apiBase": "https://api.mysupplier.sa", "eas": { "projectId": "" } },
-    "plugins": []
+    "splash": {
+      "backgroundColor": "#0F3D24",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "sa.mysupplier.app",
+      "infoPlist": {
+        "CFBundleAllowMixedLocalizations": true
+      }
+    },
+    "android": {
+      "package": "sa.mysupplier.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F3D24"
+      },
+      "permissions": []
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "extra": {
+      "apiBase": "https://api.mysupplier.sa",
+      "eas": {
+        "projectId": ""
+      }
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#175934"
+        }
+      ]
+    ]
   }
 }

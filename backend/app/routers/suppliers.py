@@ -17,6 +17,8 @@ router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 def supplier_out(s: Supplier, db: Session) -> SupplierOut:
     out = SupplierOut.model_validate(s)
     out.offer_count = db.query(func.count(Offer.id)).filter(Offer.supplier_id == s.id).scalar() or 0
+    from ..services.payments import mask_iban
+    out.iban_masked = mask_iban(s.iban)
     return out
 
 

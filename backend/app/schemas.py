@@ -21,6 +21,37 @@ class RegisterIn(BaseModel):
     locale: str = "ar"
     cr_number: str = ""
     category_ids: list[int] = []
+    otp_token: str = ""  # from /auth/otp/verify (purpose=register); required when OTP_REQUIRED=1
+
+
+class OTPRequestIn(BaseModel):
+    destination: str = Field(min_length=5, max_length=190)  # phone or email
+    channel: Optional[str] = Field(default=None, pattern="^(sms|email|whatsapp)$")
+    purpose: str = Field(default="register", pattern="^(register|login|reset|verify)$")
+
+
+class OTPVerifyIn(BaseModel):
+    destination: str
+    code: str = Field(min_length=4, max_length=8)
+    purpose: str = Field(default="register", pattern="^(register|login|reset|verify)$")
+
+
+class PasswordResetIn(BaseModel):
+    verification_token: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class NotificationPrefsIn(BaseModel):
+    notify_email: Optional[bool] = None
+    notify_sms: Optional[bool] = None
+    notify_whatsapp: Optional[bool] = None
+    notify_push: Optional[bool] = None
+
+
+class DeviceIn(BaseModel):
+    token: str = Field(min_length=10, max_length=300)
+    platform: str = Field(default="expo", pattern="^(expo|ios|android|web)$")
+    device_name: str = ""
 
 
 class LoginIn(BaseModel):
@@ -38,6 +69,12 @@ class UserOut(ORM):
     city: str
     locale: str
     is_active: bool
+    phone_verified: bool = False
+    email_verified: bool = False
+    notify_email: bool = True
+    notify_sms: bool = True
+    notify_whatsapp: bool = False
+    notify_push: bool = True
     created_at: datetime
     supplier_id: Optional[int] = None
 
@@ -195,9 +232,13 @@ class SupplierOut(SupplierBrief):
     plan: str
     created_at: datetime
     offer_count: int = 0
+    iban_masked: str = ""
+    bank_name: str = ""
 
 
 class SupplierUpdateIn(BaseModel):
+    iban: Optional[str] = None
+    bank_name: Optional[str] = None
     name: Optional[str] = None
     cr_number: Optional[str] = None
     vat_number: Optional[str] = None
@@ -384,6 +425,7 @@ class OrderOut(ORM):
     total: float
     currency: str
     status: str
+    payment_status: str = "unpaid"
     delivery_address: str
     city: str
     notes: str
@@ -454,4 +496,83 @@ class PriceSourceOut(ORM):
     last_fetched_at: Optional[datetime]
     last_status: str
     imported_rows: int
+    created_at: datetime
+
+
+# ---------- payments ----------
+class CheckoutIn(BaseModel):
+    order_id: int
+    method: str = Field(default="card", pattern="^(card|mada|applepay|stcpay|bank_transfer)$")
+
+
+class PaymentOut(ORM):
+    id: int
+    order_id: int
+    buyer_id: int
+    supplier_id: int
+    provider: str
+    provider_ref: str
+    method: str
+    amount: float
+    currency: str
+    platform_fee: float
+    supplier_net: float
+    status: str
+    checkout_url: str
+    failure_reason: str
+    transfer_reference: str
+    paid_at: Optional[datetime]
+    released_at: Optional[datetime]
+    refunded_at: Optional[datetime]
+    created_at: datetime
+    bank_instructions: str = ""
+    publishable_key: str = ""
+    supplier_name: str = ""
+    buyer_name: str = ""
+
+
+class PayoutOut(ORM):
+    id: int
+    supplier_id: int
+    payment_id: int
+    order_id: int
+    amount: float
+    status: str
+    reference: str
+    iban_masked: str
+    paid_at: Optional[datetime]
+    created_at: datetime
+    supplier_name: str = ""
+
+
+class InvoiceOut(ORM):
+    id: int
+    number: str
+    kind: str
+    order_id: int
+    payment_id: Optional[int]
+    seller_name: str
+    seller_vat: str
+    buyer_name: str
+    buyer_vat: str
+    subtotal: float
+    vat: float
+    total: float
+    lines: list
+    qr_tlv_base64: str
+    issued_at: datetime
+
+
+class DeliveryOut(ORM):
+    id: int
+    notification_id: int
+    user_id: int
+    channel: str
+    destination: str
+    status: str
+    provider: str
+    provider_ref: str
+    error: str
+    attempts: int
+    sent_at: Optional[datetime]
     created_at: datetime

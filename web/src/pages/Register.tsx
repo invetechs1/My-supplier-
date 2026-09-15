@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, Category } from '../api'
 import { useAuth } from '../auth'
+import OtpBox from '../components/OtpBox'
 import { Alert, useLoad } from '../components/ui'
 import { useI18n } from '../i18n'
 
@@ -10,7 +11,7 @@ export default function Register() {
   const { register } = useAuth()
   const nav = useNavigate()
   const [sp] = useSearchParams()
-  const [f, setF] = useState({ role: sp.get('role') === 'supplier' ? 'supplier' : 'buyer', email: '', password: '', full_name: '', company_name: '', phone: '', city: 'الرياض', cr_number: '', category_ids: [] as number[] })
+  const [f, setF] = useState({ role: sp.get('role') === 'supplier' ? 'supplier' : 'buyer', email: '', password: '', full_name: '', company_name: '', phone: '', city: 'الرياض', cr_number: '', category_ids: [] as number[], otp_token: '' })
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false)
   const cats = useLoad(() => api.get<Category[]>('/catalog/categories'))
   const cities = useLoad(() => api.get<string[]>('/catalog/cities'))
@@ -36,6 +37,7 @@ export default function Register() {
       {f.role === 'supplier' && <div className="field"><label>{t('specialties')}</label>
         <div className="row">{(cats.data || []).filter(c => !c.parent_id).map(c => <label key={c.id} className="row" style={{ width: 'auto', gap: 4 }}><input type="checkbox" style={{ width: 'auto' }} checked={f.category_ids.includes(c.id)} onChange={e => set('category_ids', e.target.checked ? [...f.category_ids, c.id] : f.category_ids.filter(x => x !== c.id))} />{c.icon} {name(c)}</label>)}</div>
       </div>}
+      {f.phone.length >= 9 && <div className="field"><OtpBox purpose="register" destination={f.phone} label={t('verify_phone')} onVerified={(tok, dest) => { setF(x => ({ ...x, otp_token: tok, phone: dest })) }} /></div>}
       <button className="btn lg" style={{ width: '100%', justifyContent: 'center' }} disabled={busy}>{t('register')}</button>
       <p className="muted small" style={{ marginTop: 12 }}>{t('have_account')} <Link to="/login">{t('login')}</Link></p>
     </form></div>

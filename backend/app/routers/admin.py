@@ -7,10 +7,12 @@ from sqlalchemy.orm import Session
 
 from ..config import STALE_OFFER_DAYS
 from ..db import get_db
-from ..models import RFQ, AuditLog, Bid, Category, Offer, Order, PriceSource, Product, Supplier, User, utcnow
-from ..schemas import CategoryIn, CategoryOut, ImportResult, PriceSourceIn, PriceSourceOut, SupplierOut, UserOut
+from ..models import (RFQ, AuditLog, Bid, Category, JobRun, NotificationDelivery, Offer, Order, Payment, Payout, PriceSource,
+                      Product, Supplier, User, utcnow)
+from ..schemas import (CategoryIn, CategoryOut, DeliveryOut, ImportResult, PaymentOut, PayoutOut, PriceSourceIn, PriceSourceOut,
+                       SupplierOut, UserOut)
 from ..security import require_admin
-from ..services import ingestion, pricing
+from ..services import ingestion, jobs, payments, pricing
 from ..services.notify import notify
 from .suppliers import supplier_out
 
@@ -232,3 +234,116 @@ def audit(limit: int = 100, db: Session = Depends(get_db)):
     rows = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit).all()
     return [{"id": r.id, "actor_id": r.actor_id, "action": r.action, "entity": r.entity, "entity_id": r.entity_id,
              "detail": r.detail, "created_at": r.created_at} for r in rows]
+
+
+# ---- finance ----
+def _payment_out(p: Payment) -> PaymentOut:
+    out = PaymentOut.model_validate(p)
+    out.supplier_name = p.supplier.name if p.supplier else ""
+    out.buyer_name = (p.buyer.company_name or p.buyer.full_name) if p.buyer else ""
+    return out
+
+
+@router.get("/finance")
+def finance(db: Session = Depends(get_db)):
+    pays = db.query(Payment).all()
+    payouts = db.query(Payout).all()
+    month_ago = utcnow() - timedelta(days=30)
+    paid = [p for p in pays if p.status in ("paid", "released")]
+    return {
+        "volume_paid": round(sum(p.amount for p in paid), 2),
+        "volume_paid_30d": round(sum(p.amount for p in paid if p.paid_at and p.paid_at >= month_ago), 2),
+        "fees_earned": round(sum(p.platform_fee for p in paid), 2),
+        "fees_earned_30d": round(sum(p.platform_fee for p in paid if p.paid_at and p.paid_at >= month_ago), 2),
+        "escrow_held": round(sum(p.supplier_net for p in pays if p.status == "paid"), 2),
+        "payouts_pending": round(sum(x.amount for x in payouts if x.status == "pending"), 2),
+        "payouts_paid": round(sum(x.amount for x in payouts if x.status == "paid"), 2),
+        "refunded": round(sum(p.amount for p in pays if p.status == "refunded"), 2),
+        "pending_transfers": sum(1 for p in pays if p.status == "pending_transfer"),
+        "by_method": {m: sum(1 for p in paid if p.method == m) for m in {p.method for p in paid}},
+        "fee_pct": payments.config.PLATFORM_FEE_PCT,
+        "provider": payments.config.PAYMENT_PROVIDER,
+    }
+
+
+@router.get("/payments", response_model=list[PaymentOut])
+def admin_payments(status: str | None = None, db: Session = Depends(get_db)):
+    q = db.query(Payment)
+    if status:
+        q = q.filter(Payment.status == status)
+    return [_payment_out(p) for p in q.order_by(Payment.id.desc()).limit(300).all()]
+
+
+@router.post("/payments/{payment_id}/confirm-transfer", response_model=PaymentOut)
+def confirm_transfer(payment_id: int, reference: str = "", db: Session = Depends(get_db)):
+    p = db.get(Payment, payment_id)
+    if not p or p.status != "pending_transfer":
+        raise HTTPException(400, "Payment is not awaiting a bank transfer")
+    return _payment_out(payments.mark_paid(db, p, reference=reference))
+
+
+@router.post("/payments/{payment_id}/refund", response_model=PaymentOut)
+def admin_refund(payment_id: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    p = db.get(Payment, payment_id)
+    if not p:
+        raise HTTPException(404, "Payment not found")
+    return _payment_out(payments.refund(db, p, user))
+
+
+@router.get("/payouts", response_model=list[PayoutOut])
+def admin_payouts(status: str | None = None, db: Session = Depends(get_db)):
+    q = db.query(Payout)
+    if status:
+        q = q.filter(Payout.status == status)
+    out = []
+    for x in q.order_by(Payout.id.desc()).limit(300).all():
+        o = PayoutOut.model_validate(x)
+        o.supplier_name = x.supplier.name if x.supplier else ""
+        out.append(o)
+    return out
+
+
+@router.post("/payouts/{payout_id}/paid", response_model=PayoutOut)
+def mark_payout_paid(payout_id: int, reference: str = "", db: Session = Depends(get_db)):
+    x = db.get(Payout, payout_id)
+    if not x or x.status == "paid":
+        raise HTTPException(400, "Payout not found or already paid")
+    x.status, x.reference, x.paid_at = "paid", reference, utcnow()
+    if x.supplier and x.supplier.user_id:
+        notify(db, x.supplier.user_id, f"تم تحويل {x.amount:,.2f} ر.س إلى حسابكم", f"مرجع التحويل: {reference}", "payout", "order", x.order_id)
+    db.commit()
+    o = PayoutOut.model_validate(x)
+    o.supplier_name = x.supplier.name if x.supplier else ""
+    return o
+
+
+@router.get("/deliveries", response_model=list[DeliveryOut])
+def deliveries(status: str | None = None, db: Session = Depends(get_db)):
+    q = db.query(NotificationDelivery)
+    if status:
+        q = q.filter(NotificationDelivery.status == status)
+    return q.order_by(NotificationDelivery.id.desc()).limit(300).all()
+
+
+@router.post("/deliveries/{delivery_id}/retry", response_model=DeliveryOut)
+def retry_delivery(delivery_id: int, db: Session = Depends(get_db)):
+    d = db.get(NotificationDelivery, delivery_id)
+    if not d:
+        raise HTTPException(404, "Delivery not found")
+    d.status, d.attempts, d.next_attempt_at = "queued", 0, utcnow()
+    db.commit()
+    return d
+
+
+@router.get("/jobs")
+def job_runs(db: Session = Depends(get_db)):
+    rows = db.query(JobRun).order_by(JobRun.id.desc()).limit(50).all()
+    return {"jobs": list(jobs.JOBS.keys()),
+            "runs": [{"id": r.id, "name": r.name, "status": r.status, "detail": r.detail, "started_at": r.started_at, "finished_at": r.finished_at} for r in rows]}
+
+
+@router.post("/jobs/{name}/run")
+def run_job_now(name: str, db: Session = Depends(get_db)):
+    if name not in jobs.JOBS:
+        raise HTTPException(404, "Unknown job")
+    return {"name": name, "result": jobs.run_job(name, db)}

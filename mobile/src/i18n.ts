@@ -19,6 +19,11 @@ const d: Record<string, [string, string]> = {
   language: ['English', 'العربية'], dashboard: ['لوحة التحكم', 'Dashboard'], price_list: ['قائمة أسعاري', 'My price list'], all: ['الكل', 'All'], loading: ['جارٍ التحميل…', 'Loading…'],
   open: ['مفتوح', 'Open'], closed: ['مغلق', 'Closed'], awarded: ['تمت الترسية', 'Awarded'], draft: ['مسودة', 'Draft'], cancelled: ['ملغي', 'Cancelled'], submitted: ['مُرسل', 'Submitted'], rejected: ['لم يُقبل', 'Not selected'], withdrawn: ['مسحوب', 'Withdrawn'],
   pending: ['بانتظار التأكيد', 'Pending'], confirmed: ['مؤكد', 'Confirmed'], in_delivery: ['قيد التوصيل', 'In delivery'], delivered: ['تم التسليم', 'Delivered'], in_stock: ['متوفر', 'In stock'], limited: ['محدود', 'Limited'], out_of_stock: ['غير متوفر', 'Out'],
+  pay_now: ['ادفع الآن', 'Pay now'], paid: ['مدفوع', 'Paid'], unpaid: ['غير مدفوع', 'Unpaid'], released: ['محوّل للمورّد', 'Released'], refunded: ['مسترد', 'Refunded'], pending_transfer: ['بانتظار التحويل', 'Awaiting transfer'], initiated: ['بدأ الدفع', 'Started'], failed: ['فشل', 'Failed'],
+  choose_method: ['طريقة الدفع', 'Payment method'], mada: ['مدى', 'mada'], card: ['بطاقة', 'Card'], applepay: ['Apple Pay', 'Apple Pay'], stcpay: ['STC Pay', 'STC Pay'], bank_transfer: ['تحويل بنكي', 'Bank transfer'],
+  escrow_note: ['يُحفظ المبلغ لدى المنصة ويُحوَّل للمورّد بعد التسليم', 'Held by the platform, released to the supplier after delivery'], payouts: ['التحويلات', 'Payouts'], in_escrow: ['محجوز لدى المنصة', 'In escrow'], payouts_pending: ['قيد التحويل', 'Payouts pending'],
+  otp_send: ['أرسل رمز التحقق', 'Send code'], otp_code: ['رمز التحقق', 'Code'], otp_verify: ['تحقق', 'Verify'], otp_sent: ['أُرسل الرمز إلى', 'Code sent to'], phone: ['الجوال', 'Phone'], invoice: ['الفاتورة', 'Invoice'],
+  push_enabled: ['إشعارات التطبيق مفعّلة', 'Push notifications enabled'], login_otp: ['دخول برمز الجوال', 'Log in with phone code'],
   demo: ['حسابات تجريبية: buyer@demo.sa · supplier1@demo.sa / Demo@2026', 'Demo: buyer@demo.sa · supplier1@demo.sa / Demo@2026'], next: ['التالي', 'Next'],
 };
 export const t = (k: string) => (d[k] ? d[k][lang === 'ar' ? 0 : 1] : k);

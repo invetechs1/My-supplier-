@@ -23,6 +23,12 @@ class User(Base):
     city: Mapped[str] = mapped_column(String(80), default="")
     locale: Mapped[str] = mapped_column(String(5), default="ar")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    phone_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    notify_email: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_sms: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_whatsapp: Mapped[bool] = mapped_column(Boolean, default=False)
+    notify_push: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -50,6 +56,8 @@ class Supplier(Base):
     rating: Mapped[float] = mapped_column(Float, default=0.0)
     rating_count: Mapped[int] = mapped_column(Integer, default=0)
     plan: Mapped[str] = mapped_column(String(20), default="free")  # free | pro | enterprise
+    iban: Mapped[str] = mapped_column(String(40), default="")
+    bank_name: Mapped[str] = mapped_column(String(120), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     owner: Mapped["User | None"] = relationship(back_populates="supplier")
@@ -242,6 +250,7 @@ class Order(Base):
     total: Mapped[float] = mapped_column(Float, default=0)
     currency: Mapped[str] = mapped_column(String(3), default="SAR")
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    payment_status: Mapped[str] = mapped_column(String(20), default="unpaid", index=True)  # unpaid|pending|paid|released|refunded
     delivery_address: Mapped[str] = mapped_column(String(400), default="")
     city: Mapped[str] = mapped_column(String(80), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
@@ -300,6 +309,8 @@ class PriceAlert(Base):
     city: Mapped[str] = mapped_column(String(80), default="")
     target_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    baseline_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -312,3 +323,129 @@ class AuditLog(Base):
     entity_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+# ---------------------------------------------------------------------------
+# Payments, payouts, invoices
+# ---------------------------------------------------------------------------
+PAYMENT_STATUSES = ("initiated", "pending_transfer", "paid", "failed", "released", "refunded")
+
+
+class Payment(Base):
+    """Escrow payment: the buyer pays the platform for an order; the supplier is paid out after delivery."""
+    __tablename__ = "payments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    buyer_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(20), default="mock")  # mock | moyasar | bank_transfer
+    provider_ref: Mapped[str] = mapped_column(String(120), default="", index=True)
+    method: Mapped[str] = mapped_column(String(20), default="card")  # card | mada | applepay | stcpay | bank_transfer
+    amount: Mapped[float] = mapped_column(Float)          # order total incl. VAT, SAR
+    currency: Mapped[str] = mapped_column(String(3), default="SAR")
+    platform_fee: Mapped[float] = mapped_column(Float, default=0)   # take rate, deducted from supplier payout
+    supplier_net: Mapped[float] = mapped_column(Float, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="initiated", index=True)
+    checkout_url: Mapped[str] = mapped_column(String(500), default="")
+    failure_reason: Mapped[str] = mapped_column(String(300), default="")
+    transfer_reference: Mapped[str] = mapped_column(String(120), default="")
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    order: Mapped["Order"] = relationship()
+    supplier: Mapped["Supplier"] = relationship()
+    buyer: Mapped["User"] = relationship()
+
+
+class Payout(Base):
+    __tablename__ = "payouts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), index=True)
+    payment_id: Mapped[int] = mapped_column(ForeignKey("payments.id"), unique=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"))
+    amount: Mapped[float] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)  # pending | paid | failed
+    reference: Mapped[str] = mapped_column(String(120), default="")
+    iban_masked: Mapped[str] = mapped_column(String(40), default="")
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+    supplier: Mapped["Supplier"] = relationship()
+
+
+class Invoice(Base):
+    """ZATCA phase-1 style simplified tax invoice (seller, VAT no., timestamp, total, VAT) with TLV QR payload."""
+    __tablename__ = "invoices"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    number: Mapped[str] = mapped_column(String(40), unique=True)
+    kind: Mapped[str] = mapped_column(String(20), default="tax_invoice")  # tax_invoice | platform_fee
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    payment_id: Mapped[int | None] = mapped_column(ForeignKey("payments.id"), nullable=True)
+    seller_name: Mapped[str] = mapped_column(String(200))
+    seller_vat: Mapped[str] = mapped_column(String(40), default="")
+    buyer_name: Mapped[str] = mapped_column(String(200), default="")
+    buyer_vat: Mapped[str] = mapped_column(String(40), default="")
+    subtotal: Mapped[float] = mapped_column(Float)
+    vat: Mapped[float] = mapped_column(Float)
+    total: Mapped[float] = mapped_column(Float)
+    lines: Mapped[list] = mapped_column(JSON, default=list)
+    qr_tlv_base64: Mapped[str] = mapped_column(Text, default="")
+    issued_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+# ---------------------------------------------------------------------------
+# OTP, devices, notification deliveries
+# ---------------------------------------------------------------------------
+class OTPCode(Base):
+    __tablename__ = "otp_codes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    destination: Mapped[str] = mapped_column(String(190), index=True)  # phone or email
+    channel: Mapped[str] = mapped_column(String(10), default="sms")  # sms | email | whatsapp
+    purpose: Mapped[str] = mapped_column(String(20), default="register")  # register | login | reset | verify
+    code_hash: Mapped[str] = mapped_column(String(128))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    consumed: Mapped[bool] = mapped_column(Boolean, default=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class DeviceToken(Base):
+    __tablename__ = "device_tokens"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    token: Mapped[str] = mapped_column(String(300), unique=True)
+    platform: Mapped[str] = mapped_column(String(10), default="expo")  # expo | ios | android | web
+    device_name: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class NotificationDelivery(Base):
+    """Outbox row per (notification, channel). A background worker sends it and records the result."""
+    __tablename__ = "notification_deliveries"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    notification_id: Mapped[int] = mapped_column(ForeignKey("notifications.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    channel: Mapped[str] = mapped_column(String(10))  # email | sms | whatsapp | push
+    destination: Mapped[str] = mapped_column(String(300), default="")
+    status: Mapped[str] = mapped_column(String(10), default="queued", index=True)  # queued | sent | failed
+    provider: Mapped[str] = mapped_column(String(20), default="")
+    provider_ref: Mapped[str] = mapped_column(String(200), default="")
+    error: Mapped[str] = mapped_column(String(400), default="")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class JobRun(Base):
+    __tablename__ = "job_runs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(60), index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(10), default="ok")
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)

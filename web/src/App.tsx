@@ -12,6 +12,11 @@ import SupplierProfilePage from './pages/SupplierProfilePage'
 import MarketPage from './pages/MarketPage'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import ResetPassword from './pages/ResetPassword'
+import BuyerPayments from './pages/buyer/BuyerPayments'
+import Payouts from './pages/supplier/Payouts'
+import AdminFinance from './pages/admin/AdminFinance'
+import AdminOps from './pages/admin/AdminOps'
 import NotificationsPage from './pages/NotificationsPage'
 import SettingsPage from './pages/SettingsPage'
 import BuyerHome from './pages/buyer/BuyerHome'
@@ -48,6 +53,7 @@ function BuyerPortal() {
     { to: '/buyer/rfq/new', label: t('new_rfq'), icon: '➕' },
     { to: '/buyer/rfqs', label: t('my_rfqs'), icon: '📋' },
     { to: '/buyer/orders', label: t('orders'), icon: '📦' },
+    { to: '/buyer/payments', label: t('payments'), icon: '💳' },
     { to: '/buyer/alerts', label: t('alerts'), icon: '🔔' },
     { to: '/settings', label: t('settings'), icon: '⚙️' },
   ]} />
@@ -60,6 +66,7 @@ function SupplierPortal() {
     { to: '/supplier/rfqs', label: t('open_rfqs'), icon: '📨' },
     { to: '/supplier/bids', label: t('my_bids'), icon: '📝' },
     { to: '/supplier/orders', label: t('orders'), icon: '📦' },
+    { to: '/supplier/payouts', label: t('payouts'), icon: '🏦' },
     { to: '/supplier/profile', label: t('profile'), icon: '🏢' },
     { to: '/settings', label: t('settings'), icon: '⚙️' },
   ]} />
@@ -72,6 +79,8 @@ function AdminPortal() {
     { to: '/admin/users', label: t('users'), icon: '👥' },
     { to: '/admin/sources', label: t('sources'), icon: '🔗' },
     { to: '/admin/quality', label: t('data_quality'), icon: '🧪' },
+    { to: '/admin/finance', label: t('finance'), icon: '💰' },
+    { to: '/admin/ops', label: t('deliveries'), icon: '📡' },
     { to: '/settings', label: t('settings'), icon: '⚙️' },
   ]} />
 }
@@ -89,6 +98,7 @@ export default function App() {
         <Route path="market" element={<MarketPage />} />
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
+        <Route path="reset-password" element={<ResetPassword />} />
         <Route path="notifications" element={<Guard roles={['buyer', 'supplier', 'admin']}><NotificationsPage /></Guard>} />
         <Route path="settings" element={<Guard roles={['buyer', 'supplier', 'admin']}><div className="container" style={{ padding: '20px 16px' }}><SettingsPage /></div></Guard>} />
         <Route path="rfq/:id" element={<Guard roles={['buyer', 'supplier', 'admin']}><div className="container" style={{ padding: '20px 16px' }}><RFQDetail /></div></Guard>} />
@@ -99,6 +109,7 @@ export default function App() {
           <Route path="rfqs" element={<MyRFQs />} />
           <Route path="rfqs/:id" element={<RFQDetail />} />
           <Route path="orders" element={<BuyerOrders />} />
+          <Route path="payments" element={<BuyerPayments />} />
           <Route path="alerts" element={<AlertsPage />} />
         </Route>
 
@@ -109,6 +120,7 @@ export default function App() {
           <Route path="rfqs/:id" element={<RFQDetail />} />
           <Route path="bids" element={<MyBids />} />
           <Route path="orders" element={<SupplierOrders />} />
+          <Route path="payouts" element={<Payouts />} />
           <Route path="profile" element={<SupplierProfileEdit />} />
         </Route>
 
@@ -118,6 +130,8 @@ export default function App() {
           <Route path="users" element={<AdminUsers />} />
           <Route path="sources" element={<AdminSources />} />
           <Route path="quality" element={<AdminQuality />} />
+          <Route path="finance" element={<AdminFinance />} />
+          <Route path="ops" element={<AdminOps />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
