@@ -53,6 +53,7 @@ router.post(
     if (kind === "SUPPLIER_PRICE_LIST" && user.role === "SUPPLIER" && !user.companyId) throw forbidden("Supplier account has no company");
     if (kind === "BUYER_QUOTATION" && !body.supplierName?.trim()) throw badRequest("supplierName is required for quotations");
     if (user.role === "BUYER" && kind !== "BUYER_QUOTATION") throw forbidden("Buyers can only upload quotations");
+    if (user.role === "SUPPLIER" && kind !== "SUPPLIER_PRICE_LIST") throw forbidden("Suppliers can only import their own price lists");
     const company = user.role === "SUPPLIER" && kind === "SUPPLIER_PRICE_LIST" ? await prisma.company.findUnique({ where: { id: user.companyId! } }) : null;
 
     const imp = await createImport({

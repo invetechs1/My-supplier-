@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
 import { asyncHandler } from "../middleware/errorHandler";
-import { requireAuth, type AuthUser } from "../middleware/auth";
+import { userFromToken, requireAuth, type AuthUser } from "../middleware/auth";
 import { badRequest, forbidden, notFound, unauthorized } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import { companyUserIds, notify } from "../services/notifications";
@@ -64,14 +64,8 @@ router.get(
   "/orders/:id/delivery-note.html",
   asyncHandler(async (req, res) => {
     const token = typeof req.query.token === "string" ? req.query.token : "";
-    let userId: string;
-    try {
-      userId = String((jwt.verify(token, env.jwtSecret) as jwt.JwtPayload).sub);
-    } catch {
-      throw unauthorized("Invalid or expired token");
-    }
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw unauthorized();
+    const user = await userFromToken(token);
+    if (!user) throw unauthorized("Invalid or expired token");
     const o = await accessibleOrder(req.params.id, user);
     const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
     const rows = o.items.map((i, idx) => `<tr><td>${idx + 1}</td><td>${esc(i.name)}<div class="muted">${esc(i.material?.sku ?? "")}</div></td><td>${esc(i.unit)}</td><td class="r">${i.quantity}</td><td class="chk"></td></tr>`).join("");

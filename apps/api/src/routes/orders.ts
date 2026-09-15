@@ -8,7 +8,7 @@ import { badRequest, forbidden, notFound } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import { paged, paginate } from "../lib/pagination";
 import { companyUserIds, notify } from "../services/notifications";
-import { applyStockMovement, recordOrderEvent } from "../services/portal";
+import { applyStockMovement, recordOrderEvent, requireCompanyRole } from "../services/portal";
 
 const router = Router();
 
@@ -33,7 +33,8 @@ router.get(
   requireAuth(),
   asyncHandler(async (req, res) => {
     const { page, pageSize, skip, take } = paginate(req.query);
-    const where = scope(req);
+    const f = z.object({ status: z.enum(["PENDING", "CONFIRMED", "IN_TRANSIT", "DELIVERED", "CANCELLED"]).optional(), paymentStatus: z.enum(["UNPAID", "PAID", "REFUNDED"]).optional(), type: z.enum(["RFQ", "DIRECT"]).optional() }).parse(req.query);
+    const where: Prisma.OrderWhereInput = { ...scope(req), ...(f.status ? { status: f.status } : {}), ...(f.paymentStatus ? { paymentStatus: f.paymentStatus } : {}), ...(f.type ? { type: f.type } : {}) };
     const [total, orders] = await Promise.all([
       prisma.order.count({ where }),
       prisma.order.findMany({ where, include: orderInclude, orderBy: { createdAt: "desc" }, skip, take }),
@@ -63,6 +64,7 @@ const transitions: Record<string, string[]> = {
 router.patch(
   "/orders/:id/status",
   requireAuth(),
+  requireCompanyRole("OWNER", "MANAGER", "SALES", "WAREHOUSE"),
   asyncHandler(async (req, res) => {
     const { status } = z.object({ status: z.enum(["PENDING", "CONFIRMED", "IN_TRANSIT", "DELIVERED", "CANCELLED"]) }).parse(req.body);
     const order = await prisma.order.findFirst({ where: { id: req.params.id, ...scope(req) } });
@@ -90,13 +92,24 @@ router.patch(
   }),
 );
 
+/**
+ * Payment confirmation rules: card payments are confirmed by the gateway only; bank transfers land in
+ * the platform account and are confirmed by the admin; suppliers may only confirm cash collected on
+ * delivery (COD) for delivered orders. Refunds go through /payments/:orderId/refund.
+ */
 router.patch(
   "/orders/:id/payment",
   requireAuth("SUPPLIER", "ADMIN"),
+  requireCompanyRole("OWNER", "MANAGER"),
   asyncHandler(async (req, res) => {
-    const { paymentStatus } = z.object({ paymentStatus: z.enum(["UNPAID", "PAID", "REFUNDED"]) }).parse(req.body);
+    const { paymentStatus } = z.object({ paymentStatus: z.enum(["UNPAID", "PAID"]) }).parse(req.body);
     const order = await prisma.order.findFirst({ where: { id: req.params.id, ...scope(req) } });
     if (!order) throw notFound("Order not found");
+    if (order.paymentStatus === "REFUNDED") throw badRequest("Refunded orders cannot be changed");
+    if (req.user!.role !== "ADMIN") {
+      if (order.paymentMethod !== "COD") throw forbidden("Only cash-on-delivery payments can be confirmed by the supplier; bank transfers are confirmed by MySupplier");
+      if (paymentStatus === "PAID" && order.status !== "DELIVERED") throw badRequest("Confirm cash collection after the order is delivered");
+    }
     const updated = await prisma.order.update({ where: { id: order.id }, data: { paymentStatus }, include: orderInclude });
     await recordOrderEvent(order.id, "PAYMENT", { message: `Payment ${paymentStatus.toLowerCase()}`, userId: req.user!.id });
     await notify({ userIds: [order.buyerId], type: "ORDER_UPDATE", title: `Order ${order.reference} marked ${paymentStatus.toLowerCase()}`, body: `Updated by ${req.user!.name}.`, link: `/dashboard/orders/${order.id}` });

@@ -260,7 +260,7 @@ router.post(
       return {
         rfqItemId: i.rfqItemId,
         unitPrice: i.unitPrice,
-        quantity: i.quantity ?? rfqItem.quantity,
+        quantity: rfqItem.quantity, // always the buyer's requested quantity – bids are compared like for like
         leadTimeDays: i.leadTimeDays ?? body.deliveryDays,
         notes: i.notes,
       };

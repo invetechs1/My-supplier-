@@ -1,7 +1,7 @@
 import type { NotificationType } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
-import { layout, mailEnabled, sendMail } from "./mailer";
+import { escapeHtml, layout, mailEnabled, sendMail } from "./mailer";
 import { sendPush } from "./push";
 
 interface Notify {
@@ -28,7 +28,7 @@ export async function notify({ userIds, type, title, body, link, email }: Notify
   if ((email ?? type !== "SYSTEM") && mailEnabled) {
     const users = await prisma.user.findMany({ where: { id: { in: unique }, active: true }, select: { email: true, name: true } });
     for (const u of users) {
-      void sendMail(u.email, title, layout(title, `<p>Hi ${u.name},</p><p>${body}</p>`, link ? { label: "Open in MySupplier", url: `${env.webUrl}${link}` } : undefined), `${title}\n\n${body}${link ? `\n${env.webUrl}${link}` : ""}`).catch(() => undefined);
+      void sendMail(u.email, title, layout(title, `<p>Hi ${escapeHtml(u.name)},</p><p>${escapeHtml(body)}</p>`, link ? { label: "Open in MySupplier", url: `${env.webUrl}${link}` } : undefined), `${title}\n\n${body}${link ? `\n${env.webUrl}${link}` : ""}`).catch(() => undefined);
     }
   }
 }

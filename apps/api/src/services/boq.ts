@@ -190,8 +190,8 @@ const QTY_UNIT_RE = /(\d+(?:[.,]\d+)?)\s*(ton|tons|tonne|tonnes|kg|kgs|bags?|m3|
  */
 export function parseBoqText(text: string): BoqLineInput[] {
   const lines: BoqLineInput[] = [];
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
+  for (const rawLine of text.split(/\r?\n/).slice(0, 500)) {
+    const line = rawLine.trim().slice(0, 300); // bounded input keeps every regex below linear in practice
     if (!line) continue;
     if (/^(item|description|material|بند|الوصف)/i.test(line) && /(qty|quantity|unit|الكمية|الوحدة)/i.test(line)) continue; // header row
 
@@ -218,10 +218,14 @@ export function parseBoqText(text: string): BoqLineInput[] {
         continue;
       }
     }
-    const trailing = line.match(/^(.*?)(?:\s*[x×*:-]\s*|\s+)(\d+(?:[.,]\d+)?)\s*$/i);
-    if (trailing && trailing[1].trim()) {
-      lines.push({ description: trailing[1].trim(), quantity: Number(trailing[2].replace(",", ".")) });
-      continue;
+    // "description x 1800" / "description 1800": take the trailing number (linear scan, no backtracking).
+    const trailing = line.match(/(\d+(?:[.,]\d+)?)\s*$/);
+    if (trailing && trailing.index !== undefined && trailing.index > 0) {
+      const description = line.slice(0, trailing.index).replace(/[\s×*:x-]+$/i, "").trim();
+      if (description && /\p{L}/u.test(description)) {
+        lines.push({ description, quantity: Number(trailing[1].replace(",", ".")) });
+        continue;
+      }
     }
     lines.push({ description: line, quantity: 1 });
   }

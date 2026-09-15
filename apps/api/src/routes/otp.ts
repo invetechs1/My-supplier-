@@ -59,7 +59,13 @@ router.post(
     const phone = normaliseSaudiPhone(body.phone);
     if (!phone) throw badRequest("Invalid phone number");
     await consumeCode(phone, "LOGIN", body.code);
-    let user = await prisma.user.findFirst({ where: { phone, active: true }, include: userInclude });
+    // Prefer the account that verified this number; fall back to a single unverified match (legacy profiles).
+    let user = await prisma.user.findFirst({ where: { phone, active: true, phoneVerified: true }, include: userInclude });
+    if (!user) {
+      const candidates = await prisma.user.findMany({ where: { phone, active: true }, include: userInclude, take: 2 });
+      if (candidates.length === 1) user = candidates[0];
+      else if (candidates.length > 1) throw conflict("This number is linked to more than one account. Sign in with email and verify your phone.");
+    }
     if (!user) {
       if (!body.name) throw notFound("No account for this number yet. Send `name` (and `company` for suppliers) to create one.");
       if (body.role === "SUPPLIER" && !body.company) throw badRequest("Suppliers must provide company details");

@@ -53,7 +53,7 @@ function LoginInner() {
 
   const tabs: Array<{ id: Method; label: string }> = [
     { id: "email", label: t("auth.email") },
-    { id: "phone", label: "Mobile number" },
+    { id: "phone", label: t("auth.mobile") },
   ];
 
   return (

@@ -28,10 +28,17 @@ export function signToken(user: AuthUser): string {
 
 async function loadUser(req: Request): Promise<AuthUser | null> {
   const header = req.headers.authorization;
-  // Download links (CSV, printable HTML) cannot send headers, so a GET may carry the JWT as ?token=.
-  const queryToken = req.method === "GET" && typeof req.query.token === "string" ? req.query.token : null;
+  // Download links (CSV, printable HTML, files) cannot send headers, so those GET routes may carry the JWT as ?token=.
+  const queryToken = req.method === "GET" && typeof req.query.token === "string" && DOWNLOAD_ROUTE.test(req.path) ? req.query.token : null;
   if (!header?.startsWith("Bearer ") && !queryToken) return null;
   const token = header?.startsWith("Bearer ") ? header.slice(7) : queryToken!;
+  return userFromToken(token);
+}
+
+const DOWNLOAD_ROUTE = /\/(invoice\.html|delivery-note\.html|einvoice\.xml|export\.csv|statement\.csv|page|file)$/;
+
+/** Verifies a JWT and loads the active user behind it (shared by header auth and download links). */
+export async function userFromToken(token: string): Promise<AuthUser | null> {
   let payload: jwt.JwtPayload;
   try {
     payload = jwt.verify(token, env.jwtSecret) as jwt.JwtPayload;

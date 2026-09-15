@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { UNITS, type Material } from "@mysupplier/shared";
-import { api, errorMessage, type AdminMaterialPayload } from "@/lib/api";
+import { api, errorMessage, type AdminMaterialPayload, type MaterialWithLogistics } from "@/lib/api";
 import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatSar, timeAgo } from "@/lib/format";
-import { Alert, Button, Card, EmptyState, FlashMessage, Input, LoadingBlock, Modal, PageHeader, Pagination, Select, Table, Textarea, type Column } from "@/components/ui";
+import { Alert, Badge, Button, Card, EmptyState, FlashMessage, Input, LoadingBlock, Modal, PageHeader, Pagination, Select, Table, Textarea, Toggle, type Column } from "@/components/ui";
 
 interface MaterialForm {
   sku: string;
@@ -18,9 +18,19 @@ interface MaterialForm {
   brand: string;
   description: string;
   specs: string;
+  weightKg: string;
+  volumeM3: string;
+  hazardous: boolean;
 }
 
-const empty: MaterialForm = { sku: "", name: "", nameAr: "", unit: "ton", categoryId: "", brand: "", description: "", specs: "" };
+const empty: MaterialForm = { sku: "", name: "", nameAr: "", unit: "ton", categoryId: "", brand: "", description: "", specs: "", weightKg: "", volumeM3: "", hazardous: false };
+
+function optionalNumber(v: string): number | null | undefined {
+  const trimmed = v.trim();
+  if (trimmed === "") return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : undefined;
+}
 
 function specsToText(specs: Material["specs"]): string {
   if (!specs) return "";
@@ -65,7 +75,20 @@ export default function AdminMaterialsPage() {
     setModal({ open: true, editing: null });
   };
   const openEdit = (m: Material) => {
-    setForm({ sku: m.sku, name: m.name, nameAr: m.nameAr, unit: String(m.unit), categoryId: m.categoryId, brand: m.brand ?? "", description: m.description ?? "", specs: specsToText(m.specs) });
+    const l = m as MaterialWithLogistics;
+    setForm({
+      sku: m.sku,
+      name: m.name,
+      nameAr: m.nameAr,
+      unit: String(m.unit),
+      categoryId: m.categoryId,
+      brand: m.brand ?? "",
+      description: m.description ?? "",
+      specs: specsToText(m.specs),
+      weightKg: l.weightKg === null || l.weightKg === undefined ? "" : String(l.weightKg),
+      volumeM3: l.volumeM3 === null || l.volumeM3 === undefined ? "" : String(l.volumeM3),
+      hazardous: !!l.hazardous,
+    });
     setErrors({});
     setModal({ open: true, editing: m });
   };
@@ -77,6 +100,10 @@ export default function AdminMaterialsPage() {
     if (!form.nameAr.trim()) next.nameAr = "Arabic name is required.";
     if (!form.unit) next.unit = "Select a unit.";
     if (!form.categoryId) next.categoryId = "Select a category.";
+    const weightKg = optionalNumber(form.weightKg);
+    const volumeM3 = optionalNumber(form.volumeM3);
+    if (weightKg === undefined || (weightKg !== null && weightKg < 0)) next.weightKg = "Enter the weight in kg per unit (or leave blank).";
+    if (volumeM3 === undefined || (volumeM3 !== null && volumeM3 < 0)) next.volumeM3 = "Enter the volume in m³ per unit (or leave blank).";
     setErrors(next);
     if (Object.keys(next).length) return;
     const payload: AdminMaterialPayload = {
@@ -88,6 +115,9 @@ export default function AdminMaterialsPage() {
       brand: form.brand.trim() || undefined,
       description: form.description.trim() || undefined,
       specs: textToSpecs(form.specs),
+      weightKg: weightKg ?? null,
+      volumeM3: volumeM3 ?? null,
+      hazardous: form.hazardous,
     };
     setSaving(true);
     try {
@@ -129,6 +159,16 @@ export default function AdminMaterialsPage() {
     ) },
     { key: "category", header: "Category", render: (m) => m.category?.name ?? catOptions.find((c) => c.value === m.categoryId)?.label ?? "—" },
     { key: "unit", header: "Unit", render: (m) => m.unit },
+    { key: "logistics", header: "Logistics", render: (m) => {
+      const l = m as MaterialWithLogistics;
+      const parts = [l.weightKg ? `${l.weightKg} kg` : null, l.volumeM3 ? `${l.volumeM3} m³` : null].filter(Boolean);
+      return (
+        <span className="inline-flex flex-wrap items-center gap-1 text-xs">
+          {parts.length ? <span className="tabular-nums text-slate-600">{parts.join(" · ")}</span> : <span className="text-amber-700" title="No weight/volume: delivery quotes fall back to the flat fee">Not set</span>}
+          {l.hazardous && <Badge tone="red">Hazardous</Badge>}
+        </span>
+      );
+    } },
     { key: "brand", header: "Brand", render: (m) => m.brand ?? <span className="text-slate-400">—</span> },
     { key: "avg", header: "Avg price", align: "end", render: (m) => <span className="tabular-nums">{formatSar(m.avgPrice, lang)}</span> },
     { key: "suppliers", header: "Suppliers", align: "end", render: (m) => m.supplierCount ?? 0 },
@@ -169,6 +209,18 @@ export default function AdminMaterialsPage() {
           <Input label="Brand" name="brand" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} />
           <Textarea label="Description" name="description" className="sm:col-span-2" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
           <Textarea label="Specs" name="specs" className="sm:col-span-2" hint="One per line as key=value, e.g. grade=60 or diameter_mm=12" value={form.specs} onChange={(e) => setForm({ ...form, specs: e.target.value })} rows={4} />
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+            <h3 className="text-sm font-semibold text-slate-900">Logistics</h3>
+            <p className="mb-3 text-xs text-slate-500">Per unit ({form.unit || "unit"}). Used to compute delivery quotes from carrier rate cards; blank means the supplier&apos;s flat fee applies.</p>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Input label="Weight (kg)" name="weightKg" type="number" min={0} step="0.001" dir="ltr" value={form.weightKg} onChange={(e) => setForm({ ...form, weightKg: e.target.value })} error={errors.weightKg} placeholder="e.g. 1000 for a ton" />
+              <Input label="Volume (m³)" name="volumeM3" type="number" min={0} step="0.0001" dir="ltr" value={form.volumeM3} onChange={(e) => setForm({ ...form, volumeM3: e.target.value })} error={errors.volumeM3} placeholder="e.g. 0.04" />
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 sm:mt-6">
+                <span className="text-sm font-medium text-slate-700">Hazardous</span>
+                <Toggle checked={form.hazardous} onChange={(v) => setForm({ ...form, hazardous: v })} label="Hazardous material" />
+              </label>
+            </div>
+          </div>
         </div>
       </Modal>
     </div>

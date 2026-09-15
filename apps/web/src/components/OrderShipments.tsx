@@ -312,6 +312,7 @@ function ShipmentCard({ shipment, canManage, onEdit, onStatus }: { shipment: Shi
  * Suppliers can create shipments and update their status; buyers and admins see read-only tracking.
  */
 export function OrderShipments({ orderId, canManage, onDelivered, onChanged }: { orderId: string; canManage: boolean; onDelivered?: () => void; onChanged?: () => void }) {
+  const { t } = useI18n();
   const state = useAsync(() => api.orderShipments(orderId), [orderId]);
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -363,7 +364,7 @@ export function OrderShipments({ orderId, canManage, onDelivered, onChanged }: {
   return (
     <Card>
       <CardHeader
-        title="Delivery"
+        title={t("order.delivery")}
         subtitle={shipments.length ? `${shipments.length} ${shipments.length === 1 ? "shipment" : "shipments"}` : canManage ? "Book a carrier or dispatch with your own fleet." : "Tracking appears here once the supplier dispatches."}
         action={
           canManage ? (

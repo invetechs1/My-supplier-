@@ -100,7 +100,9 @@ Rules:
 /** Converts spreadsheets/CSV to plain text so both AI and heuristics can read them. */
 export function spreadsheetToText(buffer: Buffer, mimeType: string): string {
   if (mimeType === "text/csv" || mimeType === "text/plain") return buffer.toString("utf8");
-  const wb = XLSX.read(buffer, { type: "buffer" });
+  if (buffer.length > 8 * 1024 * 1024) throw new Error("Spreadsheets are limited to 8 MB – export the price list as CSV or split it");
+  // Bounded parse: dense sheets, first 5,000 rows, no formulas/styles/VML – reduces the attack surface of crafted workbooks.
+  const wb = XLSX.read(buffer, { type: "buffer", dense: true, sheetRows: 5000, cellFormula: false, cellHTML: false, cellStyles: false, bookVBA: false });
   const parts: string[] = [];
   for (const name of wb.SheetNames.slice(0, 5)) {
     const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name], { blankrows: false });

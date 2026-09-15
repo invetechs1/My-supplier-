@@ -6,11 +6,11 @@ import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
 import { asyncHandler } from "../middleware/errorHandler";
 import { requireAuth, requireCompany } from "../middleware/auth";
-import { badRequest, conflict, notFound } from "../lib/errors";
+import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import { paged, paginate } from "../lib/pagination";
-import { privatePath, publicUrl, uploader } from "../lib/uploads";
-import { layout, sendMail } from "../services/mailer";
+import { assertMagicBytes, privatePath, publicUrl, uploader } from "../lib/uploads";
+import { escapeHtml, layout, sendMail } from "../services/mailer";
 import { notify } from "../services/notifications";
 import { activeListingWhere } from "../services/catalog";
 import { round2 } from "../services/pricing";
@@ -111,7 +111,15 @@ const profileSchema = z.object({
   lowStockThreshold: z.coerce.number().int().min(0).optional(), city: z.string().optional(), crNumber: z.string().nullable().optional(), vatNumber: z.string().nullable().optional(),
 });
 
-router.get("/supplier/company", ...supplier, asyncHandler(async (req, res) => res.json(serialize(await prisma.company.findUniqueOrThrow({ where: { id: requireCompany(req) } })))));
+router.get(
+  "/supplier/company",
+  ...supplier,
+  asyncHandler(async (req, res) => {
+    const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { companyRole: true } });
+    const manager = req.user!.role === "ADMIN" || ["OWNER", "MANAGER", null].includes(me?.companyRole ?? null);
+    res.json(serialize(await prisma.company.findUniqueOrThrow({ where: { id: requireCompany(req) } }), { includePrivate: manager }));
+  }),
+);
 
 router.patch(
   "/supplier/company",
@@ -123,7 +131,15 @@ router.patch(
       const taken = await prisma.company.findFirst({ where: { slug: data.slug, id: { not: companyId } } });
       if (taken) throw conflict("This storefront address is already taken");
     }
-    res.json(serialize(await prisma.company.update({ where: { id: companyId }, data })));
+    const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { companyRole: true } });
+    const isOwner = req.user!.role === "ADMIN" || (me?.companyRole ?? "OWNER") === "OWNER";
+    if (!isOwner && (data.iban !== undefined || data.bankName !== undefined || data.beneficiary !== undefined)) throw forbidden("Only the company owner can change bank details");
+    const current = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
+    // Legal identity changes on a verified company send it back to review.
+    const identityChanged = (data.vatNumber !== undefined && data.vatNumber !== current.vatNumber) || (data.crNumber !== undefined && data.crNumber !== current.crNumber) || (data.name !== undefined && data.name !== current.name);
+    const reverify = identityChanged && current.verificationStatus === "VERIFIED" && req.user!.role !== "ADMIN";
+    const updated = await prisma.company.update({ where: { id: companyId }, data: { ...data, ...(reverify ? { verificationStatus: "UNDER_REVIEW", verified: false, verificationNotes: "Legal details changed – pending re-verification" } : {}) } });
+    res.json(serialize(updated, { includePrivate: true }));
   }),
 );
 
@@ -133,6 +149,7 @@ router.post(
   (req, res, next) => uploader("image", 2).single("file")(req, res, (err) => (err ? next(badRequest((err as Error).message)) : next())),
   asyncHandler(async (req, res) => {
     if (!req.file) throw badRequest("Upload an image");
+    try { assertMagicBytes(req.file.path, req.file.mimetype); } catch (e) { throw badRequest((e as Error).message); }
     res.json(serialize(await prisma.company.update({ where: { id: requireCompany(req) }, data: { logoUrl: publicUrl(req.file.filename) } })));
   }),
 );
@@ -147,6 +164,7 @@ router.post(
     const companyId = requireCompany(req);
     const { type } = z.object({ type: z.enum(["CR", "VAT", "LICENSE", "OTHER"]) }).parse(req.body);
     if (!req.file) throw badRequest("Upload a file");
+    try { assertMagicBytes(req.file.path, req.file.mimetype); } catch (e) { throw badRequest((e as Error).message); }
     // Private: fileUrl stores only the stored file name; the file is streamed through authenticated routes.
     const doc = await prisma.companyDocument.create({ data: { companyId, type, fileName: req.file.originalname, fileUrl: `private:${req.file.filename}`, uploadedById: req.user!.id } });
     await prisma.company.updateMany({ where: { id: companyId, verificationStatus: { in: ["PENDING", "REJECTED"] } }, data: { verificationStatus: "UNDER_REVIEW" } });
@@ -160,8 +178,12 @@ function streamPrivate(res: import("express").Response, doc: { fileUrl: string; 
   const stored = doc.fileUrl.replace(/^private:/, "");
   const full = privatePath(stored);
   if (!full) throw notFound("File not found");
-  res.setHeader("Content-Disposition", `inline; filename="${doc.fileName.replace(/[^\w.\- ]/g, "_")}"`);
+  const ext = full.split(".").pop()?.toLowerCase();
+  const type = ext === "pdf" ? "application/pdf" : ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+  res.setHeader("Content-Type", type);
+  res.setHeader("Content-Disposition", `attachment; filename="${doc.fileName.replace(/[^\w.\- ]/g, "_")}"`);
   res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
   res.sendFile(full);
 }
 
@@ -265,6 +287,8 @@ router.post(
   asyncHandler(async (req, res) => {
     const companyId = requireCompany(req);
     const { email, role, name } = z.object({ email: z.string().email().transform((s) => s.toLowerCase()), role: z.enum(["OWNER", "MANAGER", "SALES", "WAREHOUSE"]), name: z.string().optional() }).parse(req.body);
+    const inviter = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { companyRole: true } });
+    if (role === "OWNER" && req.user!.role !== "ADMIN" && (inviter?.companyRole ?? "OWNER") !== "OWNER") throw forbidden("Only an owner can invite another owner");
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing?.companyId === companyId) throw conflict("This person is already in your team");
     const token = crypto.randomBytes(24).toString("hex");
@@ -274,7 +298,7 @@ router.post(
       include: { invitedBy: { select: { id: true, name: true } } },
     });
     const url = `${env.webUrl}/join?token=${token}`;
-    await sendMail(email, `${req.user!.name} invited you to ${company.name} on MySupplier`, layout("You're invited", `<p>${req.user!.name} invited you to join <strong>${company.name}</strong> on MySupplier as <strong>${role.toLowerCase()}</strong>.</p><p>The link is valid for 7 days.</p>`, { label: "Accept invitation", url }), `Accept your invitation: ${url}`);
+    await sendMail(email, `${req.user!.name} invited you to ${company.name} on MySupplier`, layout("You're invited", `<p>${escapeHtml(req.user!.name)} invited you to join <strong>${escapeHtml(company.name)}</strong> on MySupplier as <strong>${escapeHtml(role.toLowerCase())}</strong>.</p><p>The link is valid for 7 days.</p>`, { label: "Accept invitation", url }), `Accept your invitation: ${url}`);
     res.status(201).json(serialize({ ...invite, inviteUrl: env.isProd ? undefined : url }));
   }),
 );
@@ -296,6 +320,10 @@ router.patch(
     const data = z.object({ role: z.enum(["OWNER", "MANAGER", "SALES", "WAREHOUSE"]).optional(), active: z.boolean().optional() }).parse(req.body);
     const member = await prisma.user.findFirst({ where: { id: req.params.userId, companyId } });
     if (!member) throw notFound("Member not found");
+    if (member.id === req.user!.id && req.user!.role !== "ADMIN") throw badRequest("You cannot change your own role or status");
+    const actor = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { companyRole: true } });
+    const actorIsOwner = req.user!.role === "ADMIN" || (actor?.companyRole ?? "OWNER") === "OWNER";
+    if (!actorIsOwner && (data.role === "OWNER" || (member.companyRole ?? "OWNER") === "OWNER")) throw forbidden("Only an owner can grant or change owner access");
     const owners = await prisma.user.count({ where: { companyId, active: true, OR: [{ companyRole: "OWNER" }, { companyRole: null }] } });
     const isOwner = (member.companyRole ?? "OWNER") === "OWNER";
     if (isOwner && owners <= 1 && ((data.role && data.role !== "OWNER") || data.active === false)) throw badRequest("A company must keep at least one active owner");
@@ -421,18 +449,20 @@ router.get(
     const companyId = requireCompany(req);
     const pct = await companyCommissionPct(companyId);
     const orders = await prisma.order.findMany({ where: { companyId, status: { not: "CANCELLED" } }, include: { payout: { select: { status: true } } } });
-    let grossPaid = 0, commission = 0, paidOut = 0, pendingPayout = 0, awaitingDelivery = 0, unpaid = 0;
+    let grossPaid = 0, commission = 0, paidOut = 0, pendingPayout = 0, awaitingDelivery = 0, unpaid = 0, commissionDue = 0;
     for (const o of orders) {
       const total = Number(o.total);
       const c = commissionFor(total, pct);
       if (o.paymentStatus === "PAID") {
         grossPaid += total; commission += c.commission;
-        if (o.status === "DELIVERED") {
+        if (o.paymentMethod === "COD") {
+          commissionDue += c.commission; // supplier collected the cash; commission is owed to the platform
+        } else if (o.status === "DELIVERED") {
           if (o.payout?.status === "PAID") paidOut += c.net; else pendingPayout += c.net;
         } else awaitingDelivery += c.net;
-      } else unpaid += total;
+      } else if (o.paymentStatus === "UNPAID") unpaid += total;
     }
-    res.json({ currency: "SAR", commissionPct: pct, grossPaid: round2(grossPaid), commission: round2(commission), netEarned: round2(grossPaid - commission), paidOut: round2(paidOut), pendingPayout: round2(pendingPayout), awaitingDelivery: round2(awaitingDelivery), unpaidReceivables: round2(unpaid) });
+    res.json({ currency: "SAR", commissionPct: pct, grossPaid: round2(grossPaid), commission: round2(commission), netEarned: round2(grossPaid - commission), paidOut: round2(paidOut), pendingPayout: round2(pendingPayout), awaitingDelivery: round2(awaitingDelivery), unpaidReceivables: round2(unpaid), commissionDue: round2(commissionDue) });
   }),
 );
 
@@ -492,7 +522,8 @@ router.post(
   requireAuth("ADMIN"),
   asyncHandler(async (req, res) => {
     const { periodStart, periodEnd, companyId } = z.object({ periodStart: z.coerce.date(), periodEnd: z.coerce.date(), companyId: z.string().optional() }).parse(req.body);
-    const orders = await prisma.order.findMany({ where: { status: "DELIVERED", paymentStatus: "PAID", payoutId: null, updatedAt: { gte: periodStart, lte: periodEnd }, ...(companyId ? { companyId } : {}) } });
+    // Only money the platform actually collected (card via gateway, bank transfer confirmed by admin) is paid out.
+    const orders = await prisma.order.findMany({ where: { status: "DELIVERED", paymentStatus: "PAID", paymentMethod: { in: ["CARD", "BANK_TRANSFER"] }, payoutId: null, updatedAt: { gte: periodStart, lte: periodEnd }, ...(companyId ? { companyId } : {}) } });
     const byCompany = new Map<string, typeof orders>();
     for (const o of orders) byCompany.set(o.companyId, [...(byCompany.get(o.companyId) ?? []), o]);
     const created = [];
@@ -531,7 +562,7 @@ router.get(
     });
     if (!company) throw notFound("Company not found");
     const { users, ...rest } = company;
-    res.json(serialize({ ...rest, members: users.map((u) => ({ ...u, companyRole: u.companyRole ?? "OWNER" })) }));
+    res.json(serialize({ ...rest, members: users.map((u) => ({ ...u, companyRole: u.companyRole ?? "OWNER" })) }, { includePrivate: true }));
   }),
 );
 
@@ -543,7 +574,7 @@ router.patch(
     const company = await prisma.company.update({ where: { id: req.params.id }, data: { verificationStatus: status, verificationNotes: notes, verified: status === "VERIFIED", commissionPct: commissionPct === undefined ? undefined : commissionPct } });
     const users = await prisma.user.findMany({ where: { companyId: company.id, active: true }, select: { id: true } });
     await notify({ userIds: users.map((u) => u.id), type: "SYSTEM", title: status === "VERIFIED" ? "Your company is verified" : `Verification ${status.toLowerCase().replace("_", " ")}`, body: notes ?? (status === "VERIFIED" ? "You now carry the verified badge across MySupplier." : "Check your documents page for details."), link: "/supplier/documents" });
-    res.json(serialize(company));
+    res.json(serialize(company, { includePrivate: true }));
   }),
 );
 

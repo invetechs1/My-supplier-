@@ -90,6 +90,7 @@ export function ensureEInvoice(orderId: string) {
     const existing = await prisma.eInvoiceRecord.findUnique({ where: { orderId } });
     if (existing) return existing;
     const order = await prisma.order.findUniqueOrThrow({ where: { id: orderId }, include: { company: true, items: { include: { material: true } }, buyer: { include: { company: true } } } });
+    if (order.status === "CANCELLED" && order.paymentStatus !== "PAID") throw new Error("No invoice is issued for a cancelled, unpaid order");
     const last = await prisma.eInvoiceRecord.findFirst({ orderBy: { counter: "desc" } });
     const counter = (last?.counter ?? 0) + 1;
     const previousHash = last?.invoiceHash ?? GENESIS_PIH;

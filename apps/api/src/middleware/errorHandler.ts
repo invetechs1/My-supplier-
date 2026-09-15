@@ -11,7 +11,7 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     return res.status(400).json({ error: "Validation failed", details: err.flatten() });
   }
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    if (err.code === "P2002") return res.status(409).json({ error: "Duplicate record", details: err.meta });
+    if (err.code === "P2002") return res.status(409).json({ error: "A record with these details already exists" });
     if (err.code === "P2025") return res.status(404).json({ error: "Record not found" });
   }
   console.error(err);

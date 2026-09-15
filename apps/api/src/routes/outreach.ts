@@ -7,7 +7,7 @@ import { asyncHandler } from "../middleware/errorHandler";
 import { requireAuth } from "../middleware/auth";
 import { badRequest, notFound } from "../lib/errors";
 import { serialize } from "../lib/serialize";
-import { layout, mailEnabled, sendMail } from "../services/mailer";
+import { escapeHtml, layout, mailEnabled, sendMail } from "../services/mailer";
 import { importCatalog, type ImportRow } from "../services/catalogImport";
 import { snapshotHistory } from "../services/catalog";
 
@@ -53,7 +53,7 @@ export async function createUpdateRequest(companyId: string, channel: "EMAIL" | 
   let emailed = false;
   const email = company.users[0]?.email;
   if (channel === "EMAIL" && email && mailEnabled) {
-    await sendMail(email, "Please update your prices on MySupplier", layout("Update your prices", `<p>Hello ${company.name},</p><p>Contractors are searching for your products right now. Keep your prices current so you appear in comparisons, BOQ pricing and the shop.</p><p>This link needs no login and takes about 2 minutes.</p>`, { label: "Update prices", url: link }), text);
+    await sendMail(email, "Please update your prices on MySupplier", layout("Update your prices", `<p>Hello ${escapeHtml(company.name)},</p><p>Contractors are searching for your products right now. Keep your prices current so you appear in comparisons, BOQ pricing and the shop.</p><p>This link needs no login and takes about 2 minutes.</p>`, { label: "Update prices", url: link }), text);
     emailed = true;
   }
   return { companyId, companyName: company.name, link, whatsappUrl, emailed };

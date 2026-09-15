@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
 import { asyncHandler } from "../middleware/errorHandler";
-import { requireAuth, type AuthUser } from "../middleware/auth";
+import { userFromToken, requireAuth, type AuthUser } from "../middleware/auth";
 import { forbidden, notFound, unauthorized } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import { qrSvg, zatcaTlvBase64 } from "../services/zatca";
@@ -51,14 +51,8 @@ router.get(
   "/orders/:id/invoice.html",
   asyncHandler(async (req, res) => {
     const token = typeof req.query.token === "string" ? req.query.token : "";
-    let payload: jwt.JwtPayload;
-    try {
-      payload = jwt.verify(token, env.jwtSecret) as jwt.JwtPayload;
-    } catch {
-      throw unauthorized("Invalid or expired token");
-    }
-    const user = await prisma.user.findUnique({ where: { id: String(payload.sub) } });
-    if (!user) throw unauthorized();
+    const user = await userFromToken(token);
+    if (!user) throw unauthorized("Invalid or expired token");
     const inv = await invoiceFor(req.params.id, user);
     const o = inv.order;
     const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);

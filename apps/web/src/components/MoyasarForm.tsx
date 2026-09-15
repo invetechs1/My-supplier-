@@ -66,6 +66,7 @@ export function MoyasarForm({ orderId, intent, onCompleted, className }: Moyasar
         description: intent.description,
         publishable_api_key: intent.publishableKey,
         callback_url: intent.callbackUrl,
+        metadata: { order_id: intent.orderId },
         methods: ["creditcard", "applepay"],
         on_completed: async (payment) => {
           setVerifying(true);

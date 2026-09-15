@@ -62,6 +62,16 @@ const GROUPS: Array<{ id: string; title: string; items: Faq[] }> = [
     title: "Delivery",
     items: [
       { q: "Who delivers?", a: <p>The supplier you order from, using its own fleet or a contracted carrier. Lead times and delivery fees are shown per supplier before checkout.</p> },
+      {
+        q: "How is delivery priced?",
+        a: (
+          <>
+            <p>Once you choose a delivery city in the cart or at checkout we quote every carrier that serves the route — the supplier’s own fleet, heavy-trucking partners such as Trukker and Trella for steel, cement and aggregates, and parcel couriers such as SMSA and Aramex for small items.</p>
+            <p>Each quote is calculated from the carrier’s rate card for the zone (same city, same region or national), the total weight and volume of your items, and any minimum fee. The cheapest option is pre-selected per supplier; open <em>Other options</em> at checkout to pick a faster carrier. The price you choose becomes that order’s delivery fee and appears on the invoice. If no carrier covers the route, the supplier delivers at its standard fee (“Delivery by supplier”).</p>
+            <p>After dispatch the order page shows the carrier, tracking number and a live status timeline (booked → picked up → in transit → out for delivery → delivered).</p>
+          </>
+        ),
+      },
       { q: "Can I track my order?", a: <p>Yes — the order page shows Pending → Confirmed → In transit → Delivered, and you receive an email and in-app notification at each step.</p> },
       { q: "What if goods arrive damaged or short?", a: <p>Note it on the delivery note and report within 48 hours from the order page. See the <Link href="/refund-policy" className="font-semibold text-brand-700 hover:underline">Refund &amp; Cancellation Policy</Link>.</p> },
     ],
@@ -74,6 +84,15 @@ const GROUPS: Array<{ id: string; title: string; items: Faq[] }> = [
       { q: "How do bank transfers work?", a: <p>Choose bank transfer at checkout; the bank details and your order reference appear on the order page and invoice. Quote the reference in the transfer so the supplier can confirm quickly.</p> },
       { q: "Can I pay by card later?", a: <p>Yes. Any unpaid card order has a <em>Pay now</em> button on its order page.</p> },
       { q: "When am I charged?", a: <p>Card payments are captured immediately when the payment succeeds; you will see a confirmation page and the order is marked Paid.</p> },
+      {
+        q: "Can I pay by card and get a refund?",
+        a: (
+          <>
+            <p>Yes. Card payments (mada, Visa, Mastercard, Apple Pay) are processed by Moyasar, and refunds go back to the same card. The supplier — or MySupplier support — issues the refund from the order page with a reason; the order is then marked <em>Refunded</em>, the refund appears in the order’s payment history and you are notified by email and in the app.</p>
+            <p>Card refunds usually show on your statement within 5–10 business days depending on your bank. Orders paid by bank transfer or cash on delivery are refunded by bank transfer to the account you provide, and the refund is recorded on the order in the same way. Eligibility and timelines are set out in the <Link href="/refund-policy" className="font-semibold text-brand-700 hover:underline">Refund &amp; Cancellation Policy</Link>.</p>
+          </>
+        ),
+      },
     ],
   },
   {

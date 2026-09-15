@@ -73,7 +73,7 @@ router.get("/cart", asyncHandler(async (req, res) => {
 }));
 
 router.post("/cart/items", asyncHandler(async (req, res) => {
-  const { listingId, quantity } = z.object({ listingId: z.string(), quantity: z.coerce.number().positive().default(1) }).parse(req.body);
+  const { listingId, quantity } = z.object({ listingId: z.string(), quantity: z.coerce.number().finite().positive().max(1e6).default(1) }).parse(req.body);
   const cart = await getOrCreateCart(req.user!.id);
   const existing = cart.items.find((i) => i.listingId === listingId);
   const newQty = (existing?.quantity ?? 0) + quantity;
@@ -84,7 +84,7 @@ router.post("/cart/items", asyncHandler(async (req, res) => {
 }));
 
 router.patch("/cart/items/:id", asyncHandler(async (req, res) => {
-  const { quantity } = z.object({ quantity: z.coerce.number().positive() }).parse(req.body);
+  const { quantity } = z.object({ quantity: z.coerce.number().finite().positive().max(1e6) }).parse(req.body);
   const cart = await getOrCreateCart(req.user!.id);
   const item = cart.items.find((i) => i.id === req.params.id);
   if (!item) throw notFound("Cart item not found");

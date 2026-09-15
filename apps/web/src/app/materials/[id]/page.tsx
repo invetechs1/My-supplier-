@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo } from "react";
 import type { PriceListing } from "@mysupplier/shared";
-import { api } from "@/lib/api";
+import { api, type MaterialWithLogistics } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatDate, formatSar, timeAgo } from "@/lib/format";
@@ -75,6 +75,8 @@ export default function MaterialDetailPage() {
           <div className="mt-3 flex flex-wrap gap-2 text-sm text-slate-600">
             <Badge tone="slate">SKU {m.sku}</Badge>
             <Badge tone="slate">Unit: {m.unit}</Badge>
+            {(m as MaterialWithLogistics).weightKg ? <Badge tone="slate">Weight per unit: {(m as MaterialWithLogistics).weightKg} kg</Badge> : null}
+            {(m as MaterialWithLogistics).hazardous && <Badge tone="red">Hazardous</Badge>}
             {m.brand && <Badge tone="blue">{m.brand}</Badge>}
           </div>
           {m.description && <p className="mt-4 max-w-2xl text-sm text-slate-600">{m.description}</p>}

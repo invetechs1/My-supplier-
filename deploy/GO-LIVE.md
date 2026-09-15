@@ -78,6 +78,13 @@ Expo's push service once the app is built with EAS (iOS needs the push key uploa
 Store listing needs: privacy policy URL (`https://mysupplier.sa/privacy`), support URL, screenshots
 (see `apps/mobile/README.md`), and demo credentials for review.
 
+## 6b. Security notes (done in code, verify on the server)
+* Verification documents are private (served only to the owning company and admins); logos are public.
+* Uploads are validated by magic bytes and stored with server-chosen names; feeds cannot target private networks.
+* Card payments are bound to their order through gateway metadata; suppliers can only confirm cash-on-delivery after delivery; payouts cover card and bank-transfer money only, COD commission is invoiced to the supplier.
+* After deploying, run `pnpm --filter @mysupplier/api add xlsx@https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz` (the sandbox that built this could not reach the SheetJS CDN); the parser is already bounded to 8 MB / 5,000 rows.
+* Rotate any API key that was ever pasted into a chat or ticket. Keep `JWT_SECRET`, webhook secrets and Moyasar keys only in `deploy/.env`.
+
 ## 7. Operations
 | Task | How |
 |---|---|

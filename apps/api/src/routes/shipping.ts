@@ -10,6 +10,7 @@ import { companyUserIds, notify } from "../services/notifications";
 import { recordOrderEvent } from "../services/portal";
 import { CARRIERS, carrierEnabled, carrierName, loadForQuote, quoteForSupplier, trackingUrlFor } from "../services/shipping";
 import { adapters } from "../services/carriers";
+import { safeEqual } from "./payments";
 
 const router = Router();
 const shipmentInclude = { events: { orderBy: { createdAt: "asc" } }, pickupBranch: true } satisfies Prisma.ShipmentInclude;
@@ -21,7 +22,7 @@ router.get("/shipping/carriers", (_req, res) => {
 router.post(
   "/shipping/quote",
   asyncHandler(async (req, res) => {
-    const body = z.object({ supplierCompanyId: z.string().optional(), items: z.array(z.object({ materialId: z.string(), quantity: z.coerce.number().positive() })).min(1).max(200), deliveryCity: z.string().min(2), pickupCity: z.string().optional() }).parse(req.body);
+    const body = z.object({ supplierCompanyId: z.string().optional(), items: z.array(z.object({ materialId: z.string(), quantity: z.coerce.number().finite().positive().max(1e6) })).min(1).max(50), deliveryCity: z.string().min(2), pickupCity: z.string().optional() }).parse(req.body);
     if (body.supplierCompanyId) {
       const { quotes } = await quoteForSupplier(body.supplierCompanyId, body.items, body.deliveryCity, body.pickupCity);
       return res.json(quotes);
@@ -65,6 +66,10 @@ router.post(
     if (req.user!.role === "SUPPLIER" && order.companyId !== requireCompany(req)) throw forbidden();
     if (["CANCELLED", "DELIVERED"].includes(order.status)) throw badRequest(`Order is ${order.status.toLowerCase()}`);
     const body = shipmentSchema.parse(req.body);
+    if (body.pickupBranchId) {
+      const branch = await prisma.branch.findFirst({ where: { id: body.pickupBranchId, companyId: order.companyId } });
+      if (!branch) throw badRequest("Pickup branch must belong to the supplier");
+    }
     const { weightKg, volumeM3 } = await loadForQuote(order.items.filter((i) => i.materialId).map((i) => ({ materialId: i.materialId!, quantity: i.quantity })));
     let external: { externalId?: string; trackingNumber?: string; trackingUrl?: string | null; cost?: number | null } = {};
     const adapter = adapters[body.carrier];
@@ -108,6 +113,10 @@ router.patch(
     if (req.user!.role === "SUPPLIER" && shipment.order.companyId !== requireCompany(req)) throw forbidden();
     const body = shipmentSchema.partial().extend({ status: z.enum(["PENDING", "BOOKED", "PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED", "FAILED", "CANCELLED"]).optional(), description: z.string().max(300).optional(), location: z.string().max(120).optional() }).parse(req.body);
     const { status, description, location, ...fields } = body;
+    if (fields.pickupBranchId) {
+      const branch = await prisma.branch.findFirst({ where: { id: fields.pickupBranchId, companyId: shipment.order.companyId } });
+      if (!branch) throw badRequest("Pickup branch must belong to the supplier");
+    }
     if (Object.keys(fields).length) await prisma.shipment.update({ where: { id: shipment.id }, data: { ...fields, carrierName: fields.carrier ? carrierName(fields.carrier) : undefined } });
     if (status) return res.json(serialize(await advanceShipment(shipment.id, status, description, location, req.user!.id)));
     res.json(serialize(shape(await prisma.shipment.findUniqueOrThrow({ where: { id: shipment.id }, include: shipmentInclude }))));
@@ -118,13 +127,12 @@ router.patch(
 router.post(
   "/shipping/webhooks/:carrier",
   asyncHandler(async (req, res) => {
-    const secret = process.env.CARRIER_WEBHOOK_SECRET;
-    if (!secret || req.headers["x-webhook-secret"] !== secret) throw unauthorized("Bad webhook secret");
+    if (!safeEqual(String(req.headers["x-webhook-secret"] ?? ""), process.env.CARRIER_WEBHOOK_SECRET)) throw unauthorized("Bad webhook secret");
     const carrier = req.params.carrier.toUpperCase() as keyof typeof adapters;
     const adapter = adapters[carrier];
     if (!adapter) throw badRequest("Unknown carrier");
     const body = z.object({ trackingNumber: z.string().min(1), status: z.string().min(1), description: z.string().optional(), location: z.string().optional() }).parse(req.body);
-    const shipment = await prisma.shipment.findFirst({ where: { trackingNumber: body.trackingNumber, carrier } });
+    const shipment = await prisma.shipment.findFirst({ where: { trackingNumber: body.trackingNumber, carrier, status: { notIn: ["DELIVERED", "CANCELLED"] } }, orderBy: { createdAt: "desc" } });
     if (!shipment) return res.json({ ignored: true });
     await advanceShipment(shipment.id, adapter.mapStatus(body.status), body.description ?? `Carrier update: ${body.status}`, body.location);
     res.json({ ok: true });

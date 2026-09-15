@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Material, ShopOffer } from "@mysupplier/shared";
-import { api } from "@/lib/api";
+import { api, type MaterialWithLogistics } from "@/lib/api";
 import { clampQty, isPurchasable, minQtyFor, useCart } from "@/lib/cart";
 import { useAsync } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
@@ -169,7 +169,18 @@ export default function ShopProductPage() {
             <Badge tone="slate">SKU {p.sku}</Badge>
             <Badge tone="slate">Unit: {p.unit}</Badge>
             {p.category && <Badge tone="slate">{lang === "ar" ? p.category.nameAr : p.category.name}</Badge>}
+            {(p as MaterialWithLogistics).hazardous && <Badge tone="red">Hazardous</Badge>}
           </div>
+          {(() => {
+            const l = p as MaterialWithLogistics;
+            if (!l.weightKg && !l.volumeM3) return null;
+            return (
+              <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                {l.weightKg ? <div><dt className="inline text-slate-500">Weight per unit: </dt><dd className="inline font-medium tabular-nums text-slate-900">{l.weightKg} kg / {p.unit}</dd></div> : null}
+                {l.volumeM3 ? <div><dt className="inline text-slate-500">Volume per unit: </dt><dd className="inline font-medium tabular-nums text-slate-900">{l.volumeM3} m³ / {p.unit}</dd></div> : null}
+              </dl>
+            );
+          })()}
           {p.description && <p className="mt-4 text-sm leading-relaxed text-slate-600">{p.description}</p>}
 
           <div className="mt-6 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-center">

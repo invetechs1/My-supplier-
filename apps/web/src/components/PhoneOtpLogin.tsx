@@ -162,8 +162,8 @@ export function PhoneOtpLogin({ onSuccess }: { onSuccess: (auth: AuthResponse) =
     return (
       <form onSubmit={submitPhone} className="space-y-4" noValidate>
         {error && <Alert>{error}</Alert>}
-        <SaudiPhoneInput value={phoneInput} onChange={setPhoneInput} autoFocus />
-        <Button type="submit" className="w-full" loading={busy}>Send code</Button>
+        <SaudiPhoneInput value={phoneInput} onChange={setPhoneInput} autoFocus label={t("auth.mobile")} />
+        <Button type="submit" className="w-full" loading={busy}>{t("auth.sendCode")}</Button>
         <p className="text-center text-xs text-slate-500">We will text you a 6-digit code. No password needed. New numbers get an account automatically.</p>
       </form>
     );

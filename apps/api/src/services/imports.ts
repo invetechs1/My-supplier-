@@ -122,11 +122,11 @@ export async function publishImport(importId: string, opts: { includeSuggested?:
   if (imp.kind === "SUPPLIER_PRICE_LIST" && companyId) {
     source = "SUPPLIER"; sourceName = null; materialSource = "SUPPLIER";
   } else if (imp.kind === "BUYER_QUOTATION") {
+    // Quoted prices are shown under the supplier's *name* but never attributed to a registered company
+    // (a buyer must not be able to publish prices on a supplier's storefront).
     source = "QUOTATION";
-    const name = imp.supplierName?.trim();
-    const matchedCompany = name ? await prisma.company.findFirst({ where: { type: "SUPPLIER", name: { contains: name, mode: "insensitive" } } }) : null;
-    companyId = matchedCompany?.id ?? null;
-    sourceName = `Quotation – ${name || "supplier"}`;
+    companyId = null;
+    sourceName = `Quotation – ${imp.supplierName?.trim() || "supplier"}`;
   } else if (companyId) {
     source = "SUPPLIER"; sourceName = null; materialSource = "SUPPLIER";
   }

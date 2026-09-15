@@ -4,12 +4,12 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/errorHandler";
 import { requireAuth, signToken } from "../middleware/auth";
-import { badRequest, conflict, unauthorized } from "../lib/errors";
+import { badRequest, conflict, forbidden, unauthorized } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import crypto from "crypto";
 import rateLimit from "express-rate-limit";
 import { env } from "../lib/env";
-import { layout, sendMail } from "../services/mailer";
+import { escapeHtml, layout, sendMail } from "../services/mailer";
 
 /** Tighter limit for credential endpoints (brute-force protection). */
 export const authLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false, message: { error: "Too many attempts, try again later" } });
@@ -99,7 +99,10 @@ router.patch(
     const data = z
       .object({ name: z.string().min(2).optional(), phone: z.string().optional(), locale: z.enum(["en", "ar"]).optional() })
       .parse(req.body);
-    const user = await prisma.user.update({ where: { id: req.user!.id }, data, include: userInclude });
+    const current = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { phone: true } });
+    // A changed number must be verified again before it can be used for OTP login.
+    const phoneChanged = data.phone !== undefined && data.phone !== current.phone;
+    const user = await prisma.user.update({ where: { id: req.user!.id }, data: { ...data, ...(phoneChanged ? { phoneVerified: false } : {}) }, include: userInclude });
     res.json(serialize(user));
   }),
 );
@@ -124,8 +127,10 @@ router.post(
     if (!invite || invite.acceptedAt || invite.expiresAt.getTime() < Date.now()) throw badRequest("This invitation is invalid or has expired");
     let user = await prisma.user.findUnique({ where: { email: invite.email } });
     if (user) {
+      if (!user.active) throw forbidden("This account is deactivated");
+      if (user.role === "ADMIN") throw badRequest("Platform administrators cannot join a supplier team");
       if (user.companyId && user.companyId !== invite.companyId) throw conflict("This email already belongs to another company");
-      user = await prisma.user.update({ where: { id: user.id }, data: { companyId: invite.companyId, role: "SUPPLIER", companyRole: invite.role, active: true, phone: phone ?? user.phone } });
+      user = await prisma.user.update({ where: { id: user.id }, data: { companyId: invite.companyId, role: "SUPPLIER", companyRole: invite.role, phone: phone ?? user.phone } });
     } else {
       user = await prisma.user.create({ data: { email: invite.email, name, phone, passwordHash: await bcrypt.hash(password, 10), role: "SUPPLIER", companyId: invite.companyId, companyRole: invite.role } });
     }
@@ -146,7 +151,7 @@ router.post(
       const token = crypto.randomBytes(32).toString("hex");
       await prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 60 * 60_000) } });
       const url = `${env.webUrl}/reset-password?token=${token}`;
-      await sendMail(user.email, "Reset your MySupplier password", layout("Reset your password", `<p>Hi ${user.name},</p><p>Click the button below to choose a new password. The link is valid for 1 hour.</p>`, { label: "Reset password", url }), `Reset your password: ${url}`);
+      await sendMail(user.email, "Reset your MySupplier password", layout("Reset your password", `<p>Hi ${escapeHtml(user.name)},</p><p>Click the button below to choose a new password. The link is valid for 1 hour.</p>`, { label: "Reset password", url }), `Reset your password: ${url}`);
     }
     res.json({ ok: true });
   }),

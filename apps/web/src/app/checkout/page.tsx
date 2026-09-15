@@ -173,7 +173,7 @@ export default function CheckoutPage() {
   }, [items]);
 
   // Delivery total shown in the summary: the cart's fee (cheapest quote or flat fee per supplier) adjusted for explicit choices.
-  const quotesReady = !!form.deliveryCity && form.deliveryCity === cartCity;
+  const quotesReady = !!form.deliveryCity && form.deliveryCity === cartCity && !cartLoading;
   const deliveryAdjustment = quotesReady
     ? groups.reduce((sum, g) => {
         if (!g.companyId) return sum;

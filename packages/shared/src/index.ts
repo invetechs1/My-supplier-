@@ -558,6 +558,7 @@ export interface PaymentRecord {
 
 export interface PaymentIntent {
   orderId: string;
+  metadata?: { order_id: string }; // must be passed to the gateway so the payment can be bound to the order
   reference: string;
   amount: number; // SAR
   amountHalalas: number; // Moyasar expects the minor unit
@@ -855,6 +856,7 @@ export interface FinanceSummary {
   pendingPayout: number; // net for paid+delivered orders not yet in a PAID payout
   awaitingDelivery: number; // paid but not delivered yet
   unpaidReceivables: number; // COD / bank transfer not yet marked paid
+  commissionDue: number; // commission owed to the platform on cash (COD) the supplier collected directly
 }
 
 export interface StatementLine {

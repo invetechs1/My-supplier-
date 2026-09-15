@@ -1,5 +1,3 @@
-"use client";
-
 import type { ClientErrorReport } from "@mysupplier/shared";
 import { API_URL, getToken } from "./api";
 

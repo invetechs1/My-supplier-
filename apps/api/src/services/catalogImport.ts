@@ -60,7 +60,9 @@ export async function importCatalog(rows: ImportRow[], opts: { companyId?: strin
         tags: row.tags ?? material?.tags ?? [],
       };
       if (material) {
-        material = await prisma.material.update({ where: { id: material.id }, data: { ...data, active: true } });
+        // Only trusted (admin/feed) imports may edit an existing catalogue item; supplier uploads just attach their offer.
+        if (!opts.companyId) material = await prisma.material.update({ where: { id: material.id }, data: { ...data, active: true } });
+        if (!material.active) throw new Error("This catalogue item is disabled");
         result.updated++;
       } else {
         material = await prisma.material.create({ data: { ...data, sku, source: opts.materialSource } });

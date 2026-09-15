@@ -1,4 +1,5 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/errorHandler";
@@ -14,6 +15,7 @@ import {
 } from "../services/boq";
 
 const router = Router();
+router.use("/boq", rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false, message: { error: "Too many BOQ requests, please wait a minute" } }));
 
 const lineSchema = z.object({
   description: z.string().min(1).max(300),
@@ -25,7 +27,7 @@ const lineSchema = z.object({
 const analyzeSchema = z.object({
   city: z.string().optional(),
   text: z.string().max(50_000).optional(),
-  lines: z.array(lineSchema).max(300).optional(),
+  lines: z.array(lineSchema).max(200).optional(),
   verifiedOnly: z.coerce.boolean().optional(),
 });
 
