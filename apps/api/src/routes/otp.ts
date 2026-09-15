@@ -26,7 +26,8 @@ async function issueCode(phone: string, purpose: string) {
   return { code, channel };
 }
 
-async function consumeCode(phone: string, purpose: string, code: string) {
+/** Validates a code; marks it used only when `consume` is true (so a new user can re-send it together with their name). */
+async function consumeCode(phone: string, purpose: string, code: string, consume = true) {
   const rec = await prisma.otpCode.findFirst({ where: { phone, purpose, usedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: "desc" } });
   if (!rec) throw badRequest("Code expired or not requested. Request a new code.");
   if (rec.attempts >= 5) throw badRequest("Too many wrong attempts. Request a new code.");
@@ -34,7 +35,8 @@ async function consumeCode(phone: string, purpose: string, code: string) {
     await prisma.otpCode.update({ where: { id: rec.id }, data: { attempts: { increment: 1 } } });
     throw badRequest("Incorrect code");
   }
-  await prisma.otpCode.update({ where: { id: rec.id }, data: { usedAt: new Date() } });
+  if (consume) await prisma.otpCode.update({ where: { id: rec.id }, data: { usedAt: new Date() } });
+  return rec;
 }
 
 router.post(
@@ -58,7 +60,7 @@ router.post(
     const body = z.object({ phone: z.string().min(9), code: z.string().regex(/^\d{6}$/), name: z.string().min(2).optional(), role: z.enum(["BUYER", "SUPPLIER"]).default("BUYER"), company: companySchema.optional() }).parse(req.body);
     const phone = normaliseSaudiPhone(body.phone);
     if (!phone) throw badRequest("Invalid phone number");
-    await consumeCode(phone, "LOGIN", body.code);
+    const rec = await consumeCode(phone, "LOGIN", body.code, false);
     // Prefer the account that verified this number; fall back to a single unverified match (legacy profiles).
     let user = await prisma.user.findFirst({ where: { phone, active: true, phoneVerified: true }, include: userInclude });
     if (!user) {
@@ -67,6 +69,7 @@ router.post(
       else if (candidates.length > 1) throw conflict("This number is linked to more than one account. Sign in with email and verify your phone.");
     }
     if (!user) {
+      // Keep the code valid so the client can call again with the profile details.
       if (!body.name) throw notFound("No account for this number yet. Send `name` (and `company` for suppliers) to create one.");
       if (body.role === "SUPPLIER" && !body.company) throw badRequest("Suppliers must provide company details");
       const email = `${phone.replace("+", "")}@phone.mysupplier.sa`;
@@ -84,6 +87,7 @@ router.post(
     } else {
       prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => undefined);
     }
+    await prisma.otpCode.update({ where: { id: rec.id }, data: { usedAt: new Date() } });
     const token = signToken({ id: user.id, email: user.email, role: user.role, companyId: user.companyId, name: user.name });
     res.json({ token, user: serialize(user) });
   }),
