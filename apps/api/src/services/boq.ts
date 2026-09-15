@@ -75,7 +75,7 @@ const SYNONYMS: Record<string, string> = {
   مقاوم: "resistant", كبريتات: "sulphate", sulfate: "sulphate", src: "sulphate",
 };
 
-const STOP = new Set(["of", "the", "and", "for", "with", "per", "to", "in", "x", "by", "supply", "install", "including", "incl", "type", "size", "as", "spec", "approved", "complete", "works", "من", "في", "مع", "توريد", "تركيب", "و", "حسب", "المواصفات"]);
+const STOP = new Set(["of", "the", "and", "for", "with", "per", "to", "in", "x", "by", "supply", "install", "including", "incl", "type", "size", "as", "spec", "approved", "complete", "works", "slump", "pumped", "delivered", "delivery", "site", "grade", "class", "من", "في", "مع", "توريد", "تركيب", "و", "حسب", "المواصفات", "درجه", "نوع"]);
 
 function normaliseArabic(s: string): string {
   return s
@@ -91,6 +91,7 @@ export function tokenize(text: string): { words: string[]; numbers: string[]; si
   const clean = normaliseArabic(text.toLowerCase())
     .replace(/["“”'’]/g, " inch ")
     .replace(/[×xX]/g, " x ")
+    .replace(/(\p{L})-(\p{L})/gu, "$1 $2") // ready-mix -> ready mix (keep 3/4 and 12.5)
     .replace(/[^\p{L}\p{N}./-]+/gu, " ");
   const numbers = new Set<string>();
   const sized = new Set<string>(); // numbers that carry a size unit (16mm, 50kg, C30) rather than a bare designation (Type 1)

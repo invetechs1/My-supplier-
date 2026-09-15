@@ -61,6 +61,9 @@ describe("matchLine", () => {
     expect(matchLine("Saudi Cement OPC Cement 50kg أسمنت بورتلاندي عادي كيس 50 كجم", specced)[0].material.id).toBe("cem");
     expect(matchLine("Sulphate resistant cement", catalogue)[0].material.id).toBe("src");
     expect(matchLine("Ready mix concrete C30 pumped", catalogue)[0].material.id).toBe("c30");
+    const c30 = matchLine("Ready-mix concrete C30, slump 100, pumped", catalogue)[0];
+    expect(c30.material.id).toBe("c30");
+    expect(c30.score).toBeGreaterThanOrEqual(0.6);
   });
   it("matches by SKU and returns nothing for gibberish", () => {
     expect(matchLine("TIL-POR-60 for lobby", catalogue)[0]).toMatchObject({ material: { id: "tile" }, score: 1 });
