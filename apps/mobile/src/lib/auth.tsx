@@ -16,6 +16,8 @@ interface AuthContextValue {
   /** OWNER / MANAGER: may edit the company profile, see finance and manage the team. */
   canManageCompany: boolean;
   login: (payload: LoginPayload) => Promise<User>;
+  /** Store a token obtained elsewhere (OTP verify, deep link), load `/auth/me` and start the session. */
+  loginWithToken: (token: string, user?: User) => Promise<User>;
   register: (payload: RegisterPayload) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<User | null>;
@@ -28,6 +30,11 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function companyRoleOf(user: User | null | undefined): CompanyRole {
   const role = (user as (User & { companyRole?: CompanyRole | null }) | null | undefined)?.companyRole;
   return role ?? "OWNER";
+}
+
+/** `phoneVerified` is only present on newer API responses (set by OTP login / phone verification). */
+export function phoneVerifiedOf(user: User | null | undefined): boolean {
+  return Boolean((user as (User & { phoneVerified?: boolean | null }) | null | undefined)?.phoneVerified);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -82,6 +89,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAuth],
   );
 
+  const loginWithToken = useCallback(
+    async (nextToken: string, knownUser?: User) => {
+      // Persist first so `/auth/me` is sent with the bearer token.
+      await setStoredToken(nextToken);
+      let me: User;
+      try {
+        me = knownUser ?? (await api.me());
+      } catch (err) {
+        await setStoredToken(null);
+        throw err;
+      }
+      await applyAuth(nextToken, me);
+      return me;
+    },
+    [applyAuth],
+  );
+
   const register = useCallback(
     async (payload: RegisterPayload) => {
       const res = await api.register(payload);
@@ -122,12 +146,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       companyRole,
       canManageCompany: companyRole === "OWNER" || companyRole === "MANAGER",
       login,
+      loginWithToken,
       register,
       logout,
       refreshUser,
       setUser,
     };
-  }, [token, user, loading, login, register, logout, refreshUser]);
+  }, [token, user, loading, login, loginWithToken, register, logout, refreshUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

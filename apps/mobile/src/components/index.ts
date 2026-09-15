@@ -16,3 +16,5 @@ export { ProductCard, StockPill, DealBadge } from "./ProductCard";
 export { QtyStepper } from "./QtyStepper";
 export { CartButton, CartBadge } from "./CartButton";
 export { SvgImage } from "./SvgImage";
+export { AppErrorBoundary } from "./AppErrorBoundary";
+export { DeliverySection } from "./DeliverySection";

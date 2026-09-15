@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import type { CartItem } from "@mysupplier/shared";
+import { SAUDI_CITIES, type CartItem } from "@mysupplier/shared";
 import { useAuth } from "@/lib/auth";
 import { GUEST_DELIVERY_FEE_PER_SUPPLIER, clampQty, minQtyFor, supplierKey, useCart } from "@/lib/cart";
 import { usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatSar } from "@/lib/format";
-import { Alert, Button, Card, CardHeader, EmptyState, LinkButton, LoadingBlock, PageHeader, VerifiedBadge } from "@/components/ui";
+import { Alert, Button, Card, CardHeader, EmptyState, LinkButton, LoadingBlock, PageHeader, Select, VerifiedBadge } from "@/components/ui";
 import { ProductImage, StockPill } from "@/components/shop/ProductCard";
+import { QuoteLine } from "@/components/shop/DeliveryOptions";
 
 interface Group {
   key: string;
@@ -66,7 +67,7 @@ export default function CartPage() {
   usePageTitle(t("cart.title"));
   const router = useRouter();
   const { user } = useAuth();
-  const { cart, items, loading, busy, error, isGuest, update, remove, clear, reload } = useCart();
+  const { cart, items, quotes, deliveryCity, setDeliveryCity, loading, busy, error, isGuest, update, remove, clear, reload } = useCart();
   const [rowBusy, setRowBusy] = useState<string | null>(null);
 
   const groups = useMemo<Group[]>(() => {
@@ -197,6 +198,16 @@ export default function CartPage() {
                     );
                   })}
                 </ul>
+                {!isGuest && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-3">
+                    {deliveryCity && g.companyId ? (
+                      <QuoteLine quote={quotes[g.companyId]} />
+                    ) : (
+                      <span className="text-xs text-slate-500">Choose a delivery city in the summary to see carrier prices for this supplier.</span>
+                    )}
+                    {deliveryCity && g.companyId && quotes[g.companyId] && <span className="text-xs text-slate-500">to {deliveryCity} · more options at checkout</span>}
+                  </div>
+                )}
               </Card>
             ))}
           </div>
@@ -204,6 +215,19 @@ export default function CartPage() {
           <div className="lg:sticky lg:top-24 lg:h-fit">
             <Card>
               <CardHeader title={t("cart.summary")} />
+              {!isGuest && (
+                <div className="border-b border-slate-100 px-5 py-4">
+                  <Select
+                    label="Deliver to"
+                    name="cartDeliveryCity"
+                    value={deliveryCity}
+                    onChange={(e) => setDeliveryCity(e.target.value)}
+                    placeholder="Select city for delivery prices"
+                    options={SAUDI_CITIES.map((c) => ({ value: c, label: c }))}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">{deliveryCity ? "Delivery is priced with the cheapest carrier per supplier." : "Without a city each supplier's standard fee is used."}</p>
+                </div>
+              )}
               <dl className="space-y-2 px-5 py-4 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Subtotal</dt>

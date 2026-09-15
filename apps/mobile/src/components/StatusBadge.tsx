@@ -13,6 +13,7 @@ type AnyStatus =
   | "DIRECT" | "RFQ"
   | "UNDER_REVIEW" | "VERIFIED"
   | "OWNER" | "MANAGER" | "SALES" | "WAREHOUSE"
+  | "BOOKED" | "PICKED_UP" | "OUT_FOR_DELIVERY"
   | (string & {});
 
 const palette: Record<string, { bg: string; fg: string }> = {
@@ -51,6 +52,10 @@ const palette: Record<string, { bg: string; fg: string }> = {
   MANAGER: { bg: colors.infoLight, fg: colors.info },
   SALES: { bg: colors.accentLight, fg: "#B07A00" },
   WAREHOUSE: { bg: colors.purpleLight, fg: colors.purple },
+  // Shipments
+  BOOKED: { bg: colors.infoLight, fg: colors.info },
+  PICKED_UP: { bg: colors.infoLight, fg: colors.info },
+  OUT_FOR_DELIVERY: { bg: colors.accentLight, fg: "#B07A00" },
 };
 
 export function statusLabel(status: string): string {

@@ -155,6 +155,16 @@ function RegisterInner() {
 
           <Button type="submit" className="w-full" loading={submitting}>{t("auth.register")}</Button>
         </form>
+        <div className="relative my-5">
+          <span className="absolute inset-x-0 top-1/2 h-px bg-slate-200" aria-hidden />
+          <span className="relative mx-auto block w-fit bg-white px-3 text-xs uppercase tracking-wide text-slate-400">or</span>
+        </div>
+        <Link href={`/login?method=phone${params.get("next") ? `&next=${encodeURIComponent(params.get("next") as string)}` : ""}`} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-5 w-5" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+          </svg>
+          Sign up with mobile number
+        </Link>
         <p className="mt-4 text-center text-sm text-slate-500">
           Already registered?{" "}
           <Link href="/login" className="font-semibold text-brand-700 hover:underline">{t("auth.login")}</Link>

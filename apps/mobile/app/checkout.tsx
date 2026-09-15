@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
-import { SAUDI_CITIES, type CheckoutResult, type OrderExtended, type PaymentConfig, type PaymentMethod } from "@mysupplier/shared";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { SAUDI_CITIES, type CarrierCode, type CheckoutResult, type DeliveryQuote, type OrderExtended, type PaymentConfig, type PaymentMethod } from "@mysupplier/shared";
 import { Screen, Button, Card, KeyValue, TextField, PickerField, PickerModal, EmptyState, LoadingView, RequireAuth, StatusBadge } from "@/components";
 import { api, getErrorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { useCart } from "@/lib/cart";
+import { useCart, type CartGroup } from "@/lib/cart";
 import { useI18n } from "@/lib/i18n";
 import { formatSar } from "@/lib/format";
 import { startCardPayment } from "@/lib/payments";
@@ -14,11 +15,128 @@ import { colors, radius, spacing, typography } from "@/theme";
 
 const CITY_OPTIONS = SAUDI_CITIES.map((c) => ({ value: c, label: c }));
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function etaLabel(days: number): string {
+  if (days <= 0) return "Same day";
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
+/** One delivery option (carrier + service + ETA + price). */
+function QuoteRow({ quote, selected, onPress }: { quote: DeliveryQuote; selected: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={[styles.quoteRow, selected && styles.quoteRowActive]} accessibilityRole="radio" accessibilityState={{ selected }}>
+      <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={20} color={selected ? colors.primary : colors.textMuted} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.quoteCarrier}>
+          {quote.carrierName}
+          <Text style={styles.quoteService}> · {quote.service}</Text>
+        </Text>
+        <Text style={typography.caption}>
+          ETA {etaLabel(quote.etaDays)} · {quote.zone.replace(/_/g, " ").toLowerCase()}
+          {quote.weightKg ? ` · ${Math.round(quote.weightKg)} kg` : ""}
+          {quote.notes ? ` · ${quote.notes}` : ""}
+        </Text>
+      </View>
+      <Text style={styles.quotePrice}>{formatSar(quote.price)}</Text>
+    </Pressable>
+  );
+}
+
+/** Bottom sheet with every carrier option for one supplier group (POST /shipping/quote). */
+function QuoteOptionsSheet({
+  group,
+  city,
+  current,
+  onSelect,
+  onClose,
+}: {
+  group: CartGroup | null;
+  city: string;
+  current: DeliveryQuote | null;
+  onSelect: (quote: DeliveryQuote) => void;
+  onClose: () => void;
+}) {
+  const [options, setOptions] = useState<DeliveryQuote[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!group || !city) return;
+    let cancelled = false;
+    setOptions(null);
+    setError(null);
+    api
+      .shippingQuote({
+        supplierCompanyId: group.supplierId ?? undefined,
+        items: group.items.map((i) => ({ materialId: i.material.id, quantity: i.quantity })),
+        deliveryCity: city,
+        pickupCity: group.city || undefined,
+      })
+      .then((q) => {
+        if (!cancelled) setOptions(q);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(getErrorMessage(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [group, city]);
+
+  return (
+    <Modal visible={Boolean(group)} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose} />
+      <SafeAreaView edges={["bottom"]} style={styles.sheet}>
+        <View style={styles.sheetHandle} />
+        <View style={styles.sheetHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={typography.h3}>Delivery options</Text>
+            <Text style={typography.caption} numberOfLines={1}>
+              {group?.supplierName} → {city}
+            </Text>
+          </View>
+          <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Close">
+            <Ionicons name="close" size={24} color={colors.text} />
+          </Pressable>
+        </View>
+        {options === null && !error ? (
+          <View style={styles.sheetLoading}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={typography.bodySmall}>Getting carrier quotes…</Text>
+          </View>
+        ) : error ? (
+          <Text style={[typography.bodySmall, { color: colors.danger, padding: spacing.lg }]}>{error}</Text>
+        ) : options && options.length === 0 ? (
+          <Text style={[typography.bodySmall, { padding: spacing.lg }]}>No carrier rates for this route yet. The supplier will deliver at the flat fee.</Text>
+        ) : (
+          options?.map((q) => (
+            <QuoteRow
+              key={`${q.carrier}:${q.service}`}
+              quote={q}
+              selected={Boolean(current && current.carrier === q.carrier && current.service === q.service)}
+              onPress={() => {
+                onSelect(q);
+                onClose();
+              }}
+            />
+          ))
+        )}
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
 function CheckoutForm() {
   const router = useRouter();
   const { t } = useI18n();
   const { user, token } = useAuth();
-  const { items, groups, summary, loading, refresh } = useCart();
+  const { items, groups, summary, loading, refresh, quotes, deliveryCity, setDeliveryCity } = useCart();
+  const [quoteBusy, setQuoteBusy] = useState(false);
+  /** Carrier chosen per supplier id when the buyer picks something other than the cheapest quote. */
+  const [chosen, setChosen] = useState<Record<string, DeliveryQuote>>({});
+  const [optionsFor, setOptionsFor] = useState<CartGroup | null>(null);
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null);
   const [paying, setPaying] = useState<string | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
@@ -60,6 +178,51 @@ function CheckoutForm() {
   useEffect(() => {
     if (paymentConfig && !cardEnabled && payment === "CARD") setPayment("COD");
   }, [paymentConfig, cardEnabled, payment]);
+
+  // Re-price delivery whenever the destination changes (GET /cart?deliveryCity=).
+  useEffect(() => {
+    if (!city || city === deliveryCity) return;
+    let cancelled = false;
+    setQuoteBusy(true);
+    setChosen({});
+    setDeliveryCity(city).finally(() => {
+      if (!cancelled) setQuoteBusy(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [city]);
+
+  /** Quote shown for a group: the buyer's pick, else the server's cheapest, else null (flat fee). */
+  const quoteFor = (g: CartGroup): DeliveryQuote | null => {
+    if (!g.supplierId) return null;
+    return chosen[g.supplierId] ?? quotes[g.supplierId] ?? null;
+  };
+
+  // The server total uses the cheapest quote; adjust locally when the buyer picked a pricier option.
+  const deliveryAdjustment = useMemo(() => {
+    let delta = 0;
+    groups.forEach((g) => {
+      if (!g.supplierId) return;
+      const picked = chosen[g.supplierId];
+      const base = quotes[g.supplierId];
+      if (picked && base) delta += picked.price - base.price;
+    });
+    return round2(delta);
+  }, [groups, chosen, quotes]);
+  const displayDelivery = round2(summary.deliveryFee + deliveryAdjustment);
+  const displayTotal = round2(summary.total + deliveryAdjustment);
+
+  const carrierBySupplier = useMemo(() => {
+    const map: Record<string, CarrierCode> = {};
+    groups.forEach((g) => {
+      const q = quoteFor(g);
+      if (g.supplierId && q) map[g.supplierId] = q.carrier;
+    });
+    return Object.keys(map).length ? map : undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, chosen, quotes]);
 
   const PAYMENT_OPTIONS: Array<{ value: PaymentMethod; label: string; hint?: string; icon: "cash-outline" | "business-outline" | "card-outline"; disabled?: boolean }> = [
     { value: "COD", label: t("cod"), icon: "cash-outline" },
@@ -109,6 +272,7 @@ function CheckoutForm() {
         contactPhone: phone.trim(),
         paymentMethod: payment,
         notes: notes.trim() || undefined,
+        carrierBySupplier,
       });
       setResult(res);
       void refresh();
@@ -248,6 +412,70 @@ function CheckoutForm() {
 
       <TextField label={t("notes")} value={notes} onChangeText={setNotes} placeholder="Delivery window, crane access, PO number..." multiline />
 
+      <Text style={styles.sectionTitle}>{t("delivery")}</Text>
+      {!city ? (
+        <Card>
+          <Text style={typography.bodySmall}>Select the delivery city to see carrier options and prices per supplier.</Text>
+        </Card>
+      ) : (
+        groups.map((g) => {
+          const q = quoteFor(g);
+          const isChosen = Boolean(g.supplierId && chosen[g.supplierId]);
+          return (
+            <Card key={`ship:${g.key}`} style={{ paddingVertical: spacing.md }}>
+              <View style={styles.groupRow}>
+                <Ionicons name="storefront-outline" size={16} color={colors.textSecondary} />
+                <Text style={[styles.groupName, { flex: 1 }]} numberOfLines={1}>
+                  {g.supplierName}
+                </Text>
+                <Text style={typography.caption}>
+                  {g.city} → {city}
+                </Text>
+              </View>
+              {quoteBusy && !q ? (
+                <View style={styles.quoteLoading}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={typography.caption}>Getting delivery quotes…</Text>
+                </View>
+              ) : q ? (
+                <View style={styles.quoteSummary}>
+                  <View style={styles.quoteIcon}>
+                    <Ionicons name={q.carrier === "SUPPLIER" ? "car-outline" : q.carrier === "SMSA" || q.carrier === "ARAMEX" || q.carrier === "SPL" ? "cube-outline" : "bus-outline"} size={18} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.quoteCarrier}>
+                      {q.carrierName}
+                      <Text style={styles.quoteService}> · {q.service}</Text>
+                    </Text>
+                    <Text style={typography.caption}>
+                      ETA {etaLabel(q.etaDays)}
+                      {isChosen ? " · your choice" : " · cheapest"}
+                    </Text>
+                  </View>
+                  <Text style={styles.quotePrice}>{formatSar(q.price)}</Text>
+                </View>
+              ) : (
+                <View style={styles.quoteSummary}>
+                  <View style={styles.quoteIcon}>
+                    <Ionicons name="car-outline" size={18} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.quoteCarrier}>{t("deliveredBySupplier")}</Text>
+                    <Text style={typography.caption}>Flat delivery fee · supplier arranges transport</Text>
+                  </View>
+                </View>
+              )}
+              {g.supplierId ? (
+                <Pressable onPress={() => setOptionsFor(g)} style={styles.changeLink} hitSlop={6}>
+                  <Text style={styles.changeLinkText}>{q ? "Change carrier" : t("chooseCarrier")}</Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                </Pressable>
+              ) : null}
+            </Card>
+          );
+        })
+      )}
+
       <Text style={styles.sectionTitle}>Order summary</Text>
       <Card>
         {groups.map((g) => (
@@ -266,10 +494,10 @@ function CheckoutForm() {
         <View style={styles.divider} />
         <KeyValue label={t("subtotal")} value={formatSar(summary.subtotal)} />
         <KeyValue label={t("vat")} value={formatSar(summary.vat)} />
-        <KeyValue label={t("deliveryFee")} value={formatSar(summary.deliveryFee)} />
+        <KeyValue label={t("deliveryFee")} value={quoteBusy ? "…" : formatSar(displayDelivery)} />
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>{t("total")}</Text>
-          <Text style={styles.totalValue}>{formatSar(summary.total)}</Text>
+          <Text style={styles.totalValue}>{quoteBusy ? "…" : formatSar(displayTotal)}</Text>
         </View>
         <Text style={typography.caption}>
           One order is created per supplier ({groups.length}). Suppliers confirm and arrange delivery.
@@ -277,9 +505,18 @@ function CheckoutForm() {
       </Card>
 
       {submitError ? <Text style={styles.error}>{submitError}</Text> : null}
-      <Button title={`${t("placeOrder")} · ${formatSar(summary.total)}`} size="lg" fullWidth loading={submitting} onPress={placeOrder} />
+      <Button title={`${t("placeOrder")} · ${formatSar(displayTotal)}`} size="lg" fullWidth loading={submitting} disabled={quoteBusy} onPress={placeOrder} />
 
       <PickerModal visible={cityOpen} title="Delivery city" options={CITY_OPTIONS} value={city} onSelect={setCity} onClose={() => setCityOpen(false)} searchable />
+      <QuoteOptionsSheet
+        group={optionsFor}
+        city={city}
+        current={optionsFor ? quoteFor(optionsFor) : null}
+        onSelect={(q) => {
+          if (optionsFor?.supplierId) setChosen((prev) => ({ ...prev, [optionsFor.supplierId as string]: q }));
+        }}
+        onClose={() => setOptionsFor(null)}
+      />
     </Screen>
   );
 }
@@ -339,4 +576,19 @@ const styles = StyleSheet.create({
   orderTotal: { fontSize: 15, fontWeight: "700", color: colors.primary },
   orderLink: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, marginTop: spacing.sm },
   orderLinkText: { color: colors.primary, fontWeight: "600", fontSize: 13 },
+  quoteLoading: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.sm },
+  quoteSummary: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingTop: spacing.sm },
+  quoteIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center" },
+  quoteCarrier: { ...typography.body, fontWeight: "600" },
+  quoteService: { ...typography.bodySmall, fontWeight: "400" },
+  quotePrice: { fontSize: 15, fontWeight: "700", color: colors.primary },
+  changeLink: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, marginTop: spacing.sm },
+  changeLinkText: { color: colors.primary, fontWeight: "600", fontSize: 13 },
+  quoteRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  quoteRowActive: { backgroundColor: colors.primaryLight },
+  sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },
+  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingBottom: spacing.lg, maxHeight: "80%" },
+  sheetHandle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginTop: spacing.sm },
+  sheetHeader: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  sheetLoading: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.lg },
 });

@@ -4,12 +4,14 @@ import Link from "next/link";
 import React, { useEffect, useRef, useState } from "react";
 import type { OrderEvent, OrderExtended, OrderMessage, OrderStatus, PaymentMethod, PaymentStatus, Review } from "@mysupplier/shared";
 import { api, deliveryNoteHtmlUrl, errorMessage, invoiceHtmlUrl } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { canManageCompany, companyRoleOf, useAuth } from "@/lib/auth";
 import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { BANK_TRANSFER_DETAILS, usePaymentConfig } from "@/lib/payments";
 import { cn, formatDate, formatDateTime, formatSar, timeAgo } from "@/lib/format";
-import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, FlashMessage, LinkButton, LoadingBlock, PageHeader, Pagination, Stars, StatusBadge, Table, Textarea, type Column } from "./ui";
+import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, FlashMessage, LinkButton, LoadingBlock, PageHeader, Pagination, Select, Stars, StatusBadge, Table, Textarea, type Column } from "./ui";
+import { OrderShipments } from "./OrderShipments";
+import { EInvoiceCard, PaymentsList, RefundButton } from "./OrderPayments";
 
 export type OrderPerspective = "buyer" | "supplier" | "admin";
 
@@ -69,10 +71,17 @@ export function OrderStatusTimeline({ status }: { status: OrderStatus }) {
   );
 }
 
-export function OrdersList({ perspective, basePath }: { perspective: OrderPerspective; basePath: string }) {
+const ORDER_STATUSES: OrderStatus[] = ["PENDING", "CONFIRMED", "IN_TRANSIT", "DELIVERED", "CANCELLED"];
+const PAYMENT_STATUSES: PaymentStatus[] = ["UNPAID", "PAID", "REFUNDED"];
+
+export function OrdersList({ perspective, basePath, title, subtitle, filters }: { perspective: OrderPerspective; basePath: string; title?: string; subtitle?: string; filters?: boolean }) {
   const { t, lang } = useI18n();
   const [page, setPage] = useState(1);
-  const state = useAsync(() => api.orders(page), [page]);
+  const [status, setStatus] = useState<OrderStatus | "">("");
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | "">("");
+  const state = useAsync(() => api.orders(filters ? { page, status, paymentStatus } : page), [page, status, paymentStatus, filters]);
+  // The contract documents only `?page=`; apply the filters client-side too so they work on every API build.
+  const rows = (state.data?.data ?? []).filter((o) => (!status || o.status === status) && (!paymentStatus || o.paymentStatus === paymentStatus));
 
   const columns: Column<OrderExtended>[] = [
     { key: "ref", header: "Reference", render: (o) => <Link href={`${basePath}/${o.id}`} className="font-medium text-brand-700 hover:underline">{o.reference}</Link> },
@@ -90,9 +99,14 @@ export function OrdersList({ perspective, basePath }: { perspective: OrderPerspe
           </span>
         ),
     },
-    perspective === "buyer"
-      ? { key: "supplier", header: "Supplier", render: (o) => o.company?.name ?? o.companyId }
-      : { key: "buyer", header: "Buyer", render: (o) => o.rfq?.buyer?.name ?? o.contactPhone ?? o.buyerId },
+    ...(perspective === "buyer"
+      ? [{ key: "supplier", header: "Supplier", render: (o: OrderExtended) => o.company?.name ?? o.companyId } as Column<OrderExtended>]
+      : perspective === "supplier"
+        ? [{ key: "buyer", header: "Buyer", render: (o: OrderExtended) => o.rfq?.buyer?.name ?? o.contactPhone ?? o.buyerId } as Column<OrderExtended>]
+        : [
+            { key: "supplier", header: "Supplier", render: (o: OrderExtended) => (o.company ? <Link href={`/admin/companies/${o.company.id}`} className="hover:text-brand-700">{o.company.name}</Link> : o.companyId) } as Column<OrderExtended>,
+            { key: "buyer", header: "Buyer", render: (o: OrderExtended) => o.rfq?.buyer?.name ?? o.contactPhone ?? o.buyerId } as Column<OrderExtended>,
+          ]),
     { key: "total", header: "Total", align: "end", render: (o) => <span className="font-semibold tabular-nums">{formatSar(o.total, lang)}</span> },
     { key: "payment", header: "Payment", render: (o) => <PaymentStatusBadge status={o.paymentStatus} /> },
     { key: "status", header: t("common.status"), render: (o) => <StatusBadge status={o.status} /> },
@@ -101,14 +115,23 @@ export function OrdersList({ perspective, basePath }: { perspective: OrderPerspe
 
   return (
     <div>
-      <PageHeader title={t("dash.orders")} subtitle="Direct shop orders and orders created from awarded RFQs." />
+      <PageHeader title={title ?? t("dash.orders")} subtitle={subtitle ?? "Direct shop orders and orders created from awarded RFQs."} />
+      {filters && (
+        <Card className="mb-4 p-4">
+          <div className="grid gap-3 sm:grid-cols-[220px_220px_auto]">
+            <Select name="orderStatus" value={status} onChange={(e) => { setStatus(e.target.value as OrderStatus | ""); setPage(1); }} placeholder="All statuses" options={ORDER_STATUSES.map((st) => ({ value: st, label: st.replace(/_/g, " ") }))} />
+            <Select name="paymentStatusFilter" value={paymentStatus} onChange={(e) => { setPaymentStatus(e.target.value as PaymentStatus | ""); setPage(1); }} placeholder="All payments" options={PAYMENT_STATUSES.map((ps) => ({ value: ps, label: ps }))} />
+            {(status || paymentStatus) && <Button variant="ghost" onClick={() => { setStatus(""); setPaymentStatus(""); setPage(1); }}>Clear filters</Button>}
+          </div>
+        </Card>
+      )}
       {state.loading ? (
         <LoadingBlock />
       ) : state.error ? (
         <Alert onRetry={state.reload}>{state.error}</Alert>
       ) : (
         <Card>
-          <Table columns={columns} rows={state.data?.data ?? []} rowKey={(o) => o.id} empty={<EmptyState title="No orders yet" description="Orders appear here after checkout or once a bid has been accepted." />} />
+          <Table columns={columns} rows={rows} rowKey={(o) => o.id} empty={<EmptyState title={status || paymentStatus ? "No orders match these filters" : "No orders yet"} description={status || paymentStatus ? "Try another status or payment filter." : "Orders appear here after checkout or once a bid has been accepted."} />} />
           {state.data && <Pagination page={state.data.page} pageSize={state.data.pageSize} total={state.data.total} onChange={setPage} />}
         </Card>
       )}
@@ -461,7 +484,9 @@ function embeddedReview(o: OrderExtended): Review | null {
 
 export function OrderDetail({ id, perspective, backHref }: { id: string; perspective: OrderPerspective; backHref: string }) {
   const { t, lang } = useI18n();
+  const { user } = useAuth();
   const state = useAsync(() => api.order(id), [id]);
+  const [paymentsKey, setPaymentsKey] = useState(0);
   const { config: paymentConfig } = usePaymentConfig();
   const [flash, setFlash] = useFlash();
   const [busy, setBusy] = useState<OrderStatus | "PAID" | null>(null);
@@ -499,10 +524,24 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
     }
   };
 
+  /** After a shipment reaches DELIVERED the API flips the order status; re-fetch so the header and timeline agree. */
+  const refreshOrder = async () => {
+    try {
+      const fresh = await api.order(id);
+      state.setData(fresh);
+    } catch {
+      state.reload();
+    }
+    bumpActivity();
+  };
+
   if (state.loading) return <LoadingBlock />;
   if (state.error || !state.data) return <Alert onRetry={state.reload}>{state.error ?? "Order not found"}</Alert>;
   const o = state.data;
   const type = orderType(o);
+  const isAdminUser = user?.role === "ADMIN";
+  const canRefund = o.paymentStatus === "PAID" && (perspective === "admin" ? isAdminUser : perspective === "supplier" && (isAdminUser || canManageCompany(companyRoleOf(user))));
+  const canManageShipments = perspective === "supplier" && user?.role === "SUPPLIER";
   const currentReview = review === undefined ? embeddedReview(o) : review;
   const canPrintDeliveryNote = perspective === "supplier" || perspective === "admin";
 
@@ -559,6 +598,17 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
               <Button variant="outline" onClick={markPaid} loading={busy === "PAID"}>
                 Mark as paid
               </Button>
+            )}
+            {canRefund && (
+              <RefundButton
+                order={o}
+                onRefunded={(result) => {
+                  state.setData((prev) => (prev ? { ...prev, ...result.order } : result.order));
+                  setPaymentsKey((k) => k + 1);
+                  bumpActivity();
+                  setFlash({ kind: "success", message: `${formatSar(result.refundedAmount, lang)} refunded${o.paymentMethod === "CARD" ? " via Moyasar" : " (recorded as manual refund)"}. The buyer has been notified.` });
+                }}
+              />
             )}
             {canSupplierAct && nextStatus && (
               <Button onClick={() => setStatus(nextStatus)} loading={busy === nextStatus}>
@@ -700,10 +750,15 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
             <CardHeader title="Payment" />
             <dl className="space-y-2 px-5 py-4 text-sm">
               <div><dt className="text-slate-500">Method</dt><dd className="font-medium text-slate-900">{o.paymentMethod ? PAYMENT_LABEL[o.paymentMethod] ?? o.paymentMethod : type === "RFQ" ? "As agreed in bid" : "—"}</dd></div>
-              <div><dt className="text-slate-500">Status</dt><dd className="mt-0.5"><PaymentStatusBadge status={o.paymentStatus} /></dd></div>
+              <div><dt className="text-slate-500">Status</dt><dd className="mt-0.5 flex items-center gap-2"><PaymentStatusBadge status={o.paymentStatus} />{o.paymentStatus === "REFUNDED" && <span className="text-xs text-slate-500">Refund recorded below</span>}</dd></div>
+              <div>
+                <dt className="mb-1 text-slate-500">Payment records</dt>
+                <dd><PaymentsList orderId={o.id} refreshKey={paymentsKey} /></dd>
+              </div>
             </dl>
           </Card>
           <InvoicePreview orderId={o.id} />
+          <EInvoiceCard orderId={o.id} isAdmin={perspective === "admin" && isAdminUser} onToast={setFlash} />
           <Card>
             <CardHeader title="Delivery" />
             <dl className="space-y-2 px-5 py-4 text-sm">
@@ -718,6 +773,12 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
           </Card>
         </div>
       </div>
+
+      {o.status !== "CANCELLED" && (
+        <div className="mt-6">
+          <OrderShipments orderId={o.id} canManage={canManageShipments && o.status !== "DELIVERED"} onDelivered={() => void refreshOrder()} onChanged={bumpActivity} />
+        </div>
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

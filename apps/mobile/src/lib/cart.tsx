@@ -2,8 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { storage } from "./storage";
-import { VAT_RATE, type Cart, type CartItem, type Material, type ShopOffer } from "@mysupplier/shared";
-import { api } from "./api";
+import { VAT_RATE, type CartItem, type DeliveryQuote, type Material, type ShopOffer } from "@mysupplier/shared";
+import { api, type CartWithQuotes } from "./api";
 import { useAuth } from "./auth";
 import { colors, radius, spacing } from "@/theme";
 
@@ -31,6 +31,8 @@ export interface CartSummary {
 
 export interface CartGroup {
   key: string;
+  /** Supplier company id (null for market/imported listings without a company). */
+  supplierId: string | null;
   supplierName: string;
   verified: boolean;
   city: string;
@@ -48,6 +50,12 @@ interface CartContextValue {
   busy: boolean;
   error: string | null;
   isGuest: boolean;
+  /** City the server priced delivery for (`GET /cart?deliveryCity=`), null = flat fees. */
+  deliveryCity: string | null;
+  /** Cheapest carrier quote per supplier id for `deliveryCity` (null entry = no carrier rate, flat fee). */
+  quotes: Record<string, DeliveryQuote | null>;
+  /** Re-price the cart for a delivery city (server picks the cheapest quote per supplier). */
+  setDeliveryCity: (city: string | null) => Promise<void>;
   addItem: (offer: ShopOffer, material: Material, quantity: number) => Promise<void>;
   updateQuantity: (itemId: string, quantity: number) => Promise<void>;
   removeItem: (itemId: string) => Promise<void>;
@@ -131,6 +139,7 @@ export function groupBySupplier(items: CartItem[]): CartGroup[] {
     } else {
       map.set(key, {
         key,
+        supplierId: item.offer.companyId ?? null,
         supplierName: item.offer.companyName,
         verified: item.offer.verified,
         city: item.offer.city,
@@ -154,7 +163,9 @@ export function estimateSummary(items: CartItem[]): CartSummary {
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading: authLoading } = useAuth();
-  const [serverCart, setServerCart] = useState<Cart | null>(null);
+  const [serverCart, setServerCart] = useState<CartWithQuotes | null>(null);
+  const [deliveryCity, setDeliveryCityState] = useState<string | null>(null);
+  const deliveryCityRef = useRef<string | null>(null);
   const [localItems, setLocalItems] = useState<LocalCartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -171,7 +182,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const loadServerCart = useCallback(async () => {
     try {
-      const cart = await api.cart();
+      const cart = await api.cart(deliveryCityRef.current);
       setServerCart(cart);
       setError(null);
     } catch (err) {
@@ -324,6 +335,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   }, [isAuthenticated, setLocal, withBusy]);
 
+  const setDeliveryCity = useCallback(
+    async (city: string | null) => {
+      const next = city && city.trim() ? city.trim() : null;
+      deliveryCityRef.current = next;
+      setDeliveryCityState(next);
+      if (isAuthenticated) await loadServerCart();
+    },
+    [isAuthenticated, loadServerCart],
+  );
+
   const refresh = useCallback(async () => {
     if (isAuthenticated) await loadServerCart();
     else {
@@ -350,6 +371,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       busy,
       error,
       isGuest: !isAuthenticated,
+      deliveryCity,
+      quotes: (isAuthenticated && serverCart?.quotes) || {},
+      setDeliveryCity,
       addItem,
       updateQuantity,
       removeItem,
@@ -358,7 +382,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       quantityFor,
       showToast,
     }),
-    [items, groups, summary, loading, authLoading, busy, error, isAuthenticated, addItem, updateQuantity, removeItem, clear, refresh, quantityFor, showToast],
+    [items, groups, summary, loading, authLoading, busy, error, isAuthenticated, serverCart, deliveryCity, setDeliveryCity, addItem, updateQuantity, removeItem, clear, refresh, quantityFor, showToast],
   );
 
   return (

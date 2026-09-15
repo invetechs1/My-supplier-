@@ -9,7 +9,22 @@ import { homeForRole, useAuth } from "@/lib/auth";
 import { useFlash, usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatDate } from "@/lib/format";
+import { formatSaudiPhone, normaliseSaudiPhone } from "@/lib/phone";
 import { Alert, Badge, Button, Card, CardBody, CardHeader, FlashMessage, Input, LoadingBlock, Modal, PageHeader, Select, VerifiedBadge } from "@/components/ui";
+import { OtpCodeInput } from "@/components/OtpCodeInput";
+import { ResendButton } from "@/components/PhoneOtpLogin";
+
+/** Green "Phone verified" pill shown next to the phone field and in the profile header. */
+function PhoneVerifiedBadge() {
+  return (
+    <Badge tone="green" className="gap-1">
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3" aria-hidden>
+        <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+      </svg>
+      Phone verified
+    </Badge>
+  );
+}
 
 export default function AccountPage() {
   const { t, lang, setLang } = useI18n();
@@ -26,6 +41,14 @@ export default function AccountPage() {
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwFlash, setPwFlash] = useFlash();
   const [savingPw, setSavingPw] = useState(false);
+
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyPhone, setVerifyPhone] = useState<string | null>(null);
+  const [verifyCode, setVerifyCode] = useState("");
+  const [verifyDevCode, setVerifyDevCode] = useState<string | null>(null);
+  const [verifyKey, setVerifyKey] = useState(0);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifyBusy, setVerifyBusy] = useState(false);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
@@ -80,6 +103,66 @@ export default function AccountPage() {
     }
   };
 
+  const phoneVerified = !!user.phoneVerified;
+  const savedPhone = normaliseSaudiPhone(user.phone ?? "");
+  const phoneDirty = profile.phone.trim() !== (user.phone ?? "").trim();
+
+  const startVerifyPhone = async () => {
+    const target = normaliseSaudiPhone(profile.phone);
+    if (!target) {
+      setProfileFlash({ kind: "error", message: "Enter a valid Saudi mobile number (05xxxxxxxx) first." });
+      return;
+    }
+    setVerifyBusy(true);
+    setVerifyError(null);
+    try {
+      if (phoneDirty) {
+        // The API verifies the phone on the account, so persist it before requesting the code.
+        await api.updateMe({ phone: target });
+        await refresh();
+      }
+      const res = await api.otpRequest({ phone: target, purpose: "VERIFY_PHONE" });
+      setVerifyPhone(target);
+      setVerifyDevCode(res.devCode ?? null);
+      setVerifyCode("");
+      setVerifyKey((k) => k + 1);
+      setVerifyOpen(true);
+    } catch (err) {
+      setProfileFlash({ kind: "error", message: errorMessage(err, "Could not send the verification code.") });
+    } finally {
+      setVerifyBusy(false);
+    }
+  };
+
+  const resendVerifyCode = async () => {
+    if (!verifyPhone) return;
+    setVerifyError(null);
+    try {
+      const res = await api.otpRequest({ phone: verifyPhone, purpose: "VERIFY_PHONE" });
+      setVerifyDevCode(res.devCode ?? null);
+      setVerifyCode("");
+      setVerifyKey((k) => k + 1);
+    } catch (err) {
+      setVerifyError(errorMessage(err));
+    }
+  };
+
+  const confirmVerifyPhone = async (code = verifyCode) => {
+    if (code.length !== 6) return;
+    setVerifyBusy(true);
+    setVerifyError(null);
+    try {
+      await api.verifyPhone(code);
+      await refresh();
+      setVerifyOpen(false);
+      setProfileFlash({ kind: "success", message: "Phone number verified." });
+    } catch (err) {
+      setVerifyError(errorMessage(err, "Invalid or expired code."));
+    } finally {
+      setVerifyBusy(false);
+    }
+  };
+
   const deleteAccount = async () => {
     setDeleteError(null);
     setDeleting(true);
@@ -116,6 +199,7 @@ export default function AccountPage() {
           <p className="truncate text-sm text-slate-500">{user.email}</p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <Badge tone={user.role === "ADMIN" ? "purple" : user.role === "SUPPLIER" ? "green" : "blue"}>{user.role}</Badge>
+            {phoneVerified && <PhoneVerifiedBadge />}
             {user.company && (
               <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                 {user.company.name} <VerifiedBadge verified={user.company.verified} />
@@ -134,7 +218,24 @@ export default function AccountPage() {
               <FlashMessage flash={profileFlash} />
               <Input label="Full name" name="name" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} required />
               <Input label="Email" name="email" value={user.email} disabled hint="Contact support to change your email address." dir="ltr" />
-              <Input label="Phone" name="phone" type="tel" dir="ltr" placeholder="+9665XXXXXXXX" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+              <div>
+                <Input label="Phone" name="phone" type="tel" dir="ltr" placeholder="+9665XXXXXXXX" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {phoneVerified && !phoneDirty ? (
+                    <>
+                      <PhoneVerifiedBadge />
+                      <span className="text-xs text-slate-500">{formatSaudiPhone(savedPhone)} can receive order updates by SMS.</span>
+                    </>
+                  ) : (
+                    <>
+                      <Button type="button" size="sm" variant="outline" onClick={startVerifyPhone} loading={verifyBusy && !verifyOpen} disabled={!normaliseSaudiPhone(profile.phone)}>
+                        Verify phone
+                      </Button>
+                      <span className="text-xs text-slate-500">{phoneVerified && phoneDirty ? "Changing the number requires verifying it again." : "We will text a 6-digit code to confirm the number."}</span>
+                    </>
+                  )}
+                </div>
+              </div>
               <Select label="Preferred language" name="locale" value={profile.locale} onChange={(e) => setProfile({ ...profile, locale: e.target.value as "en" | "ar" })} options={[{ value: "en", label: "English" }, { value: "ar", label: "العربية" }]} />
               <Button type="submit" loading={savingProfile}>{t("common.save")}</Button>
             </form>
@@ -165,6 +266,32 @@ export default function AccountPage() {
           </Button>
         </CardBody>
       </Card>
+
+      <Modal
+        open={verifyOpen}
+        title="Verify your phone"
+        onClose={() => (verifyBusy ? undefined : setVerifyOpen(false))}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setVerifyOpen(false)} disabled={verifyBusy}>{t("common.cancel")}</Button>
+            <Button onClick={() => confirmVerifyPhone()} loading={verifyBusy} disabled={verifyCode.length !== 6}>Confirm</Button>
+          </>
+        }
+      >
+        <div className="space-y-4 text-sm text-slate-600">
+          <p>Enter the 6-digit code we sent to <span className="font-semibold text-slate-900" dir="ltr">{formatSaudiPhone(verifyPhone)}</span>.</p>
+          {verifyError && <Alert>{verifyError}</Alert>}
+          <OtpCodeInput value={verifyCode} onChange={setVerifyCode} onComplete={(c) => void confirmVerifyPhone(c)} disabled={verifyBusy} autoFocus error={!!verifyError} />
+          {verifyDevCode && (
+            <Alert kind="info" className="text-xs">
+              <span className="font-semibold">Development mode:</span> your code is <button type="button" className="font-mono font-bold underline" onClick={() => setVerifyCode(verifyDevCode)}>{verifyDevCode}</button>.
+            </Alert>
+          )}
+          <div className="flex justify-end">
+            <ResendButton onResend={resendVerifyCode} disabled={verifyBusy} resetKey={verifyKey} />
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={deleteOpen}

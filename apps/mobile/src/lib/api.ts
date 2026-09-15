@@ -7,16 +7,22 @@ import type {
   BoqAnalysis,
   BoqLineInput,
   BoqToRfqPayload,
+  Branch,
+  Carrier,
+  CarrierCode,
   Cart,
   Category,
   CheckoutPayload,
   CheckoutResult,
+  ClientErrorReport,
   Company,
   CompanyInvite,
   CompanyProfile,
   CompanyRole,
   CreateBidPayload,
   CreateRfqPayload,
+  CreateShipmentPayload,
+  DeliveryQuote,
   DeviceRegistration,
   FinanceSummary,
   InventoryItem,
@@ -29,6 +35,9 @@ import type {
   OrderExtended,
   OrderMessage,
   OrderStatus,
+  OtpRequestPayload,
+  OtpRequestResult,
+  OtpVerifyPayload,
   Paginated,
   PaymentConfig,
   PaymentIntent,
@@ -48,9 +57,13 @@ import type {
   PriceListing,
   PriceSummary,
   PublishImportResult,
+  RefundPayload,
+  RefundResult,
   RegisterPayload,
   Review,
   Rfq,
+  Shipment,
+  ShipmentStatus,
   StatementLine,
   StockMovement,
   StockMovementType,
@@ -356,7 +369,55 @@ export interface StockMovementInput {
   reason?: string;
 }
 
+// Go-live: OTP, refunds, shipments & carriers, client errors -----------------
+
+/** `GET /cart?deliveryCity=` adds a cheapest quote per supplier (null = no carrier rate, flat fee applies). */
+export type CartWithQuotes = Cart & { quotes?: Record<string, DeliveryQuote | null> };
+
+/** `POST /checkout` accepts the carrier chosen per supplier group. */
+export type CheckoutPayloadWithCarriers = CheckoutPayload & { carrierBySupplier?: Record<string, CarrierCode> };
+
+export interface ShippingQuoteBody {
+  supplierCompanyId?: string;
+  items: Array<{ materialId: string; quantity: number }>;
+  deliveryCity: string;
+  pickupCity?: string;
+}
+
+export type ShipmentPatch = Partial<CreateShipmentPayload> & {
+  status?: ShipmentStatus;
+  description?: string;
+  location?: string;
+};
+
 export const api = {
+  // Auth: phone OTP
+  otpRequest: (payload: OtpRequestPayload) =>
+    request<OtpRequestResult>("/auth/otp/request", { method: "POST", body: payload }),
+  otpVerify: (payload: OtpVerifyPayload) =>
+    request<AuthResponse>("/auth/otp/verify", { method: "POST", body: payload, auth: false }),
+  /** After `otpRequest({ purpose: "VERIFY_PHONE" })` for the logged-in user's phone. */
+  verifyPhone: (code: string) => request<User>("/auth/phone/verify", { method: "POST", body: { code } }),
+
+  // Refunds (supplier owner/manager, admin) on PAID orders
+  refundOrder: (orderId: string, payload: RefundPayload) =>
+    request<RefundResult>(`/payments/${encodeURIComponent(orderId)}/refund`, { method: "POST", body: payload }),
+
+  // Shipping & shipments
+  carriers: () => request<Carrier[]>("/shipping/carriers", { auth: false }),
+  shippingQuote: (body: ShippingQuoteBody) =>
+    request<DeliveryQuote[]>("/shipping/quote", { method: "POST", body, auth: false }),
+  orderShipments: (orderId: string) => request<Shipment[]>(`/orders/${encodeURIComponent(orderId)}/shipments`),
+  createShipment: (orderId: string, payload: CreateShipmentPayload) =>
+    request<Shipment>(`/orders/${encodeURIComponent(orderId)}/shipments`, { method: "POST", body: payload }),
+  updateShipment: (id: string, patch: ShipmentPatch) =>
+    request<Shipment>(`/shipments/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
+  supplierBranches: () => request<Branch[]>("/supplier/branches"),
+
+  // Ops: client error reports (never awaited by UI code; see lib/errorReporting)
+  reportClientError: (report: ClientErrorReport) =>
+    request<{ ok: true }>("/client-errors", { method: "POST", body: report }),
+
   // Supplier portal: dashboard & company
   supplierDashboard: (days = 30) => request<SupplierDashboard>("/supplier/dashboard", { query: { days } }),
   supplierCompany: () => request<CompanyProfile>("/supplier/company"),
@@ -500,14 +561,14 @@ export const api = {
   shopBrands: () => request<string[]>("/shop/brands", { auth: false }),
 
   // Cart & checkout (auth)
-  cart: () => request<Cart>("/cart"),
+  cart: (deliveryCity?: string | null) => request<CartWithQuotes>("/cart", { query: { deliveryCity } }),
   addCartItem: (listingId: string, quantity: number) =>
     request<Cart>("/cart/items", { method: "POST", body: { listingId, quantity } }),
   updateCartItem: (id: string, quantity: number) =>
     request<Cart>(`/cart/items/${id}`, { method: "PATCH", body: { quantity } }),
   removeCartItem: (id: string) => request<Cart>(`/cart/items/${id}`, { method: "DELETE" }),
   clearCart: () => request<Cart>("/cart", { method: "DELETE" }),
-  checkout: (payload: CheckoutPayload) => request<CheckoutResult>("/checkout", { method: "POST", body: payload }),
+  checkout: (payload: CheckoutPayloadWithCarriers) => request<CheckoutResult>("/checkout", { method: "POST", body: payload }),
 
   // Orders (OrderExtended: RFQ-awarded and direct shop orders)
   orders: (page = 1) => request<Paginated<OrderExtended>>("/orders", { query: { page } }),

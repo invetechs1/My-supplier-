@@ -3,17 +3,27 @@ import React from "react";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { SAUDI_CITIES, type CheckoutResult, type OrderExtended, type PaymentIntent, type PaymentMethod } from "@mysupplier/shared";
+import { useEffect, useMemo, useState } from "react";
+import { SAUDI_CITIES, type CarrierCode, type CartItem, type CheckoutResult, type DeliveryQuote, type OrderExtended, type PaymentIntent, type PaymentMethod } from "@mysupplier/shared";
 import { api, errorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { useCart } from "@/lib/cart";
+import { supplierKey, useCart } from "@/lib/cart";
+import { SupplierDeliveryChooser } from "@/components/shop/DeliveryOptions";
 import { usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { usePaymentConfig } from "@/lib/payments";
 import { cn, formatSar } from "@/lib/format";
 import { MoyasarForm } from "@/components/MoyasarForm";
-import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, Input, LinkButton, LoadingBlock, PageHeader, Select, Spinner, StatusBadge, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, Input, LinkButton, LoadingBlock, PageHeader, Select, Spinner, StatusBadge, Textarea, VerifiedBadge } from "@/components/ui";
+
+interface SupplierGroup {
+  key: string;
+  companyId: string | null;
+  name: string;
+  verified: boolean;
+  city: string;
+  items: CartItem[];
+}
 
 const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string; description: string }> = [
   { value: "COD", label: "Cash on delivery", description: "Pay the driver when the materials arrive." },
@@ -116,7 +126,7 @@ export default function CheckoutPage() {
   const { t, lang } = useI18n();
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const { cart, items, loading: cartLoading, error: cartError, reload } = useCart();
+  const { cart, items, quotes, deliveryCity: cartCity, setDeliveryCity, loading: cartLoading, error: cartError, reload } = useCart();
   const { config: paymentConfig } = usePaymentConfig();
   const cardEnabled = !!paymentConfig?.cardPaymentsEnabled;
   usePageTitle(t("checkout.title"));
@@ -127,6 +137,8 @@ export default function CheckoutPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [payingCard, setPayingCard] = useState(false);
+  /** Buyer's carrier choice per supplier id; `undefined` = keep the cart's default (cheapest) quote, `null` = supplier's own delivery. */
+  const [chosen, setChosen] = useState<Record<string, DeliveryQuote | null | undefined>>({});
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login?redirect=/checkout");
@@ -137,9 +149,55 @@ export default function CheckoutPage() {
     setForm((f) => ({
       ...f,
       contactPhone: f.contactPhone || user.phone || user.company?.phone || "",
-      deliveryCity: f.deliveryCity || user.company?.city || "",
+      deliveryCity: f.deliveryCity || cartCity || user.company?.city || "",
     }));
-  }, [user]);
+  }, [user, cartCity]);
+
+  // Re-price delivery (GET /cart?deliveryCity=) whenever the buyer changes the city, and drop stale carrier choices.
+  useEffect(() => {
+    if (form.deliveryCity && form.deliveryCity !== cartCity) {
+      setDeliveryCity(form.deliveryCity);
+      setChosen({});
+    }
+  }, [form.deliveryCity, cartCity, setDeliveryCity]);
+
+  const groups = useMemo<SupplierGroup[]>(() => {
+    const map = new Map<string, SupplierGroup>();
+    items.forEach((it) => {
+      const key = supplierKey(it.offer);
+      const g = map.get(key) ?? { key, companyId: it.offer.companyId, name: it.offer.companyName, verified: it.offer.verified, city: it.offer.city, items: [] };
+      g.items.push(it);
+      map.set(key, g);
+    });
+    return [...map.values()];
+  }, [items]);
+
+  // Delivery total shown in the summary: the cart's fee (cheapest quote or flat fee per supplier) adjusted for explicit choices.
+  const quotesReady = !!form.deliveryCity && form.deliveryCity === cartCity;
+  const deliveryAdjustment = quotesReady
+    ? groups.reduce((sum, g) => {
+        if (!g.companyId) return sum;
+        const pick = chosen[g.companyId];
+        if (pick === undefined) return sum;
+        const base = quotes[g.companyId]?.price ?? 0;
+        // Falling back to "delivery by supplier" when a quote existed: the API applies the flat fee; we cannot know it here, so keep the base.
+        if (pick === null) return sum;
+        return sum + (pick.price - base);
+      }, 0)
+    : 0;
+  const deliveryFee = (cart?.deliveryFee ?? 0) + deliveryAdjustment;
+  const grandTotal = (cart?.total ?? 0) + deliveryAdjustment;
+  const carrierBySupplier = useMemo(() => {
+    const out: Record<string, CarrierCode> = {};
+    if (!quotesReady) return out;
+    groups.forEach((g) => {
+      if (!g.companyId) return;
+      const pick = chosen[g.companyId];
+      const quote = pick === undefined ? quotes[g.companyId] : pick;
+      if (quote) out[g.companyId] = quote.carrier;
+    });
+    return out;
+  }, [groups, chosen, quotes, quotesReady]);
 
   // If card payments turn out to be disabled after the config loads, fall back to COD.
   useEffect(() => {
@@ -228,6 +286,7 @@ export default function CheckoutPage() {
         contactPhone: form.contactPhone.trim(),
         paymentMethod: form.paymentMethod,
         notes: form.notes.trim() || undefined,
+        carrierBySupplier: Object.keys(carrierBySupplier).length > 0 ? carrierBySupplier : undefined,
       });
       setPayingCard(form.paymentMethod === "CARD" && cardEnabled && res.orders.length > 0);
       setResult(res);
@@ -270,6 +329,37 @@ export default function CheckoutPage() {
                 <Textarea label="Delivery address" name="deliveryAddress" value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} error={errors.deliveryAddress} placeholder="Site name, street, district, landmark…" className="sm:col-span-2" rows={3} required />
                 <Textarea label="Notes for suppliers (optional)" name="notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Delivery window, gate access, crane on site…" className="sm:col-span-2" rows={2} />
               </CardBody>
+            </Card>
+
+            <Card>
+              <CardHeader title="Delivery options" subtitle={form.deliveryCity ? `Carrier prices to ${form.deliveryCity}, one delivery per supplier.` : "Choose a delivery city above to price delivery."} />
+              <ul className="divide-y divide-slate-100">
+                {groups.map((g) => (
+                  <li key={g.key} className="px-5 py-4">
+                    <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+                      <span className="font-semibold text-slate-900">{g.name}</span>
+                      <VerifiedBadge verified={g.verified} />
+                      <span className="text-xs text-slate-500">· ships from {g.city} · {g.items.length} {g.items.length === 1 ? "item" : "items"}</span>
+                    </div>
+                    {g.companyId ? (
+                      cartLoading || !quotesReady ? (
+                        <span className="inline-flex items-center gap-2 text-xs text-slate-500">{form.deliveryCity && <Spinner size="sm" />}{form.deliveryCity ? "Pricing delivery…" : "Select a delivery city."}</span>
+                      ) : (
+                        <SupplierDeliveryChooser
+                          supplierId={g.companyId}
+                          items={g.items}
+                          deliveryCity={form.deliveryCity}
+                          defaultQuote={quotes[g.companyId]}
+                          selected={chosen[g.companyId] === undefined ? quotes[g.companyId] ?? null : chosen[g.companyId] ?? null}
+                          onSelect={(q) => setChosen((prev) => ({ ...prev, [g.companyId as string]: q }))}
+                        />
+                      )
+                    ) : (
+                      <span className="text-xs text-slate-500">Reference listing — delivery arranged by the supplier.</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </Card>
 
             <Card>
@@ -344,12 +434,27 @@ export default function CheckoutPage() {
                   <dd className="tabular-nums">{formatSar(cart?.vat, lang)}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-slate-500">Delivery</dt>
-                  <dd className="tabular-nums">{formatSar(cart?.deliveryFee, lang)}</dd>
+                  <dt className="text-slate-500">
+                    Delivery
+                    {quotesReady && Object.keys(carrierBySupplier).length > 0 && <span className="ms-1 text-xs text-slate-400">({Object.keys(carrierBySupplier).length} carrier {Object.keys(carrierBySupplier).length === 1 ? "quote" : "quotes"})</span>}
+                  </dt>
+                  <dd className="tabular-nums">{formatSar(deliveryFee, lang)}</dd>
                 </div>
+                {quotesReady &&
+                  groups.map((g) => {
+                    if (!g.companyId) return null;
+                    const pick = chosen[g.companyId];
+                    const quote = pick === undefined ? quotes[g.companyId] : pick;
+                    return (
+                      <div key={g.key} className="flex justify-between text-xs text-slate-500">
+                        <dt className="truncate pe-2">↳ {g.name}</dt>
+                        <dd className="shrink-0 tabular-nums">{quote ? `${quote.carrierName} · ${formatSar(quote.price, lang)}` : "Supplier delivery"}</dd>
+                      </div>
+                    );
+                  })}
                 <div className="flex justify-between border-t border-slate-200 pt-3 text-base">
                   <dt className="font-semibold text-slate-900">Total</dt>
-                  <dd className="font-bold tabular-nums text-brand-700">{formatSar(cart?.total, lang)}</dd>
+                  <dd className="font-bold tabular-nums text-brand-700">{formatSar(grandTotal, lang)}</dd>
                 </div>
               </dl>
               <div className="px-5 pb-5">

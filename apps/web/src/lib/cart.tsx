@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { VAT_RATE, type Cart, type CartItem, type Material, type ShopOffer } from "@mysupplier/shared";
-import { api, errorMessage } from "./api";
+import { VAT_RATE, type Cart, type CartItem, type DeliveryQuote, type Material, type ShopOffer } from "@mysupplier/shared";
+import { api, errorMessage, type CartWithQuotes } from "./api";
 import { useAuth } from "./auth";
 import { cn } from "./format";
 
 export const LOCAL_CART_KEY = "ms_cart";
+export const DELIVERY_CITY_KEY = "ms_delivery_city";
 /** Client-side delivery estimate for guests (the API prices delivery per supplier). */
 export const GUEST_DELIVERY_FEE_PER_SUPPLIER = 150;
 
@@ -32,7 +33,12 @@ export interface ToastState {
 
 interface CartContextValue {
   /** Server cart when logged in, a client-side cart for guests. */
-  cart: Cart | null;
+  cart: CartWithQuotes | null;
+  /** Cheapest carrier quote per supplier id for `deliveryCity` (null = flat supplier fee); empty when no city is chosen. */
+  quotes: Record<string, DeliveryQuote | null>;
+  /** Delivery city used to price delivery (`GET /cart?deliveryCity=`); remembered on this device. */
+  deliveryCity: string;
+  setDeliveryCity: (city: string) => void;
   items: CartItem[];
   /** Number of distinct lines in the cart. */
   count: number;
@@ -90,6 +96,25 @@ function readLocal(): LocalCartItem[] {
   }
 }
 
+function readDeliveryCity(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(DELIVERY_CITY_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeDeliveryCity(city: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (city) window.localStorage.setItem(DELIVERY_CITY_KEY, city);
+    else window.localStorage.removeItem(DELIVERY_CITY_KEY);
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
 function writeLocal(items: LocalCartItem[]): void {
   if (typeof window === "undefined") return;
   try {
@@ -132,7 +157,8 @@ export function buildGuestCart(items: LocalCartItem[]): Cart {
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth();
-  const [serverCart, setServerCart] = useState<Cart | null>(null);
+  const [serverCart, setServerCart] = useState<CartWithQuotes | null>(null);
+  const [deliveryCity, setDeliveryCityState] = useState("");
   const [localItems, setLocalItems] = useState<LocalCartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -154,9 +180,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  // Hydrate the guest cart from localStorage once on the client.
+  // Hydrate the guest cart and remembered delivery city from localStorage once on the client.
   useEffect(() => {
     setLocalItems(readLocal());
+    setDeliveryCityState(readDeliveryCity());
+  }, []);
+
+  const setDeliveryCity = useCallback((city: string) => {
+    setDeliveryCityState(city);
+    writeDeliveryCity(city);
   }, []);
 
   const persistLocal = useCallback((next: LocalCartItem[]) => {
@@ -197,7 +229,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         }
       }
       try {
-        const c = await api.cart();
+        const c = await api.cart(deliveryCity || undefined);
         if (active) setServerCart(c);
       } catch (err) {
         if (active) setError(errorMessage(err));
@@ -209,7 +241,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, [userId, authLoading, tick, notify]);
+  }, [userId, authLoading, tick, notify, deliveryCity]);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
 
@@ -217,7 +249,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     async (fn: () => Promise<Cart>, successMessage?: ToastState): Promise<boolean> => {
       setBusy(true);
       try {
-        const c = await fn();
+        let c: CartWithQuotes = await fn();
+        // Mutations return the cart without carrier quotes; re-price delivery for the chosen city.
+        if (deliveryCity) c = await api.cart(deliveryCity).catch(() => c);
         setServerCart(c);
         setError(null);
         if (successMessage) notify(successMessage);
@@ -229,7 +263,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         setBusy(false);
       }
     },
-    [notify],
+    [notify, deliveryCity],
   );
 
   const addedToast: ToastState = useMemo(() => ({ kind: "success", message: "Added to cart", actionHref: "/cart", actionLabel: "View cart" }), []);
@@ -288,12 +322,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [userId, runServer, persistLocal]);
 
   const isGuest = !userId;
-  const cart = useMemo<Cart | null>(() => (isGuest ? buildGuestCart(localItems) : serverCart), [isGuest, localItems, serverCart]);
+  const cart = useMemo<CartWithQuotes | null>(() => (isGuest ? buildGuestCart(localItems) : serverCart), [isGuest, localItems, serverCart]);
   const items = useMemo<CartItem[]>(() => cart?.items ?? [], [cart]);
+  const quotes = useMemo<Record<string, DeliveryQuote | null>>(() => (!isGuest && deliveryCity && cart?.quotes ? cart.quotes : {}), [isGuest, deliveryCity, cart]);
 
   const value = useMemo<CartContextValue>(
     () => ({
       cart,
+      quotes,
+      deliveryCity,
+      setDeliveryCity,
       items,
       count: items.length,
       loading: authLoading || (!isGuest && loading),
@@ -308,7 +346,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       toast,
       notify,
     }),
-    [cart, items, authLoading, isGuest, loading, busy, error, add, update, remove, clear, reload, toast, notify],
+    [cart, quotes, deliveryCity, setDeliveryCity, items, authLoading, isGuest, loading, busy, error, add, update, remove, clear, reload, toast, notify],
   );
 
   return (

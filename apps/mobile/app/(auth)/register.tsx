@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { SAUDI_CITIES, type CompanyType, type RegisterPayload } from "@mysupplier/shared";
 import { Screen, Button, TextField, PickerField, PickerModal } from "@/components";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { getErrorMessage } from "@/lib/api";
 import { colors, radius, spacing, typography } from "@/theme";
 
@@ -22,6 +24,7 @@ export default function RegisterScreen() {
   const router = useRouter();
   const { redirect } = useLocalSearchParams<{ redirect?: string }>();
   const { register } = useAuth();
+  const { t } = useI18n();
 
   const [role, setRole] = useState<RegRole>("BUYER");
   const [name, setName] = useState("");
@@ -147,6 +150,13 @@ export default function RegisterScreen() {
 
       <Button title="Create account" onPress={onSubmit} loading={submitting} fullWidth size="lg" />
 
+      <Link href={{ pathname: "/(auth)/login", params: { mode: "phone", ...(redirect ? { redirect } : {}) } }} replace asChild>
+        <Pressable style={styles.mobileLink} hitSlop={6}>
+          <Ionicons name="phone-portrait-outline" size={16} color={colors.primary} />
+          <Text style={styles.link}>{t("signUpWithMobile")}</Text>
+        </Pressable>
+      </Link>
+
       <View style={styles.footer}>
         <Text style={typography.bodySmall}>Already have an account? </Text>
         <Link href={{ pathname: "/(auth)/login", params: redirect ? { redirect } : {} }} replace asChild>
@@ -204,4 +214,5 @@ const styles = StyleSheet.create({
   serverError: { color: colors.danger, marginBottom: spacing.md, fontSize: 13 },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: spacing.xl },
   link: { color: colors.primary, fontWeight: "600", fontSize: 13 },
+  mobileLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: spacing.md, paddingVertical: spacing.sm },
 });

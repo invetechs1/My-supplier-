@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import type { OrderEvent, OrderExtended, OrderMessage, OrderStatus, PaymentConfig, PaymentMethod, Review } from "@mysupplier/shared";
-import { Screen, Button, StatusBadge, Card, SectionHeader, KeyValue, LoadingView, ErrorView, RequireAuth, ProductImage, SvgImage, TextField, statusLabel } from "@/components";
+import { Screen, Button, StatusBadge, Card, SectionHeader, KeyValue, LoadingView, ErrorView, RequireAuth, ProductImage, SvgImage, TextField, DeliverySection, statusLabel } from "@/components";
 import { api, deliveryNoteUrl, getErrorMessage, invoiceHtmlUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -295,13 +296,81 @@ function ReviewSection({ order, isBuyer, isOrderSupplier, t }: { order: OrderExt
   );
 }
 
+/** Refund a PAID order (supplier owner/manager or admin): amount defaults to the order total. */
+function RefundSheet({ order, visible, onClose, onRefunded, t }: { order: OrderExtended; visible: boolean; onClose: () => void; onRefunded: (o: OrderExtended) => void; t: (k: "refund") => string }) {
+  const [amount, setAmount] = useState(String(order.total));
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      setAmount(String(order.total));
+      setReason("");
+      setError(null);
+    }
+  }, [visible, order.total]);
+
+  const submit = async () => {
+    const value = Number(amount.replace(/,/g, "").trim());
+    if (!Number.isFinite(value) || value <= 0) return setError("Enter a refund amount greater than 0");
+    if (value > order.total + 0.005) return setError(`Amount cannot exceed the order total (${formatSar(order.total)})`);
+    if (reason.trim().length < 3) return setError("Give a short reason for the refund");
+    setBusy(true);
+    setError(null);
+    try {
+      const full = Math.abs(value - order.total) < 0.005;
+      const res = await api.refundOrder(order.id, { amount: full ? undefined : Math.round(value * 100) / 100, reason: reason.trim() });
+      onRefunded(res.order);
+      onClose();
+      Alert.alert(t("refund"), `${formatSar(res.refundedAmount)} refunded${order.paymentMethod === "CARD" && res.payment?.provider !== "MANUAL" ? " through the card gateway" : " (recorded as a manual refund)"}.`);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose} />
+      <SafeAreaView edges={["bottom"]} style={styles.sheet}>
+        <View style={styles.sheetHandle} />
+        <View style={styles.sheetHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={typography.h3}>
+              {t("refund")} · {order.reference}
+            </Text>
+            <Text style={typography.caption}>
+              {paymentMethodLabel(order.paymentMethod, (k) => k === "cod" ? "Cash on delivery" : k === "bankTransfer" ? "Bank transfer" : "Card")} · paid {formatSar(order.total)}
+            </Text>
+          </View>
+          <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Close">
+            <Ionicons name="close" size={24} color={colors.text} />
+          </Pressable>
+        </View>
+        <View style={{ padding: spacing.lg }}>
+          <TextField label="Amount (SAR)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" hint="Defaults to the full amount paid. Partial refunds are allowed." />
+          <TextField label="Reason" value={reason} onChangeText={setReason} placeholder="Damaged goods, short delivery, cancelled by buyer…" multiline maxLength={500} />
+          <Text style={[typography.caption, { marginBottom: spacing.md }]}>
+            {order.paymentMethod === "CARD" ? "Card payments are refunded through the payment gateway; the buyer sees it in 5–10 business days." : "Cash / bank payments are recorded as a manual refund — transfer the money to the buyer separately."}
+          </Text>
+          {error ? <Text style={[typography.bodySmall, { color: colors.danger, marginBottom: spacing.sm }]}>{error}</Text> : null}
+          <Button title={`${t("refund")} ${formatSar(Number(amount) || 0)}`} variant="danger" icon="return-down-back-outline" size="lg" fullWidth loading={busy} onPress={submit} />
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
 function OrderDetailContent() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useI18n();
-  const { user, isSupplier, token } = useAuth();
-  const { data, loading, error, refreshing, reload, refresh, setData } = useApi(() => api.order(id), [id], Boolean(id));
+  const { user, isSupplier, token, canManageCompany } = useAuth();
+  const { data, loading, error, refreshing, reload, refresh, setData, silentReload } = useApi(() => api.order(id), [id], Boolean(id));
   const [busy, setBusy] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
   const [payBusy, setPayBusy] = useState(false);
   const [cardBusy, setCardBusy] = useState(false);
   const [cardError, setCardError] = useState<string | null>(null);
@@ -344,6 +413,7 @@ function OrderDetailContent() {
   const isBuyer = user?.id === order.buyerId;
   const isAdmin = user?.role === "ADMIN";
   const isOrderSupplier = isSupplier && user?.companyId === order.companyId;
+  const canRefund = (isOrderSupplier && canManageCompany) || isAdmin;
   const items = order.items ?? [];
   const bidItems = order.bid?.items ?? [];
   const hasBreakdown = typeof order.subtotal === "number";
@@ -513,6 +583,14 @@ function OrderDetailContent() {
         />
       ) : null}
 
+      <DeliverySection
+        orderId={order.id}
+        version={`${order.status}:${order.updatedAt}`}
+        canManage={isOrderSupplier && !cancelled}
+        onOrderChanged={silentReload}
+        t={t}
+      />
+
       <SectionHeader title="Payment" />
       <Card>
         <View style={styles.paymentRow}>
@@ -558,7 +636,18 @@ function OrderDetailContent() {
         {(isOrderSupplier || isAdmin) && paymentStatus === "UNPAID" && !cancelled ? (
           <Button title={t("markAsPaid")} variant="secondary" icon="cash-outline" fullWidth loading={payBusy} onPress={markPaid} style={{ marginTop: spacing.md }} />
         ) : null}
+        {paymentStatus === "REFUNDED" ? (
+          <View style={styles.refundedRow}>
+            <Ionicons name="return-down-back-outline" size={16} color={colors.textSecondary} />
+            <Text style={[typography.bodySmall, { fontWeight: "600" }]}>{t("refunded")}</Text>
+            <StatusBadge status="REFUNDED" small />
+          </View>
+        ) : null}
+        {canRefund && paymentStatus === "PAID" ? (
+          <Button title={t("refund")} variant="outline" icon="return-down-back-outline" fullWidth onPress={() => setRefundOpen(true)} style={{ marginTop: spacing.md }} />
+        ) : null}
       </Card>
+      {canRefund ? <RefundSheet order={order} visible={refundOpen} onClose={() => setRefundOpen(false)} onRefunded={(o) => setData(o)} t={t} /> : null}
 
       <SectionHeader title={t("invoice")} />
       <Card>
@@ -743,4 +832,9 @@ const styles = StyleSheet.create({
   replyBox: { marginTop: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primaryLight },
   replyHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
   replyTitle: { ...typography.label, color: colors.primary },
+  refundedRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },
+  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingBottom: spacing.sm },
+  sheetHandle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginTop: spacing.sm },
+  sheetHeader: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
 });

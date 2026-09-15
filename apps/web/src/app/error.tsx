@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { Button } from "@/components/ui";
+import { reportClientError } from "@/lib/errors";
 
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
-    // Surface the error in the console so it reaches browser/error monitoring.
+    // Surface the error in the console and report it to the API (fire-and-forget, throttled).
     console.error(error);
+    reportClientError(error, { stack: error.digest ? `${error.stack ?? ""}\n[digest ${error.digest}]` : error.stack });
   }, [error]);
 
   return (

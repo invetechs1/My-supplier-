@@ -4,6 +4,21 @@ import type {
   AuthResponse,
   Bid,
   BoqAnalysis,
+  Carrier,
+  CarrierCode,
+  ClientErrorReport,
+  CreateShipmentPayload,
+  DeliveryQuote,
+  EInvoiceRecord,
+  MaterialLogistics,
+  OtpRequestPayload,
+  OtpRequestResult,
+  OtpVerifyPayload,
+  RefundPayload,
+  RefundResult,
+  Shipment,
+  ShipmentStatus,
+  ShippingRate,
   BoqLineInput,
   BoqToRfqPayload,
   Branch,
@@ -378,7 +393,12 @@ export interface PriceUpdateResult {
 // Supplier portal (multi-tenant) ------------------------------------------------
 
 /** `GET /auth/me` now returns the caller's company role; older API builds omit it (treated as OWNER). */
-export type AppUser = User & { companyRole?: CompanyRole | null; company?: (Company & Partial<CompanyProfile>) | null };
+export type AppUser = User & {
+  companyRole?: CompanyRole | null;
+  company?: (Company & Partial<CompanyProfile>) | null;
+  /** Set by the OTP flows (`/auth/otp/verify`, `/auth/phone/verify`); older API builds omit it. */
+  phoneVerified?: boolean | null;
+};
 
 export type CompanyProfilePatch = Partial<
   Pick<
@@ -465,6 +485,31 @@ export interface VerificationPatch {
 
 export type AdminCompanyDetail = CompanyProfile & { documents: CompanyDocument[]; members: TeamMember[]; branches: Branch[] };
 
+// Go-live: OTP, shipping, refunds, e-invoicing ---------------------------------
+
+/** `GET /cart?deliveryCity=` adds the cheapest carrier quote per supplier (null = no rate card matched, flat fee used). */
+export type CartWithQuotes = Cart & { quotes?: Record<string, DeliveryQuote | null> };
+
+/** `POST /checkout` accepts the buyer's carrier choice per supplier. */
+export type CheckoutPayloadWithCarriers = CheckoutPayload & { carrierBySupplier?: Record<string, CarrierCode> };
+
+export interface ShippingQuoteBody {
+  supplierCompanyId?: string;
+  items: Array<{ materialId: string; quantity: number }>;
+  deliveryCity: string;
+  pickupCity?: string;
+}
+
+/** `PATCH /shipments/:id`: partial booking details plus an optional status transition with an event. */
+export type ShipmentPatch = Partial<CreateShipmentPayload> & { status?: ShipmentStatus; description?: string; location?: string };
+
+export type ShippingRatePayload = Omit<ShippingRate, "id">;
+
+export type OrdersQuery = { page?: number; status?: OrderStatus | ""; paymentStatus?: PaymentStatus | "" };
+
+/** Material with the logistics fields used for delivery quotes. */
+export type MaterialWithLogistics = Material & MaterialLogistics;
+
 export const api = {
   // Public
   health: () => request<HealthStatus>("/health"),
@@ -497,6 +542,10 @@ export const api = {
   changePassword: (currentPassword: string, newPassword: string) =>
     request<{ ok: boolean }>("/auth/change-password", { method: "POST", body: { currentPassword, newPassword } }),
   deleteMe: () => request<{ ok: boolean }>("/auth/me", { method: "DELETE" }),
+  // Phone OTP
+  otpRequest: (payload: OtpRequestPayload) => request<OtpRequestResult>("/auth/otp/request", { method: "POST", body: payload }),
+  otpVerify: (payload: OtpVerifyPayload) => request<AuthResponse>("/auth/otp/verify", { method: "POST", body: payload }),
+  verifyPhone: (code: string) => request<AppUser>("/auth/phone/verify", { method: "POST", body: { code } }),
 
   // Buyer
   createRfq: (payload: CreateRfqPayload) => request<Rfq>("/rfqs", { method: "POST", body: payload }),
@@ -529,14 +578,34 @@ export const api = {
   shopBrands: () => request<string[]>("/shop/brands"),
 
   // Cart & checkout (auth)
-  cart: () => request<Cart>("/cart"),
+  cart: (deliveryCity?: string | null) => request<CartWithQuotes>("/cart", { query: { deliveryCity: deliveryCity || undefined } }),
   addCartItem: (listingId: string, quantity: number) =>
     request<Cart>("/cart/items", { method: "POST", body: { listingId, quantity } }),
   updateCartItem: (id: string, quantity: number) =>
     request<Cart>(`/cart/items/${encodeURIComponent(id)}`, { method: "PATCH", body: { quantity } }),
   removeCartItem: (id: string) => request<Cart>(`/cart/items/${encodeURIComponent(id)}`, { method: "DELETE" }),
   clearCart: () => request<Cart>("/cart", { method: "DELETE" }),
-  checkout: (payload: CheckoutPayload) => request<CheckoutResult>("/checkout", { method: "POST", body: payload }),
+  checkout: (payload: CheckoutPayloadWithCarriers) => request<CheckoutResult>("/checkout", { method: "POST", body: payload }),
+
+  // Shipping & carriers
+  carriers: () => request<Carrier[]>("/shipping/carriers"),
+  shippingQuote: (body: ShippingQuoteBody) => request<DeliveryQuote[]>("/shipping/quote", { method: "POST", body }),
+  orderShipments: (orderId: string) => request<Shipment[]>(`/orders/${encodeURIComponent(orderId)}/shipments`),
+  createShipment: (orderId: string, body: CreateShipmentPayload) =>
+    request<Shipment>(`/orders/${encodeURIComponent(orderId)}/shipments`, { method: "POST", body }),
+  updateShipment: (id: string, body: ShipmentPatch) => request<Shipment>(`/shipments/${encodeURIComponent(id)}`, { method: "PATCH", body }),
+  adminShippingRates: () => request<ShippingRate[]>("/admin/shipping/rates"),
+  adminCreateShippingRate: (body: ShippingRatePayload) => request<ShippingRate>("/admin/shipping/rates", { method: "POST", body }),
+  adminUpdateShippingRate: (id: string, body: Partial<ShippingRatePayload>) =>
+    request<ShippingRate>(`/admin/shipping/rates/${encodeURIComponent(id)}`, { method: "PATCH", body }),
+  adminDeleteShippingRate: (id: string) => request<{ ok: boolean }>(`/admin/shipping/rates/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  // E-invoicing (ZATCA phase 2 groundwork)
+  einvoice: (orderId: string) => request<EInvoiceRecord>(`/orders/${encodeURIComponent(orderId)}/einvoice`),
+  adminReportEinvoice: (id: string) => request<EInvoiceRecord>(`/admin/einvoices/${encodeURIComponent(id)}/report`, { method: "POST" }),
+
+  // Ops
+  reportClientError: (body: ClientErrorReport) => request<{ ok?: boolean }>("/client-errors", { method: "POST", body }),
 
   // Supplier catalogue
   supplierCatalogImport: (items: SupplierCatalogItem[]) =>
@@ -545,7 +614,9 @@ export const api = {
     request<SupplierListing>(`/supplier/prices/${encodeURIComponent(id)}`, { method: "PATCH", body }),
 
   // Orders
-  orders: (page = 1) => request<Paginated<OrderExtended>>("/orders", { query: { page } }),
+  /** The contract documents `?page=`; `status` / `paymentStatus` are forwarded for API builds that filter server-side. */
+  orders: (query: number | OrdersQuery = 1) =>
+    request<Paginated<OrderExtended>>("/orders", { query: typeof query === "number" ? { page: query } : { page: query.page, status: query.status || undefined, paymentStatus: query.paymentStatus || undefined } }),
   order: (id: string) => request<OrderExtended>(`/orders/${encodeURIComponent(id)}`),
   updateOrderStatus: (id: string, status: OrderStatus) =>
     request<OrderExtended>(`/orders/${encodeURIComponent(id)}/status`, { method: "PATCH", body: { status } }),
@@ -563,6 +634,7 @@ export const api = {
       body: { paymentId },
     }),
   payments: (orderId: string) => request<PaymentRecord[]>(`/payments/${encodeURIComponent(orderId)}`),
+  refund: (orderId: string, body: RefundPayload) => request<RefundResult>(`/payments/${encodeURIComponent(orderId)}/refund`, { method: "POST", body }),
 
   // Notifications
   notifications: async (unreadOnly = false) => {
@@ -717,6 +789,24 @@ export function deliveryNoteHtmlUrl(orderId: string): string {
   return `${API_URL}/orders/${encodeURIComponent(orderId)}/delivery-note.html${token ? `?token=${encodeURIComponent(token)}` : ""}`;
 }
 
+/** UBL 2.1 e-invoice XML (token in the query). */
+export function einvoiceXmlUrl(orderId: string): string {
+  const token = getToken();
+  return `${API_URL}/orders/${encodeURIComponent(orderId)}/einvoice.xml${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+}
+
+/** Private verification document for the supplier's own company (owner/manager). */
+export function supplierDocumentFileUrl(docId: string): string {
+  const token = getToken();
+  return `${API_URL}/supplier/company/documents/${encodeURIComponent(docId)}/file${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+}
+
+/** Private verification document opened by an admin. */
+export function adminDocumentFileUrl(companyId: string, docId: string): string {
+  const token = getToken();
+  return `${API_URL}/admin/companies/${encodeURIComponent(companyId)}/documents/${encodeURIComponent(docId)}/file${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+}
+
 /** CSV export of all listings with stock (opens as a download; token in the query). */
 export function inventoryExportUrl(): string {
   const token = getToken();
@@ -759,6 +849,9 @@ export interface AdminMaterialPayload {
   brand?: string;
   specs?: Record<string, string | number>;
   description?: string;
+  weightKg?: number | null;
+  volumeM3?: number | null;
+  hazardous?: boolean;
 }
 
 export interface ImportPriceRow {
