@@ -1,4 +1,6 @@
-# MySupplier – Saudi building-materials price platform
+# MySupplier – Build for less
+
+Saudi building-materials price platform.
 
 **Live prices for every construction item across the Kingdom, from every supplier, in one place –
 plus an RFQ / bidding marketplace where registered suppliers compete for your order.**

@@ -10,9 +10,9 @@ import { SITE_URL } from "@/lib/api";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 const SITE_NAME = "MySupplier";
-const DEFAULT_TITLE = "MySupplier — Building material prices in Saudi Arabia";
+const DEFAULT_TITLE = "MySupplier – Build for less";
 const DESCRIPTION =
-  "Real construction material prices across Saudi Arabia. Compare verified suppliers, price your BOQ, request quotes, award orders and pay securely — with ZATCA-compliant VAT invoices.";
+  "Build for less. Real construction material prices across Saudi Arabia. Compare verified suppliers, price your BOQ, request quotes, award orders and pay securely — with ZATCA-compliant VAT invoices.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

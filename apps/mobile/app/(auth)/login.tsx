@@ -50,7 +50,7 @@ export default function LoginScreen() {
     <Screen scroll keyboard edges={["bottom", "left", "right"]}>
       <View style={styles.hero}>
         <Text style={styles.logo}>MySupplier</Text>
-        <Text style={styles.tagline}>Building-materials prices, RFQs and bids across Saudi Arabia</Text>
+        <Text style={styles.tagline}>Build for less — live building-material prices, RFQs and bids across Saudi Arabia</Text>
       </View>
 
       <TextField

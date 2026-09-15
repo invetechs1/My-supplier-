@@ -16,7 +16,7 @@ const STATS = [
 
 export default function AboutPage() {
   return (
-    <ProsePage title="About MySupplier" subtitle="Transparent building-material pricing for the Kingdom — built for contractors, consultants and suppliers." aside={<LegalNav />}>
+    <ProsePage title="About MySupplier" subtitle="Build for less. Transparent building-material pricing for the Kingdom — built for contractors, consultants and suppliers." aside={<LegalNav />}>
       <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {STATS.map((s) => (
           <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">

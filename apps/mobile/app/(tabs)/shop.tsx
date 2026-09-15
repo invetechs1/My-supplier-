@@ -76,7 +76,7 @@ export default function ShopScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.heroTitle}>{t("shop")}</Text>
             <Text style={styles.heroSub}>
-              {user ? `${t("welcome")}, ${user.name.split(" ")[0]}` : "Construction materials, delivered"}
+              {user ? `${t("welcome")}, ${user.name.split(" ")[0]}` : "Build for less"}
             </Text>
           </View>
           <CartButton color="#fff" style={styles.heroBtn} />

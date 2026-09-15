@@ -57,7 +57,8 @@ export default function LandingPage() {
             <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-brand-50 ring-1 ring-inset ring-white/20">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> Live market data · Saudi Arabia
             </span>
-            <h1 className="mt-5 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">{t("hero.title")}</h1>
+            <p className="mt-5 text-sm font-semibold uppercase tracking-[0.2em] text-accent">{t("hero.kicker")}</p>
+            <h1 className="mt-3 text-5xl font-bold leading-tight tracking-tight sm:text-6xl">{t("hero.title")}</h1>
             <p className="mt-5 max-w-2xl text-lg text-brand-100">{t("hero.subtitle")}</p>
             <form onSubmit={onSearch} className="mt-8 flex flex-col gap-2 sm:flex-row" role="search">
               <input

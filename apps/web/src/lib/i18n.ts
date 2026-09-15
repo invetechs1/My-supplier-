@@ -50,7 +50,8 @@ const dictionary = {
     "nav.notifications": "Notifications",
     "nav.account": "Account",
     "nav.help": "Help",
-    "hero.title": "Real construction material prices across Saudi Arabia",
+    "hero.title": "Build for less.",
+    "hero.kicker": "Real construction material prices across Saudi Arabia",
     "hero.subtitle":
       "Compare live supplier prices for cement, steel, aggregates and more. Request quotes, receive competitive bids and award orders in one place.",
     "hero.searchPlaceholder": "Search materials, e.g. Portland cement, rebar 12mm…",
@@ -119,7 +120,7 @@ const dictionary = {
     "common.city": "City",
     "common.status": "Status",
     "common.actions": "Actions",
-    "footer.tagline": "Transparent building-material pricing for the Kingdom.",
+    "footer.tagline": "Build for less. Transparent building-material pricing for the Kingdom.",
   },
   ar: {
     "nav.shop": "المتجر",
@@ -165,7 +166,8 @@ const dictionary = {
     "nav.notifications": "الإشعارات",
     "nav.account": "الحساب",
     "nav.help": "المساعدة",
-    "hero.title": "أسعار حقيقية لمواد البناء في جميع أنحاء المملكة العربية السعودية",
+    "hero.title": "ابنِ بتكلفة أقل.",
+    "hero.kicker": "أسعار حقيقية لمواد البناء في جميع أنحاء المملكة العربية السعودية",
     "hero.subtitle":
       "قارن أسعار الموردين المباشرة للإسمنت والحديد والركام وغيرها. اطلب عروض الأسعار، واستقبل العطاءات التنافسية، وأرسِ الطلبات في مكان واحد.",
     "hero.searchPlaceholder": "ابحث عن المواد، مثل الإسمنت البورتلاندي، حديد التسليح 12 مم…",
@@ -234,7 +236,7 @@ const dictionary = {
     "common.city": "المدينة",
     "common.status": "الحالة",
     "common.actions": "الإجراءات",
-    "footer.tagline": "تسعير شفاف لمواد البناء في المملكة.",
+    "footer.tagline": "ابنِ بتكلفة أقل. تسعير شفاف لمواد البناء في المملكة.",
   },
 } as const;
 

@@ -24,7 +24,7 @@ export async function sendMail(to: string, subject: string, html: string, text?:
 export function layout(title: string, body: string, cta?: { label: string; url: string }) {
   return `<!doctype html><html><body style="margin:0;background:#f4f6f5;font-family:Inter,Arial,sans-serif;color:#111827">
   <div style="max-width:560px;margin:24px auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e5e7eb">
-    <div style="background:#0B6E4F;color:#fff;padding:20px 24px;font-weight:700;font-size:18px">MySupplier</div>
+    <div style="background:#0B6E4F;color:#fff;padding:20px 24px;font-weight:700;font-size:18px">MySupplier <span style="font-weight:400;opacity:.8;font-size:13px">· Build for less</span></div>
     <div style="padding:24px">
       <h2 style="margin:0 0 12px;font-size:20px">${title}</h2>
       <div style="font-size:15px;line-height:1.6">${body}</div>

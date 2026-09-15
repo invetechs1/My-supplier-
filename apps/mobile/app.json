@@ -8,7 +8,7 @@
     "scheme": "mysupplier",
     "userInterfaceStyle": "light",
     "primaryColor": "#0B6E4F",
-    "description": "Saudi construction-materials marketplace: compare supplier prices, order online, run RFQs and manage bids.",
+    "description": "Build for less. Saudi construction-materials marketplace: compare supplier prices, order online, run RFQs and manage bids.",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
