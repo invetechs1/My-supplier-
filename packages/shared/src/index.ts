@@ -3,7 +3,7 @@
 
 export type Role = "BUYER" | "SUPPLIER" | "ADMIN";
 export type CompanyType = "SUPPLIER" | "CONTRACTOR" | "CONSULTANT" | "OTHER";
-export type PriceSource = "SUPPLIER" | "MARKET" | "IMPORTED";
+export type PriceSource = "SUPPLIER" | "MARKET" | "IMPORTED" | "QUOTATION";
 export type RfqStatus = "OPEN" | "CLOSED" | "AWARDED" | "CANCELLED";
 export type BidStatus = "SUBMITTED" | "WITHDRAWN" | "ACCEPTED" | "REJECTED";
 export type OrderStatus = "PENDING" | "CONFIRMED" | "IN_TRANSIT" | "DELIVERED" | "CANCELLED";

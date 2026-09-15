@@ -19,6 +19,8 @@ export const colors = {
   info: "#2563EB",
   infoLight: "#DBEAFE",
   neutralLight: "#F3F4F6",
+  purple: "#7C3AED",
+  purpleLight: "#EDE9FE",
 } as const;
 
 export const spacing = {

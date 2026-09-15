@@ -14,21 +14,31 @@
       "resizeMode": "contain",
       "backgroundColor": "#0B6E4F"
     },
-    "assetBundlePatterns": ["**/*"],
-    "runtimeVersion": { "policy": "appVersion" },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "sa.mysupplier.app",
       "buildNumber": "1",
-      "config": { "usesNonExemptEncryption": false },
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "MySupplier uses the camera to photograph delivery notes and site materials you attach to orders and RFQs.",
-        "NSPhotoLibraryUsageDescription": "MySupplier accesses your photo library so you can attach photos of materials or documents to orders and RFQs.",
+        "NSCameraUsageDescription": "MySupplier uses the camera to scan supplier price lists and quotations so prices can be read automatically.",
+        "NSPhotoLibraryUsageDescription": "MySupplier accesses your photo library so you can upload photos of supplier price lists and quotations.",
         "CFBundleAllowMixedLocalizations": true,
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       },
-      "associatedDomains": ["applinks:mysupplier.sa"]
+      "associatedDomains": [
+        "applinks:mysupplier.sa"
+      ]
     },
     "android": {
       "package": "sa.mysupplier.app",
@@ -37,15 +47,35 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B6E4F"
       },
-      "permissions": ["android.permission.INTERNET", "android.permission.POST_NOTIFICATIONS", "android.permission.RECEIVE_BOOT_COMPLETED", "android.permission.VIBRATE"],
-      "blockedPermissions": ["android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE", "android.permission.RECORD_AUDIO", "android.permission.SYSTEM_ALERT_WINDOW"],
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES"
+      ],
+      "blockedPermissions": [
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "useNextNotificationsApi": true,
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": [{ "scheme": "https", "host": "mysupplier.sa", "pathPrefix": "/app" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "https",
+              "host": "mysupplier.sa",
+              "pathPrefix": "/app"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -70,7 +100,16 @@
           "color": "#0B6E4F",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "MySupplier uses the camera to scan supplier price lists and quotations so prices can be read automatically.",
+          "photosPermission": "MySupplier accesses your photo library so you can upload photos of supplier price lists and quotations.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-document-picker"
     ],
     "experiments": {
       "typedRoutes": false

@@ -176,10 +176,18 @@ export default function ProfileScreen() {
           <Row icon="notifications-outline" label={t("notifications")} badge={unread} onPress={() => router.push("/notifications")} />
         ) : null}
         {isSupplier ? (
-          <Row icon="pricetags-outline" label={t("myPriceList")} onPress={() => router.push("/supplier/prices")} />
+          <>
+            <Row icon="pricetags-outline" label={t("myPriceList")} onPress={() => router.push("/supplier/prices")} />
+            <Row icon="scan-outline" label={t("scanPriceList")} onPress={() => router.push("/imports/new")} />
+            <Row icon="cloud-upload-outline" label={t("myImports")} onPress={() => router.push("/imports")} />
+          </>
         ) : null}
         {isAuthenticated && !isSupplier ? (
-          <Row icon="document-text-outline" label={t("newRfq")} onPress={() => router.push("/rfq/new")} />
+          <>
+            <Row icon="document-text-outline" label={t("newRfq")} onPress={() => router.push("/rfq/new")} />
+            <Row icon="receipt-outline" label={user?.role === "ADMIN" ? "Import prices" : t("uploadQuotation")} onPress={() => router.push("/imports/new")} />
+            <Row icon="albums-outline" label={user?.role === "ADMIN" ? t("myImports") : t("myQuotations")} onPress={() => router.push("/imports")} />
+          </>
         ) : null}
       </View>
 

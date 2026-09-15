@@ -18,6 +18,7 @@ import {
   CartButton,
   StockPill,
   DealBadge,
+  StatusBadge,
 } from "@/components";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -230,6 +231,7 @@ export default function ProductDetailScreen() {
                         {o.companyName}
                       </Text>
                       {o.verified ? <Ionicons name="checkmark-circle" size={14} color={colors.primary} /> : null}
+                      {o.source === "QUOTATION" ? <StatusBadge status="QUOTATION" small /> : null}
                     </View>
                     <View style={styles.sellerMeta}>
                       <Text style={typography.caption}>{o.city}</Text>

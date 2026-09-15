@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { SAUDI_CITIES, type Material, type PriceListing, type UpsertPricePayload } from "@mysupplier/shared";
 import {
   Screen,
@@ -18,6 +19,7 @@ import {
 } from "@/components";
 import { api, getErrorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { formatSar, timeAgo } from "@/lib/format";
 import { colors, radius, spacing, typography, shadow } from "@/theme";
 
@@ -144,6 +146,8 @@ function PriceEditor({
 
 function PricesContent() {
   const { user } = useAuth();
+  const { t } = useI18n();
+  const router = useRouter();
   const [items, setItems] = useState<PriceListing[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -244,10 +248,13 @@ function PricesContent() {
   return (
     <Screen padded={false} edges={["bottom", "left", "right"]}>
       <View style={styles.header}>
-        <Text style={typography.bodySmall}>
+        <Text style={[typography.bodySmall, { flex: 1 }]} numberOfLines={1}>
           {total} listing{total === 1 ? "" : "s"} · {user?.company?.name ?? "My company"}
         </Text>
-        <Button title="Add price" icon="add" size="sm" onPress={openAdd} />
+        <View style={styles.headerActions}>
+          <Button title={t("scanPriceList")} icon="scan-outline" size="sm" variant="secondary" onPress={() => router.push("/imports/new")} />
+          <Button title="Add price" icon="add" size="sm" onPress={openAdd} />
+        </View>
       </View>
       {loading && items.length === 0 ? (
         <LoadingView />
@@ -316,7 +323,8 @@ export default function SupplierPricesScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  headerActions: { flexDirection: "row", gap: spacing.sm },
   list: { padding: spacing.lg, paddingTop: 0, paddingBottom: spacing.xxl, flexGrow: 1 },
   card: { flexDirection: "row", gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.md, ...shadow.card },
   cardTitle: { ...typography.h3 },

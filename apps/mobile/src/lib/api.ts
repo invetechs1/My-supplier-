@@ -1,5 +1,6 @@
 import { storage } from "./storage";
 import type {
+  AiConfig,
   ApiError,
   AuthResponse,
   Bid,
@@ -29,11 +30,17 @@ import type {
   Product,
   ProductDetail,
   ShopHome,
+  ImportKind,
+  ImportRowStatus,
+  ImportStatus,
   PlatformStats,
   PriceHistoryPoint,
+  PriceImport,
+  PriceImportRow,
   PriceIndexEntry,
   PriceListing,
   PriceSummary,
+  PublishImportResult,
   RegisterPayload,
   Rfq,
   UpsertPricePayload,
@@ -159,6 +166,58 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   return res.data;
 }
 
+/**
+ * Multipart upload (files + fields). Unlike `request`, the Content-Type header
+ * is left to fetch so the multipart boundary is set correctly; on native the
+ * file part is appended as `{ uri, name, type }`.
+ */
+export async function requestMultipart<T>(
+  path: string,
+  form: FormData,
+  options: { method?: "POST" | "PATCH" | "PUT"; timeoutMs?: number } = {},
+): Promise<T> {
+  const { method = "POST", timeoutMs = 180_000 } = options;
+  const url = `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
+  const headers: Record<string, string> = { Accept: "application/json" };
+  const token = await getStoredToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+  let response: Response;
+  try {
+    response = await fetch(url, { method, headers, body: form, signal: controller?.signal });
+  } catch (err) {
+    const aborted = err instanceof Error && err.name === "AbortError";
+    const message = aborted ? "The upload timed out" : err instanceof Error ? err.message : "Network request failed";
+    throw new ApiRequestError(aborted ? message : `Cannot reach the server (${message}). Check EXPO_PUBLIC_API_URL.`, 0);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+
+  const text = await response.text();
+  let parsed: unknown = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = text;
+    }
+  }
+  if (!response.ok) {
+    const errBody = (parsed && typeof parsed === "object" ? parsed : {}) as Partial<ApiError>;
+    const message =
+      typeof errBody.error === "string"
+        ? errBody.error
+        : typeof parsed === "string" && parsed
+          ? parsed
+          : `Request failed with status ${response.status}`;
+    throw new ApiRequestError(message, response.status, errBody.details);
+  }
+  return parsed as T;
+}
+
 export function getErrorMessage(err: unknown): string {
   if (err instanceof ApiRequestError) return err.message;
   if (err instanceof Error) return err.message;
@@ -213,7 +272,45 @@ export interface BoqAnalyzeBody {
   verifiedOnly?: boolean;
 }
 
+// Type alias (not interface) so it is assignable to the indexed Query type.
+export type ImportsQuery = {
+  status?: ImportStatus;
+  kind?: ImportKind;
+  page?: number;
+};
+
+export interface ImportRowPatch {
+  materialId?: string | null;
+  price?: number | null;
+  unit?: string;
+  city?: string | null;
+  status?: ImportRowStatus;
+  createMaterial?: boolean;
+}
+
+export interface PublishImportOptions {
+  includeSuggested?: boolean;
+  minConfidence?: number;
+}
+
 export const api = {
+  // AI price collection (imports land in a review queue before publishing)
+  aiConfig: () => request<AiConfig>("/ai/config", { auth: false }),
+  /** multipart/form-data: `file` or `text`, plus kind, city?, sourceName?, supplierName?, quotationDate? */
+  createImport: (form: FormData) => requestMultipart<PriceImport>("/imports", form),
+  imports: (query: ImportsQuery = {}) => request<Paginated<PriceImport>>("/imports", { query }),
+  importDetail: (id: string) => request<PriceImport>(`/imports/${encodeURIComponent(id)}`),
+  updateImportRow: (importId: string, rowId: string, patch: ImportRowPatch) =>
+    request<PriceImportRow>(`/imports/${encodeURIComponent(importId)}/rows/${encodeURIComponent(rowId)}`, {
+      method: "PATCH",
+      body: patch,
+    }),
+  approveAllRows: (id: string, minConfidence = 0.8) =>
+    request<PriceImport>(`/imports/${encodeURIComponent(id)}/approve-all`, { method: "POST", body: { minConfidence } }),
+  publishImport: (id: string, opts: PublishImportOptions = {}) =>
+    request<PublishImportResult>(`/imports/${encodeURIComponent(id)}/publish`, { method: "POST", body: opts }),
+  rejectImport: (id: string) => request<PriceImport>(`/imports/${encodeURIComponent(id)}/reject`, { method: "POST" }),
+
   // BOQ research (public analyze; RFQ conversion needs a BUYER)
   boqParse: (text: string) =>
     request<{ lines: BoqLineInput[] }>("/boq/parse", { method: "POST", body: { text }, auth: false }),

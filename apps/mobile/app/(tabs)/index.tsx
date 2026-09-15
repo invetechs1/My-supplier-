@@ -117,6 +117,25 @@ export default function HomeScreen() {
         <Ionicons name="arrow-forward-circle" size={28} color={colors.accent} />
       </Pressable>
 
+      {user ? (
+        <Pressable onPress={() => router.push("/imports/new")} style={({ pressed }) => [styles.importCard, pressed && { opacity: 0.92 }]}>
+          <View style={styles.importIcon}>
+            <Ionicons name={user.role === "SUPPLIER" ? "scan-outline" : "receipt-outline"} size={22} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.importTitle}>
+              {user.role === "SUPPLIER" ? "Update prices from a photo or PDF" : "Got a quotation? Upload it"}
+            </Text>
+            <Text style={styles.importSub}>
+              {user.role === "SUPPLIER"
+                ? "Scan your price list and we match every line to the catalogue"
+                : "Upload it and get every supplier\u2019s price for the same items"}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+        </Pressable>
+      ) : null}
+
       {statTiles.length ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsStrip}>
           {statTiles.map((s) => (
@@ -246,6 +265,22 @@ const styles = StyleSheet.create({
   boqIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" },
   boqTitle: { fontSize: 16, fontWeight: "700", color: "#fff" },
   boqSub: { fontSize: 13, color: "rgba(255,255,255,0.8)", marginTop: 2 },
+  importCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.primaryLight,
+    ...shadow.card,
+  },
+  importIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center" },
+  importTitle: { ...typography.body, fontWeight: "700" },
+  importSub: { ...typography.caption, marginTop: 2 },
   statsStrip: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.sm },
   stat: {
     backgroundColor: colors.surface,

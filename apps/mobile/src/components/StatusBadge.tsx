@@ -6,7 +6,9 @@ type AnyStatus =
   | "OPEN" | "CLOSED" | "AWARDED" | "CANCELLED"
   | "SUBMITTED" | "WITHDRAWN" | "ACCEPTED" | "REJECTED"
   | "PENDING" | "CONFIRMED" | "IN_TRANSIT" | "DELIVERED"
-  | "SUPPLIER" | "MARKET" | "IMPORTED"
+  | "SUPPLIER" | "MARKET" | "IMPORTED" | "QUOTATION"
+  | "PROCESSING" | "REVIEW" | "PUBLISHED" | "FAILED"
+  | "SUGGESTED" | "APPROVED"
   | "PAID" | "UNPAID" | "REFUNDED"
   | "DIRECT" | "RFQ"
   | (string & {});
@@ -27,6 +29,14 @@ const palette: Record<string, { bg: string; fg: string }> = {
   SUPPLIER: { bg: colors.primaryLight, fg: colors.primary },
   MARKET: { bg: colors.infoLight, fg: colors.info },
   IMPORTED: { bg: colors.neutralLight, fg: colors.textSecondary },
+  QUOTATION: { bg: colors.purpleLight, fg: colors.purple },
+  // AI price imports
+  PROCESSING: { bg: colors.infoLight, fg: colors.info },
+  REVIEW: { bg: colors.warningLight, fg: colors.warning },
+  PUBLISHED: { bg: colors.successLight, fg: colors.success },
+  FAILED: { bg: colors.dangerLight, fg: colors.danger },
+  SUGGESTED: { bg: colors.neutralLight, fg: colors.textSecondary },
+  APPROVED: { bg: colors.successLight, fg: colors.success },
   PAID: { bg: colors.successLight, fg: colors.success },
   UNPAID: { bg: colors.warningLight, fg: colors.warning },
   REFUNDED: { bg: colors.neutralLight, fg: colors.textSecondary },
@@ -36,6 +46,7 @@ const palette: Record<string, { bg: string; fg: string }> = {
 
 export function statusLabel(status: string): string {
   if (status === "RFQ") return "RFQ";
+  if (status === "QUOTATION") return "Quoted";
   return status.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
