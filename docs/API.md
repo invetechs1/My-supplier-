@@ -164,6 +164,37 @@ Checkout records `OUT` movements per order item; cancelling a PENDING/CONFIRMED 
 | GET | `/admin/companies/:id` | `CompanyProfile & { documents: CompanyDocument[], members: TeamMember[], branches: Branch[] }` |
 | PATCH | `/admin/companies/:id/documents/:docId` | `{ status, notes? }` |
 
+## Go-live features
+### Phone OTP login (Saudi users prefer mobile sign-in)
+| POST | `/auth/otp/request` | `OtpRequestPayload` -> `OtpRequestResult`. Sends a 6-digit code by SMS (Unifonic when `UNIFONIC_APP_SID` is set) or logs it in development (`devCode` returned when not production). Rate limited: 5 per phone per 15 min |
+| POST | `/auth/otp/verify` | `OtpVerifyPayload` -> `AuthResponse`. Existing account with that phone logs in; a new phone creates a BUYER (or SUPPLIER with `company`) using `name`. Marks `phoneVerified` |
+| POST | `/auth/phone/verify` | auth: `{ code }` after `/auth/otp/request` with purpose VERIFY_PHONE -> `User` |
+
+### Refunds
+| POST | `/payments/:orderId/refund` | SUPPLIER (owner/manager) or ADMIN: `RefundPayload` -> `RefundResult`. Card payments are refunded through Moyasar (`POST /payments/:id/refund`); bank/COD payments are recorded as manual refunds. Order `paymentStatus` becomes `REFUNDED`, an event and notification are written |
+
+### Shipments & carriers
+| GET | `/shipping/carriers` | `Carrier[]` (enabled carriers) |
+| POST | `/shipping/quote` | public: `{ supplierCompanyId?, items: [{ materialId, quantity }], deliveryCity, pickupCity? }` -> `DeliveryQuote[]` sorted by price (zone from pickup vs delivery city, weight/volume from material logistics data, rate cards) |
+| GET | `/cart?deliveryCity=` | (existing) `deliveryFee` now comes from the cheapest quote per supplier, falling back to the flat fee; `Cart` gains `quotes: Record<supplierId, DeliveryQuote | null>` |
+| POST | `/checkout` | (existing) accepts optional `carrierBySupplier: Record<supplierId, CarrierCode>`; the chosen quote's price becomes the order's `deliveryFee` and a `PENDING` shipment is created per order |
+| GET | `/orders/:id/shipments` | `Shipment[]` (buyer, supplier, admin) |
+| POST | `/orders/:id/shipments` | supplier: `CreateShipmentPayload` -> `Shipment` (status BOOKED; sets order IN_TRANSIT when it moves) |
+| PATCH | `/shipments/:id` | supplier: partial `CreateShipmentPayload` + `{ status?, description?, location? }` -> `Shipment` (adds an event; DELIVERED sets the order DELIVERED, notifies buyer) |
+| POST | `/shipping/webhooks/:carrier` | carrier tracking webhook (`x-webhook-secret` = `CARRIER_WEBHOOK_SECRET`): `{ trackingNumber, status, description?, location? }` |
+| GET/POST | `/admin/shipping/rates` · `PATCH/DELETE /admin/shipping/rates/:id` | `ShippingRate` cards (seeded for SUPPLIER own fleet, TRUKKER/TRELLA heavy trucking, SMSA/ARAMEX parcel) |
+| PATCH | `/admin/materials/:id` | (existing) now accepts `weightKg`, `volumeM3`, `hazardous` |
+Carrier APIs (Trukker, Trella, SMSA, Aramex) are integrated through `services/carriers/*` adapters: quoting uses the rate cards; booking/tracking calls the carrier when its credentials are configured, otherwise shipments are managed manually by the supplier with tracking numbers.
+
+### E-invoicing (ZATCA phase 2 groundwork)
+| GET | `/orders/:id/einvoice` | `EInvoiceRecord` (generated on first request: UBL 2.1 XML, SHA-256 hash chained to the previous invoice, UUID, counter, phase-1 QR) |
+| GET | `/orders/:id/einvoice.xml?token=` | the UBL XML |
+| POST | `/admin/einvoices/:id/report` | submits to ZATCA reporting API when `ZATCA_*` credentials are configured, else returns `PENDING_CONFIG` |
+
+### Ops
+| POST | `/client-errors` | `ClientErrorReport` from web/mobile -> logged and forwarded to Sentry when `SENTRY_DSN` is set |
+Verification documents are now served only through `GET /supplier/company/documents/:id/file` (owner/manager) and `GET /admin/companies/:id/documents/:docId/file` (admin), both accepting `?token=`; logos remain public under `/uploads/`.
+
 ## Auth
 | POST | `/auth/register` | body `RegisterPayload` -> `AuthResponse` (SUPPLIER must include `company`) |
 | POST | `/auth/login` | body `LoginPayload` -> `AuthResponse` |

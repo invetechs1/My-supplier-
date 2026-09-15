@@ -8,7 +8,8 @@ import { asyncHandler } from "../middleware/errorHandler";
 import { requireAuth } from "../middleware/auth";
 import { badRequest, forbidden, notFound, unauthorized } from "../lib/errors";
 import { serialize } from "../lib/serialize";
-import { cardPaymentsEnabled, fetchMoyasarPayment, toHalalas } from "../services/payments";
+import { cardPaymentsEnabled, fetchMoyasarPayment, refundMoyasarPayment, toHalalas } from "../services/payments";
+import { requireCompanyRole } from "../services/portal";
 import { companyUserIds, notify } from "../services/notifications";
 import { recordOrderEvent } from "../services/portal";
 
@@ -154,6 +155,40 @@ router.get(
 <style>body{font-family:Inter,Arial,sans-serif;margin:0;background:#f4f6f5}.wrap{max-width:480px;margin:0 auto;padding:20px}.card{background:#fff;border-radius:16px;padding:20px;border:1px solid #e5e7eb}h1{font-size:18px;margin:0 0 4px;color:#0B6E4F}.t{font-size:26px;font-weight:700;margin:8px 0 16px}</style></head>
 <body><div class="wrap"><div class="card"><h1>MySupplier</h1><div>Order ${esc(order.reference)} · ${esc(order.company.name)}</div><div class="t">SAR ${Number(order.total).toLocaleString("en-US", { minimumFractionDigits: 2 })}</div><div class="mysr-form"></div></div></div>
 <script>Moyasar.init({element:'.mysr-form',amount:${intent.amountHalalas},currency:'SAR',description:${JSON.stringify(intent.description)},publishable_api_key:${JSON.stringify(intent.publishableKey)},callback_url:${JSON.stringify(redirect)},methods:['creditcard','applepay'],metadata:{order_id:${JSON.stringify(order.id)}},on_completed:function(p){window.location.href=${JSON.stringify(redirect)}+'&id='+encodeURIComponent(p.id)+'&status='+encodeURIComponent(p.status);}});</script></body></html>`);
+  }),
+);
+
+/**
+ * Refund a paid order. Card payments go back through Moyasar; bank transfer / COD refunds are
+ * recorded as manual refunds (the supplier pays the buyer back outside the platform).
+ */
+router.post(
+  "/payments/:orderId/refund",
+  requireAuth("SUPPLIER", "ADMIN"),
+  requireCompanyRole("OWNER", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    const { amount, reason } = z.object({ amount: z.coerce.number().positive().optional(), reason: z.string().min(3).max(500) }).parse(req.body);
+    const order = await prisma.order.findUnique({ where: { id: req.params.orderId }, include: orderInclude });
+    if (!order) throw notFound("Order not found");
+    if (req.user!.role !== "ADMIN" && order.companyId !== req.user!.companyId) throw forbidden();
+    if (order.paymentStatus !== "PAID") throw badRequest("Only paid orders can be refunded");
+    const total = Number(order.total);
+    const refundAmount = amount ?? total;
+    if (refundAmount > total + 0.01) throw badRequest("Refund exceeds the order total");
+
+    let payment;
+    if (order.paymentMethod === "CARD") {
+      const paid = await prisma.payment.findFirst({ where: { orderId: order.id, status: "PAID", providerPaymentId: { not: null } }, orderBy: { createdAt: "desc" } });
+      if (!paid?.providerPaymentId || !cardPaymentsEnabled()) throw badRequest("No gateway payment found to refund");
+      const gw = await refundMoyasarPayment(paid.providerPaymentId, toHalalas(refundAmount));
+      payment = await prisma.payment.create({ data: { orderId: order.id, provider: "MOYASAR", providerPaymentId: `${paid.providerPaymentId}:refund:${Date.now()}`, amount: -refundAmount, status: "REFUNDED", raw: gw as unknown as Prisma.InputJsonValue } });
+    } else {
+      payment = await prisma.payment.create({ data: { orderId: order.id, provider: "MANUAL", amount: -refundAmount, status: "REFUNDED", raw: { reason, by: req.user!.id } as Prisma.InputJsonValue } });
+    }
+    const updated = await prisma.order.update({ where: { id: order.id }, data: { paymentStatus: "REFUNDED", ...(order.status !== "DELIVERED" ? { status: "CANCELLED" } : {}) }, include: orderInclude });
+    await recordOrderEvent(order.id, "PAYMENT", { message: `Refunded SAR ${refundAmount.toLocaleString("en-US")} – ${reason}`, userId: req.user!.id });
+    await notify({ userIds: [order.buyerId], type: "ORDER_UPDATE", title: `Refund issued for ${order.reference}`, body: `SAR ${refundAmount.toLocaleString("en-US")} – ${reason}`, link: `/dashboard/orders/${order.id}` });
+    res.json(serialize({ order: updated, payment, refundedAmount: refundAmount }));
   }),
 );
 

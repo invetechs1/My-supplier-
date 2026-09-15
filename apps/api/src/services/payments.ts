@@ -24,3 +24,19 @@ export async function fetchMoyasarPayment(paymentId: string): Promise<MoyasarPay
 }
 
 export const toHalalas = (sar: number) => Math.round(sar * 100);
+
+/** Refunds a Moyasar payment (full or partial, amount in halalas). */
+export async function refundMoyasarPayment(paymentId: string, amountHalalas?: number): Promise<MoyasarPayment & { refunded?: number }> {
+  const auth = Buffer.from(`${env.moyasar.secretKey}:`).toString("base64");
+  const resp = await fetch(`${env.moyasar.apiBase}/payments/${encodeURIComponent(paymentId)}/refund`, {
+    method: "POST",
+    headers: { authorization: `Basic ${auth}`, accept: "application/json", "content-type": "application/json" },
+    body: JSON.stringify(amountHalalas ? { amount: amountHalalas } : {}),
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`Moyasar refund failed (${resp.status}) ${text.slice(0, 200)}`);
+  }
+  return (await resp.json()) as MoyasarPayment & { refunded?: number };
+}

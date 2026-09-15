@@ -9,11 +9,12 @@ import { requireAuth, requireCompany } from "../middleware/auth";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import { paged, paginate } from "../lib/pagination";
-import { publicUrl, uploader } from "../lib/uploads";
+import { privatePath, publicUrl, uploader } from "../lib/uploads";
 import { layout, sendMail } from "../services/mailer";
 import { notify } from "../services/notifications";
 import { activeListingWhere } from "../services/catalog";
 import { round2 } from "../services/pricing";
+import { csvCell } from "../lib/security";
 import {
   applyStockMovement, commissionFor, companyCommissionPct, dayKey, getSettings, lastNDays, requireCompanyRole, requireManager,
   reservedByListing, saveSettings, slugify, soldLast30dByListing,
@@ -146,11 +147,41 @@ router.post(
     const companyId = requireCompany(req);
     const { type } = z.object({ type: z.enum(["CR", "VAT", "LICENSE", "OTHER"]) }).parse(req.body);
     if (!req.file) throw badRequest("Upload a file");
-    const doc = await prisma.companyDocument.create({ data: { companyId, type, fileName: req.file.originalname, fileUrl: publicUrl(req.file.filename), uploadedById: req.user!.id } });
+    // Private: fileUrl stores only the stored file name; the file is streamed through authenticated routes.
+    const doc = await prisma.companyDocument.create({ data: { companyId, type, fileName: req.file.originalname, fileUrl: `private:${req.file.filename}`, uploadedById: req.user!.id } });
     await prisma.company.updateMany({ where: { id: companyId, verificationStatus: { in: ["PENDING", "REJECTED"] } }, data: { verificationStatus: "UNDER_REVIEW" } });
     const admins = await prisma.user.findMany({ where: { role: "ADMIN", active: true }, select: { id: true } });
     await notify({ userIds: admins.map((a) => a.id), type: "SYSTEM", title: "Supplier document uploaded", body: `${req.file.originalname} (${type}) awaits verification.`, link: `/admin/companies/${companyId}`, email: false });
     res.status(201).json(serialize(doc));
+  }),
+);
+
+function streamPrivate(res: import("express").Response, doc: { fileUrl: string; fileName: string }) {
+  const stored = doc.fileUrl.replace(/^private:/, "");
+  const full = privatePath(stored);
+  if (!full) throw notFound("File not found");
+  res.setHeader("Content-Disposition", `inline; filename="${doc.fileName.replace(/[^\w.\- ]/g, "_")}"`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.sendFile(full);
+}
+
+router.get(
+  "/supplier/company/documents/:id/file",
+  ...supplier, requireManager(),
+  asyncHandler(async (req, res) => {
+    const doc = await prisma.companyDocument.findFirst({ where: { id: req.params.id, companyId: requireCompany(req) } });
+    if (!doc) throw notFound("Document not found");
+    streamPrivate(res, doc);
+  }),
+);
+
+router.get(
+  "/admin/companies/:id/documents/:docId/file",
+  requireAuth("ADMIN"),
+  asyncHandler(async (req, res) => {
+    const doc = await prisma.companyDocument.findFirst({ where: { id: req.params.docId, companyId: req.params.id } });
+    if (!doc) throw notFound("Document not found");
+    streamPrivate(res, doc);
   }),
 );
 
@@ -307,7 +338,7 @@ router.get(
   ...supplier,
   asyncHandler(async (req, res) => {
     const rows = await prisma.priceListing.findMany({ where: { companyId: requireCompany(req) }, include: inventoryInclude, orderBy: { material: { name: "asc" } } });
-    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const esc = (v: unknown) => csvCell(v);
     const csv = ["sku,name,unit,city,branch,price,stock,minQty,leadTimeDays,updatedAt", ...rows.map((l) => [l.material.sku, l.material.name, l.material.unit, l.city, l.branch?.name ?? "", Number(l.price), l.stock ?? "", l.minQty, l.leadTimeDays, l.updatedAt.toISOString()].map(esc).join(","))].join("\n");
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", 'attachment; filename="inventory.csv"');
@@ -424,7 +455,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { from, to } = rangeSchema.parse(req.query);
     const lines = await statementLines(requireCompany(req), from, to);
-    const csv = ["reference,date,status,payment,gross,commissionPct,commission,net,payout", ...lines.map((l) => [l.order.reference, l.order.createdAt.toISOString().slice(0, 10), l.order.status, l.order.paymentStatus, l.gross, l.commissionPct, l.commission, l.net, l.payout?.status ?? ""].join(","))].join("\n");
+    const csv = ["reference,date,status,payment,gross,commissionPct,commission,net,payout", ...lines.map((l) => [l.order.reference, l.order.createdAt.toISOString().slice(0, 10), l.order.status, l.order.paymentStatus, l.gross, l.commissionPct, l.commission, l.net, l.payout?.status ?? ""].map(csvCell).join(","))].join("\n");
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", 'attachment; filename="statement.csv"');
     res.send(csv);

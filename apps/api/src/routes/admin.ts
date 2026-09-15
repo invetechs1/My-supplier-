@@ -100,6 +100,9 @@ const materialSchema = z.object({
   description: z.string().optional().nullable(),
   imageUrl: z.string().url().optional().nullable(),
   active: z.boolean().optional(),
+  weightKg: z.coerce.number().nonnegative().optional().nullable(),
+  volumeM3: z.coerce.number().nonnegative().optional().nullable(),
+  hazardous: z.boolean().optional(),
 });
 
 router.post(

@@ -43,6 +43,8 @@ services:
       API_URL: https://${API_DOMAIN}/api/v1
       WEB_URL: https://${DOMAIN}
       CORS_ORIGIN: https://${DOMAIN}
+    volumes:
+      - uploads:/app/apps/api/uploads
     depends_on:
       db: { condition: service_healthy }
     healthcheck:
@@ -84,5 +86,6 @@ services:
 
 volumes:
   pgdata:
+  uploads:
   caddy_data:
   caddy_config:

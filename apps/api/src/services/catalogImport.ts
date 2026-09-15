@@ -2,6 +2,7 @@ import { Prisma, type MaterialSource } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { snapshotHistory } from "./catalog";
 import { stripHtml } from "./ai";
+import { assertPublicUrl } from "../lib/security";
 import { createImport, publishImport } from "./imports";
 
 export interface ImportRow {
@@ -142,6 +143,7 @@ export interface FeedRunResult extends ImportResult {
 export async function runFeed(feedId: string, runById?: string): Promise<FeedRunResult> {
   const feed = await prisma.feed.findUniqueOrThrow({ where: { id: feedId } });
   try {
+    await assertPublicUrl(feed.url);
     if (feed.format === "html") {
       const resp = await fetch(feed.url, { headers: { accept: "text/html,*/*;q=0.5", "user-agent": "MySupplierBot/1.0 (+price index)" }, signal: AbortSignal.timeout(30_000) });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

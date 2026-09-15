@@ -98,7 +98,9 @@ cd deploy && cp .env.production.example .env   # fill in domains, secrets, SMTP,
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Production features: Mada/Visa/Apple Pay via Moyasar, ZATCA phase-1 tax invoices with QR, push
+Production features: phone OTP sign-in (Unifonic), delivery quotes and shipment tracking with carrier
+adapters (TruKKer, Trella, SMSA, Aramex, SPL), refunds, ZATCA phase-2 e-invoice groundwork (UBL 2.1 +
+hash chain), Sentry monitoring, private document storage, Mada/Visa/Apple Pay via Moyasar, ZATCA phase-1 tax invoices with QR, push
 notifications (Expo) and transactional email, password reset, account deletion, health endpoint,
 sitemap, security headers and rate limiting.
 

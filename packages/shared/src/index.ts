@@ -887,3 +887,146 @@ export interface SupplierPublicProfile extends CompanyProfile {
   reviews: Review[];
   stats: { listings: number; bids: number; wonBids: number; ordersDelivered: number; memberSince: string };
 }
+
+// Go-live: OTP login, refunds, shipments & carriers, e-invoicing ----------------------
+
+export interface OtpRequestPayload {
+  phone: string; // E.164, e.g. +9665xxxxxxxx
+  purpose?: "LOGIN" | "VERIFY_PHONE";
+}
+export interface OtpRequestResult {
+  ok: true;
+  expiresInSeconds: number;
+  channel: "SMS" | "WHATSAPP" | "DEV";
+  devCode?: string; // only in non-production when no SMS provider is configured
+}
+export interface OtpVerifyPayload {
+  phone: string;
+  code: string;
+  name?: string; // required when the phone is new (account is created as BUYER)
+  role?: "BUYER" | "SUPPLIER";
+  company?: RegisterPayload["company"];
+}
+
+export interface RefundPayload {
+  amount?: number; // SAR, defaults to the full paid amount
+  reason: string;
+}
+export interface RefundResult {
+  order: OrderExtended;
+  payment: PaymentRecord;
+  refundedAmount: number;
+}
+
+export type ShipmentStatus = "PENDING" | "BOOKED" | "PICKED_UP" | "IN_TRANSIT" | "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED" | "CANCELLED";
+export type CarrierCode = "SUPPLIER" | "TRUKKER" | "TRELLA" | "SMSA" | "ARAMEX" | "SPL" | "OTHER";
+
+export interface Carrier {
+  code: CarrierCode;
+  name: string;
+  nameAr: string;
+  kind: "OWN_FLEET" | "HEAVY_TRUCKING" | "PARCEL";
+  enabled: boolean;
+  supportsTracking: boolean;
+  maxWeightKg: number | null;
+}
+
+export interface DeliveryQuote {
+  carrier: CarrierCode;
+  carrierName: string;
+  service: string; // e.g. "Flatbed trailer", "Same-day parcel"
+  zone: "SAME_CITY" | "SAME_REGION" | "NATIONAL";
+  weightKg: number;
+  volumeM3: number;
+  price: number; // SAR excl. VAT
+  etaDays: number;
+  notes?: string | null;
+}
+
+export interface ShipmentEvent {
+  id: string;
+  status: ShipmentStatus;
+  description?: string | null;
+  location?: string | null;
+  createdAt: string;
+}
+
+export interface Shipment {
+  id: string;
+  orderId: string;
+  carrier: CarrierCode;
+  carrierName: string;
+  service?: string | null;
+  trackingNumber?: string | null;
+  trackingUrl?: string | null;
+  status: ShipmentStatus;
+  cost: number | null;
+  weightKg: number | null;
+  volumeM3: number | null;
+  pickupBranchId?: string | null;
+  pickupBranch?: Branch | null;
+  driverName?: string | null;
+  driverPhone?: string | null;
+  vehicle?: string | null;
+  scheduledAt?: string | null;
+  deliveredAt?: string | null;
+  events: ShipmentEvent[];
+  createdAt: string;
+}
+
+export interface CreateShipmentPayload {
+  carrier: CarrierCode;
+  service?: string;
+  trackingNumber?: string;
+  trackingUrl?: string;
+  pickupBranchId?: string;
+  driverName?: string;
+  driverPhone?: string;
+  vehicle?: string;
+  scheduledAt?: string;
+  cost?: number;
+}
+
+export interface ShippingRate {
+  id: string;
+  carrier: CarrierCode;
+  zone: DeliveryQuote["zone"];
+  service: string;
+  baseFee: number; // SAR
+  perKg: number; // SAR per kg above includedKg
+  includedKg: number;
+  perM3: number;
+  minFee: number;
+  maxWeightKg: number | null;
+  etaDays: number;
+  enabled: boolean;
+}
+
+/** Material weight/volume so quotes can be computed (extends Material). */
+export interface MaterialLogistics {
+  weightKg?: number | null; // per unit
+  volumeM3?: number | null; // per unit
+  hazardous?: boolean;
+}
+
+export type EInvoiceStatus = "GENERATED" | "REPORTED" | "CLEARED" | "REJECTED" | "PENDING_CONFIG";
+export interface EInvoiceRecord {
+  id: string;
+  orderId: string;
+  invoiceNumber: string;
+  uuid: string;
+  invoiceHash: string;
+  previousInvoiceHash: string;
+  counter: number;
+  status: EInvoiceStatus;
+  zatcaResponse?: unknown;
+  createdAt: string;
+}
+
+export interface ClientErrorReport {
+  message: string;
+  stack?: string;
+  url?: string;
+  userAgent?: string;
+  platform?: "web" | "ios" | "android";
+}

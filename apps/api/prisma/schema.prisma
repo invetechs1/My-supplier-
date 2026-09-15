@@ -94,6 +94,7 @@ model User {
   company       Company?       @relation(fields: [companyId], references: [id])
   companyRole   CompanyRole?
   lastLoginAt   DateTime?
+  phoneVerified Boolean        @default(false)
   rfqs          Rfq[]
   orders        Order[]
   notifications Notification[]
@@ -189,6 +190,9 @@ model Material {
   featured    Boolean        @default(false)
   source      MaterialSource @default(CURATED)
   popularity  Int            @default(0)
+  weightKg    Float?
+  volumeM3    Float?
+  hazardous   Boolean        @default(false)
   listings    PriceListing[]
   rfqItems    RfqItem[]
   history     PriceHistory[]
@@ -344,6 +348,8 @@ model Order {
   stockMoves      StockMovement[]
   payoutId        String?
   payout          Payout?        @relation(fields: [payoutId], references: [id])
+  shipments       Shipment[]
+  einvoice        EInvoiceRecord?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
@@ -661,6 +667,7 @@ model Branch {
   phone     String?
   isDefault Boolean        @default(false)
   listings  PriceListing[]
+  shipments Shipment[]
   createdAt DateTime       @default(now())
 
   @@index([companyId])
@@ -752,4 +759,127 @@ model PlatformSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+enum ShipmentStatus {
+  PENDING
+  BOOKED
+  PICKED_UP
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+enum CarrierCode {
+  SUPPLIER
+  TRUKKER
+  TRELLA
+  SMSA
+  ARAMEX
+  SPL
+  OTHER
+}
+
+enum ShippingZone {
+  SAME_CITY
+  SAME_REGION
+  NATIONAL
+}
+
+enum EInvoiceStatus {
+  GENERATED
+  REPORTED
+  CLEARED
+  REJECTED
+  PENDING_CONFIG
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  codeHash  String
+  purpose   String   @default("LOGIN")
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([phone, createdAt])
+}
+
+model Shipment {
+  id             String          @id @default(cuid())
+  orderId        String
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  carrier        CarrierCode     @default(SUPPLIER)
+  carrierName    String
+  service        String?
+  trackingNumber String?
+  trackingUrl    String?
+  status         ShipmentStatus  @default(PENDING)
+  cost           Decimal?        @db.Decimal(14, 2)
+  weightKg       Float?
+  volumeM3       Float?
+  pickupBranchId String?
+  pickupBranch   Branch?         @relation(fields: [pickupBranchId], references: [id], onDelete: SetNull)
+  driverName     String?
+  driverPhone    String?
+  vehicle        String?
+  scheduledAt    DateTime?
+  deliveredAt    DateTime?
+  externalId     String?
+  events         ShipmentEvent[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([orderId])
+  @@index([trackingNumber])
+}
+
+model ShipmentEvent {
+  id          String         @id @default(cuid())
+  shipmentId  String
+  shipment    Shipment       @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  status      ShipmentStatus
+  description String?
+  location    String?
+  createdAt   DateTime       @default(now())
+
+  @@index([shipmentId])
+}
+
+model ShippingRate {
+  id          String       @id @default(cuid())
+  carrier     CarrierCode
+  zone        ShippingZone
+  service     String
+  baseFee     Decimal      @db.Decimal(14, 2)
+  perKg       Decimal      @default(0) @db.Decimal(14, 4)
+  includedKg  Float        @default(0)
+  perM3       Decimal      @default(0) @db.Decimal(14, 2)
+  minFee      Decimal      @default(0) @db.Decimal(14, 2)
+  maxWeightKg Float?
+  etaDays     Int          @default(2)
+  enabled     Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+
+  @@index([carrier, zone])
+}
+
+model EInvoiceRecord {
+  id                  String         @id @default(cuid())
+  orderId             String         @unique
+  order               Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  invoiceNumber       String         @unique
+  uuid                String         @unique
+  invoiceHash         String
+  previousInvoiceHash String
+  counter             Int
+  xml                 String
+  status              EInvoiceStatus @default(GENERATED)
+  zatcaResponse       Json?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
 }

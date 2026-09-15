@@ -54,6 +54,12 @@ Then log in at `https://mysupplier.sa/admin`, create categories/materials or imp
 4. Apple Pay on web needs domain verification in the Moyasar dashboard (hosted file under `/.well-known/`
    — serve it from `apps/web/public/.well-known/`).
 
+## 4b. Phone OTP, carriers, monitoring, e-invoicing
+* **OTP login**: create a Unifonic account (unifonic.com), get an App SID and an approved sender ID → `UNIFONIC_APP_SID`, `UNIFONIC_SENDER_ID`. Until set, phone sign-in works only in development (code 123456).
+* **Carriers**: delivery quotes come from rate cards in `/admin/shipping` (seeded for supplier delivery, TruKKer, Trella, SMSA, Aramex). Suppliers book shipments manually with tracking numbers today; when you sign a carrier contract, put its API key in `.env` and adapt `services/carriers/index.ts` to that carrier's payload. Carrier tracking webhooks post to `/api/v1/shipping/webhooks/<carrier>` with header `x-webhook-secret: $CARRIER_WEBHOOK_SECRET`.
+* **Monitoring**: create a Sentry project → `SENTRY_DSN`. API 5xx errors and web/mobile client errors are captured. Add an uptime monitor on `/api/v1/health`.
+* **ZATCA phase 2**: every order has a UBL 2.1 e-invoice with hash chain at `/orders/:id/einvoice`. To report to Fatoora you need onboarding (CSR → CSID) and XAdES signing with your EGS certificate; then set `ZATCA_*`. Plan this with your accountant before your phase-2 wave date.
+
 ## 5. Email
 Set SMTP variables and restart. Send yourself a password-reset email from `/forgot-password` to verify.
 Add SPF/DKIM/DMARC records for the sending domain to avoid spam folders.
@@ -91,5 +97,9 @@ Store listing needs: privacy policy URL (`https://mysupplier.sa/privacy`), suppo
 - [ ] SMTP verified, SPF/DKIM set
 - [ ] Health monitor + alerting configured, backups verified by a test restore
 - [ ] Mobile builds submitted; deep link `mysupplier://payment` tested on a device
+- [ ] Unifonic sender ID approved and OTP tested on a real phone
+- [ ] Sentry DSN set; test error visible in Sentry
+- [ ] Shipping rate cards reviewed with your first carriers; `CARRIER_WEBHOOK_SECRET` set
+- [ ] Refund tested in Moyasar test mode
 - [ ] First 20 suppliers onboarded with price lists (bulk CSV in `/supplier/prices` or `/supplier/catalog`)
 - [ ] At least one external price feed registered in `/admin/feeds`

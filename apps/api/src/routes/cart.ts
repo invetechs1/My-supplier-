@@ -11,6 +11,8 @@ import { companyUserIds, notify } from "../services/notifications";
 import { DELIVERY_FEE_SAME_CITY, VAT_RATE, deliveryFee, isPurchasable, toOffer } from "../services/shop";
 import { round2 } from "../services/pricing";
 import { applyStockMovement, recordOrderEvent } from "../services/portal";
+import { carrierName, quoteForSupplier } from "../services/shipping";
+import type { CarrierCode } from "@prisma/client";
 
 const router = Router();
 router.use(["/cart", "/checkout"], requireAuth());
@@ -27,7 +29,21 @@ async function getOrCreateCart(userId: string): Promise<CartRow> {
   return prisma.cart.create({ data: { userId }, include: cartInclude });
 }
 
-function shapeCart(cart: CartRow, deliveryCity?: string) {
+/** Cheapest delivery quote per supplier for the cart contents (null when quoting is impossible). */
+async function quotesFor(cart: CartRow, deliveryCity?: string, carrierBySupplier: Record<string, CarrierCode> = {}) {
+  const out: Record<string, Awaited<ReturnType<typeof quoteForSupplier>>["quotes"][number] | null> = {};
+  if (!deliveryCity) return out;
+  const bySupplier = new Map<string, { materialId: string; quantity: number }[]>();
+  for (const ci of cart.items) if (ci.listing.companyId) bySupplier.set(ci.listing.companyId, [...(bySupplier.get(ci.listing.companyId) ?? []), { materialId: ci.listing.materialId, quantity: ci.quantity }]);
+  for (const [companyId, items] of bySupplier) {
+    const { quotes } = await quoteForSupplier(companyId, items, deliveryCity);
+    const wanted = carrierBySupplier[companyId];
+    out[companyId] = (wanted ? quotes.find((q) => q.carrier === wanted) : undefined) ?? quotes[0] ?? null;
+  }
+  return out;
+}
+
+async function shapeCart(cart: CartRow, deliveryCity?: string, carrierBySupplier: Record<string, CarrierCode> = {}) {
   const items = cart.items.map((ci) => {
     const offer = toOffer(ci.listing);
     return { id: ci.id, listingId: ci.listingId, quantity: ci.quantity, offer, material: ci.listing.material, lineTotal: round2(offer.price * ci.quantity) };
@@ -35,9 +51,10 @@ function shapeCart(cart: CartRow, deliveryCity?: string) {
   const subtotal = round2(items.reduce((s, i) => s + i.lineTotal, 0));
   const supplierCities = new Map<string, string>();
   for (const i of items) if (i.offer.companyId) supplierCities.set(i.offer.companyId, i.offer.city);
-  const fee = [...supplierCities.values()].reduce((s, c) => s + (deliveryCity ? deliveryFee(c, deliveryCity) : DELIVERY_FEE_SAME_CITY), 0);
+  const quotes = await quotesFor(cart, deliveryCity, carrierBySupplier);
+  const fee = [...supplierCities.entries()].reduce((s, [companyId, c]) => s + (quotes[companyId]?.price ?? (deliveryCity ? deliveryFee(c, deliveryCity) : DELIVERY_FEE_SAME_CITY)), 0);
   const vat = round2(subtotal * VAT_RATE);
-  return { id: cart.id, items, subtotal, vat, deliveryFee: fee, total: round2(subtotal + vat + fee), supplierCount: supplierCities.size, currency: "SAR" };
+  return { id: cart.id, items, subtotal, vat, deliveryFee: round2(fee), total: round2(subtotal + vat + fee), supplierCount: supplierCities.size, currency: "SAR", quotes };
 }
 
 async function validatedListing(listingId: string, quantity: number) {
@@ -52,7 +69,7 @@ async function validatedListing(listingId: string, quantity: number) {
 
 router.get("/cart", asyncHandler(async (req, res) => {
   const cart = await getOrCreateCart(req.user!.id);
-  res.json(serialize(shapeCart(cart, typeof req.query.deliveryCity === "string" ? req.query.deliveryCity : undefined)));
+  res.json(serialize(await shapeCart(cart, typeof req.query.deliveryCity === "string" ? req.query.deliveryCity : undefined)));
 }));
 
 router.post("/cart/items", asyncHandler(async (req, res) => {
@@ -63,7 +80,7 @@ router.post("/cart/items", asyncHandler(async (req, res) => {
   await validatedListing(listingId, newQty);
   if (existing) await prisma.cartItem.update({ where: { id: existing.id }, data: { quantity: newQty } });
   else await prisma.cartItem.create({ data: { cartId: cart.id, listingId, quantity } });
-  res.status(201).json(serialize(shapeCart(await getOrCreateCart(req.user!.id))));
+  res.status(201).json(serialize(await shapeCart(await getOrCreateCart(req.user!.id))));
 }));
 
 router.patch("/cart/items/:id", asyncHandler(async (req, res) => {
@@ -73,20 +90,20 @@ router.patch("/cart/items/:id", asyncHandler(async (req, res) => {
   if (!item) throw notFound("Cart item not found");
   await validatedListing(item.listingId, quantity);
   await prisma.cartItem.update({ where: { id: item.id }, data: { quantity } });
-  res.json(serialize(shapeCart(await getOrCreateCart(req.user!.id))));
+  res.json(serialize(await shapeCart(await getOrCreateCart(req.user!.id))));
 }));
 
 router.delete("/cart/items/:id", asyncHandler(async (req, res) => {
   const cart = await getOrCreateCart(req.user!.id);
   if (!cart.items.some((i) => i.id === req.params.id)) throw notFound("Cart item not found");
   await prisma.cartItem.delete({ where: { id: req.params.id } });
-  res.json(serialize(shapeCart(await getOrCreateCart(req.user!.id))));
+  res.json(serialize(await shapeCart(await getOrCreateCart(req.user!.id))));
 }));
 
 router.delete("/cart", asyncHandler(async (req, res) => {
   const cart = await getOrCreateCart(req.user!.id);
   await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
-  res.json(serialize(shapeCart(await getOrCreateCart(req.user!.id))));
+  res.json(serialize(await shapeCart(await getOrCreateCart(req.user!.id))));
 }));
 
 const checkoutSchema = z.object({
@@ -95,6 +112,7 @@ const checkoutSchema = z.object({
   contactPhone: z.string().min(7),
   paymentMethod: z.enum(["COD", "BANK_TRANSFER", "CARD"]),
   notes: z.string().optional(),
+  carrierBySupplier: z.record(z.enum(["SUPPLIER", "TRUKKER", "TRELLA", "SMSA", "ARAMEX", "SPL", "OTHER"])).optional(),
 });
 
 const orderInclude = { company: true, items: { include: { material: true } } } satisfies Prisma.OrderInclude;
@@ -115,12 +133,14 @@ router.post("/checkout", asyncHandler(async (req, res) => {
     bySupplier.set(key, [...(bySupplier.get(key) ?? []), item]);
   }
 
+  const quotes = await quotesFor(cart, body.deliveryCity, body.carrierBySupplier ?? {});
   const orders = [];
   for (const [companyId, items] of bySupplier) {
     const reference = await nextReference("ORD");
     const subtotal = round2(items.reduce((s, i) => s + Number(i.listing.price) * i.quantity, 0));
     const vat = round2(subtotal * VAT_RATE);
-    const fee = deliveryFee(items[0].listing.city, body.deliveryCity);
+    const quote = quotes[companyId] ?? null;
+    const fee = quote?.price ?? deliveryFee(items[0].listing.city, body.deliveryCity);
     const total = round2(subtotal + vat + fee);
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
@@ -142,6 +162,7 @@ router.post("/checkout", asyncHandler(async (req, res) => {
         await tx.material.update({ where: { id: i.listing.materialId }, data: { popularity: { increment: 5 } } });
       }
       await tx.orderEvent.create({ data: { orderId: created.id, type: "CREATED", status: "PENDING", message: `Order placed · ${body.paymentMethod.replace("_", " ").toLowerCase()}`, userId } });
+      await tx.shipment.create({ data: { orderId: created.id, carrier: quote?.carrier ?? "SUPPLIER", carrierName: carrierName(quote?.carrier ?? "SUPPLIER"), service: quote?.service, cost: fee, weightKg: quote?.weightKg, volumeM3: quote?.volumeM3, status: "PENDING", events: { create: { status: "PENDING", description: quote ? `${quote.carrierName} · ${quote.service} · ETA ${quote.etaDays} day(s)` : "Awaiting supplier booking" } } } });
       return created;
     });
     orders.push(order);

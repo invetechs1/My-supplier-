@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 import { PrismaClient, Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { DEFAULT_RATES } from "../src/services/shipping";
 
 const prisma = new PrismaClient();
 
@@ -227,6 +228,11 @@ async function main() {
   await prisma.companyDocument.deleteMany();
   await prisma.branch.deleteMany();
   await prisma.platformSetting.deleteMany();
+  await prisma.shipmentEvent.deleteMany();
+  await prisma.shipment.deleteMany();
+  await prisma.shippingRate.deleteMany();
+  await prisma.eInvoiceRecord.deleteMany();
+  await prisma.otpCode.deleteMany();
   await prisma.priceImportRow.deleteMany();
   await prisma.priceImport.deleteMany();
   await prisma.priceUpdateRequest.deleteMany();
@@ -406,6 +412,10 @@ async function main() {
   await prisma.feed.create({ data: { name: "Example JSON feed (edit URL)", url: "https://example.com/construction-prices.json", format: "json", enabled: false, lastStatus: "never run" } });
   // (counters are written at the end, after every seeded reference)
   await prisma.platformSetting.createMany({ data: [{ key: "commissionPct", value: 3 }, { key: "payoutDayOfWeek", value: 1 }, { key: "lowStockThresholdDefault", value: 10 }] });
+  await prisma.shippingRate.createMany({ data: DEFAULT_RATES });
+  // Logistics data for quoting (kg / m³ per unit) on the heaviest categories.
+  const weights: Record<string, [number, number]> = { "CEM-OPC-50": [50, 0.035], "CEM-SRC-50": [50, 0.035], "CEM-WHT-50": [50, 0.035], "BLK-HOL-20": [18, 0.016], "BLK-HOL-15": [14, 0.012], "BLK-SOL-10": [12, 0.008], "BRK-RED": [3, 0.0015], "TIL-POR-60": [22, 0.012], "GYP-BRD-12": [28, 0.036], "PLY-18": [32, 0.054], "PPE-HLM": [0.4, 0.006], "HV-SPL-24": [60, 0.3], "SN-WH-50": [22, 0.12], "WTR-TNK-2000": [60, 2.2] };
+  for (const [sku, [kg, m3]] of Object.entries(weights)) await prisma.material.updateMany({ where: { sku }, data: { weightKg: kg, volumeM3: m3 } });
   // A delivered, paid direct order from the demo supplier with a review, messages and a timeline.
   const helmet = byPk("PPE-HLM");
   const helmetListing = await prisma.priceListing.findFirst({ where: { materialId: helmet.id, companyId: demoSupplier.id } });
