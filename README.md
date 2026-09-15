@@ -84,6 +84,7 @@ pnpm --filter @mysupplier/api test        # unit tests (pricing engine)
 pnpm --filter @mysupplier/api typecheck
 pnpm --filter @mysupplier/web typecheck && pnpm --filter @mysupplier/web build
 pnpm --filter @mysupplier/mobile typecheck
+pnpm --filter @mysupplier/web e2e        # browser smoke test against a running, seeded API + web (CI runs it too)
 ```
 CI (`.github/workflows/ci.yml`) runs migrations + seed against a real Postgres, then builds all apps.
 
