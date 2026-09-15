@@ -40,3 +40,6 @@ PID=$(curl -s "$B/shop/products?q=helmet" | j "d['data'][0]['id']"); LID=$(curl 
 echo "--- cart + checkout"; curl -s -X POST $B/cart/items -H "authorization: Bearer $BT" -H 'content-type: application/json' -d "{\"listingId\":\"$LID\",\"quantity\":200}" | j "d['total'] > 0"
 curl -s -X POST $B/checkout -H "authorization: Bearer $BT" -H 'content-type: application/json' -d '{"deliveryCity":"Riyadh","deliveryAddress":"Smoke street 1","contactPhone":"+966500000000","paymentMethod":"COD"}' | j "[(o['type'], o['paymentStatus']) for o in d['orders']]"
 echo "SHOP OK"
+echo "--- ai import (heuristic or AI)"; IMP=$(curl -s -X POST $B/imports -H "authorization: Bearer $ST" -F "text=Rebar 16mm Grade 60, ton, 2600" -F "city=Riyadh" -F "kind=SUPPLIER_PRICE_LIST"); echo "$IMP" | j "d['status'], d['extractedCount'], d['rows'][0]['material']['sku']"
+IID=$(echo "$IMP" | j "d['id']"); curl -s -X POST $B/imports/$IID/publish -H "authorization: Bearer $ST" -H 'content-type: application/json' -d '{"includeSuggested":true}' | j "d['published']"
+echo "IMPORT OK"
