@@ -30,6 +30,8 @@ export interface User {
   locale: "en" | "ar";
   companyId?: string | null;
   company?: Company | null;
+  companyRole?: CompanyRole | null;
+  phoneVerified?: boolean;
   createdAt: string;
 }
 
@@ -452,6 +454,8 @@ export interface Cart {
   total: number;
   supplierCount: number;
   currency: string;
+  /** Cheapest (or chosen) delivery quote per supplier id; present when a delivery city is known. */
+  quotes?: Record<string, DeliveryQuote | null>;
 }
 
 export interface OrderItem {
@@ -488,6 +492,8 @@ export interface CheckoutPayload {
   contactPhone: string;
   paymentMethod: PaymentMethod;
   notes?: string;
+  /** Carrier chosen per supplier id (from /shipping/quote); defaults to the cheapest quote. */
+  carrierBySupplier?: Record<string, CarrierCode>;
 }
 
 export interface CheckoutResult {
