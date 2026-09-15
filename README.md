@@ -21,6 +21,12 @@ Docs: [API contract](docs/API.md) · [Architecture](docs/ARCHITECTURE.md) · [Ro
   (15%) and delivery fees, split checkout that creates one order per supplier, payment method
   (cash on delivery, bank transfer, card placeholder) and order tracking. Reference prices from
   market sources are shown next to real offers but are not purchasable.
+* **AI price collection** – suppliers upload a price list as PDF, Excel, photo or pasted text;
+  contractors upload quotations they received; admins point a feed at a supplier web page.
+  Claude reads the document, every line is matched to the catalogue with a confidence score and
+  alternatives, and a review queue lets the uploader fix matches before publishing. Published
+  quotations appear as "quoted" prices next to supplier offers. Suppliers with stale prices get a
+  weekly email or WhatsApp link to update prices in two minutes without logging in.
 * **Catalogue growth engine** – suppliers add their own products and stock ("Sell on
   MySupplier", single form or CSV), and admins register external feeds (JSON or CSV URLs) that
   are imported daily, so the catalogue keeps collecting construction products from every source.

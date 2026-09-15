@@ -1,6 +1,8 @@
 import { Prisma, type MaterialSource } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { snapshotHistory } from "./catalog";
+import { stripHtml } from "./ai";
+import { createImport, publishImport } from "./imports";
 
 export interface ImportRow {
   sku?: string;
@@ -127,10 +129,32 @@ export function parseCsvRows(text: string): ImportRow[] {
   });
 }
 
-/** Fetches a feed URL (JSON array or CSV) and imports it as MARKET listings + FEED materials. */
-export async function runFeed(feedId: string): Promise<ImportResult> {
+export interface FeedRunResult extends ImportResult {
+  importId?: string;
+  extracted?: number;
+  published?: number;
+}
+
+/**
+ * Fetches a feed URL and imports it. JSON/CSV feeds map directly to listings; HTML pages are
+ * read by the AI extractor into a PriceImport (review queue, or auto-published).
+ */
+export async function runFeed(feedId: string, runById?: string): Promise<FeedRunResult> {
   const feed = await prisma.feed.findUniqueOrThrow({ where: { id: feedId } });
   try {
+    if (feed.format === "html") {
+      const resp = await fetch(feed.url, { headers: { accept: "text/html,*/*;q=0.5", "user-agent": "MySupplierBot/1.0 (+price index)" }, signal: AbortSignal.timeout(30_000) });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const text = stripHtml(await resp.text());
+      const admin = runById ?? (await prisma.user.findFirst({ where: { role: "ADMIN" }, select: { id: true } }))?.id;
+      if (!admin) throw new Error("No admin user to own the import");
+      const imp = await createImport({ kind: "WEB_PAGE", uploadedById: admin, companyId: feed.companyId, sourceName: feed.name, city: feed.city ?? undefined, feedId: feed.id, input: { text } });
+      if (imp.status === "FAILED") throw new Error(imp.error ?? "extraction failed");
+      let published = 0;
+      if (feed.autoPublish) published = (await publishImport(imp.id, { includeSuggested: true, minConfidence: 0.8 })).published;
+      await prisma.feed.update({ where: { id: feed.id }, data: { lastRunAt: new Date(), lastStatus: feed.autoPublish ? `ok, ${published} published` : `ok, ${imp.extractedCount} rows awaiting review`, lastItemCount: imp.extractedCount } });
+      return { created: 0, updated: 0, listings: published, errors: [], importId: imp.id, extracted: imp.extractedCount, published };
+    }
     const resp = await fetch(feed.url, { headers: { accept: "application/json, text/csv;q=0.9, */*;q=0.5" }, signal: AbortSignal.timeout(30_000) });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const text = await resp.text();

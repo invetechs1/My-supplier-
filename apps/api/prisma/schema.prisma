@@ -24,6 +24,7 @@ enum PriceSource {
   SUPPLIER
   MARKET
   IMPORTED
+  QUOTATION
 }
 
 enum RfqStatus {
@@ -97,6 +98,7 @@ model User {
   cart          Cart?
   devices       Device[]
   resetTokens   PasswordResetToken[]
+  imports       PriceImport[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -119,6 +121,8 @@ model Company {
   listings    PriceListing[]
   bids        Bid[]
   orders      Order[]
+  imports     PriceImport[]
+  updateRequests PriceUpdateRequest[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
@@ -160,6 +164,7 @@ model Material {
   rfqItems    RfqItem[]
   history     PriceHistory[]
   orderItems  OrderItem[]
+  importRows  PriceImportRow[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
@@ -349,6 +354,9 @@ model Feed {
   name          String    @unique
   url           String
   format        String    @default("json")
+  companyId     String?
+  city          String?
+  autoPublish   Boolean   @default(false)
   enabled       Boolean   @default(true)
   lastRunAt     DateTime?
   lastStatus    String?
@@ -424,4 +432,100 @@ model PasswordResetToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime @default(now())
+}
+
+enum ImportKind {
+  SUPPLIER_PRICE_LIST
+  BUYER_QUOTATION
+  WEB_PAGE
+  TEXT
+}
+
+enum ImportStatus {
+  PROCESSING
+  REVIEW
+  PUBLISHED
+  FAILED
+  REJECTED
+}
+
+enum ImportRowStatus {
+  SUGGESTED
+  APPROVED
+  REJECTED
+  PUBLISHED
+}
+
+enum OutreachChannel {
+  EMAIL
+  WHATSAPP
+  LINK
+}
+
+model PriceImport {
+  id             String           @id @default(cuid())
+  kind           ImportKind
+  status         ImportStatus     @default(PROCESSING)
+  sourceName     String
+  supplierName   String?
+  companyId      String?
+  company        Company?         @relation(fields: [companyId], references: [id])
+  uploadedById   String
+  uploadedBy     User             @relation(fields: [uploadedById], references: [id])
+  fileName       String?
+  mimeType       String?
+  city           String?
+  quotationDate  DateTime?
+  aiUsed         Boolean          @default(false)
+  model          String?
+  extractedCount Int              @default(0)
+  publishedCount Int              @default(0)
+  error          String?
+  rawText        String?
+  feedId         String?
+  rows           PriceImportRow[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([uploadedById])
+  @@index([status, kind])
+}
+
+model PriceImportRow {
+  id             String          @id @default(cuid())
+  importId       String
+  import         PriceImport     @relation(fields: [importId], references: [id], onDelete: Cascade)
+  rawName        String
+  rawUnit        String?
+  rawPrice       String?
+  rawCity        String?
+  brand          String?
+  notes          String?
+  price          Decimal?        @db.Decimal(14, 2)
+  unit           String
+  city           String?
+  materialId     String?
+  material       Material?       @relation(fields: [materialId], references: [id])
+  confidence     Float           @default(0)
+  alternatives   Json?
+  status         ImportRowStatus @default(SUGGESTED)
+  createMaterial Boolean         @default(false)
+  position       Int             @default(0)
+
+  @@index([importId])
+}
+
+model PriceUpdateRequest {
+  id          String          @id @default(cuid())
+  companyId   String
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tokenHash   String          @unique
+  channel     OutreachChannel @default(LINK)
+  createdById String?
+  sentAt      DateTime        @default(now())
+  expiresAt   DateTime
+  completedAt DateTime?
+  updatedRows Int             @default(0)
+
+  @@index([companyId])
 }

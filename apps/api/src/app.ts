@@ -20,6 +20,8 @@ import feedRoutes from "./routes/feeds";
 import paymentRoutes from "./routes/payments";
 import deviceRoutes from "./routes/devices";
 import invoiceRoutes from "./routes/invoice";
+import importRoutes from "./routes/imports";
+import outreachRoutes from "./routes/outreach";
 
 export function createApp() {
   const app = express();
@@ -45,6 +47,8 @@ export function createApp() {
   api.use(paymentRoutes);
   api.use(deviceRoutes);
   api.use(invoiceRoutes);
+  api.use(importRoutes);
+  api.use(outreachRoutes);
   api.use("/auth", authRoutes);
   api.use(rfqRoutes);
   api.use(supplierPriceRoutes);

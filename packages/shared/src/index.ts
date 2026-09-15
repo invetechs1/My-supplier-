@@ -581,3 +581,101 @@ export interface HealthStatus {
   version: string;
   uptimeSeconds: number;
 }
+
+// AI price collection -------------------------------------------------------------
+// Sources: supplier price lists (PDF/Excel/image/text), quotations received by buyers,
+// supplier web pages (scraped + AI-normalised), and supplier self-updates via magic links.
+
+export type ImportKind = "SUPPLIER_PRICE_LIST" | "BUYER_QUOTATION" | "WEB_PAGE" | "TEXT";
+export type ImportStatus = "PROCESSING" | "REVIEW" | "PUBLISHED" | "FAILED" | "REJECTED";
+export type ImportRowStatus = "SUGGESTED" | "APPROVED" | "REJECTED" | "PUBLISHED";
+export type OutreachChannel = "EMAIL" | "WHATSAPP" | "LINK";
+
+export interface AiConfig {
+  enabled: boolean; // false when no ANTHROPIC_API_KEY: text/CSV/Excel still work via heuristics, PDFs/images need AI
+  model: string | null;
+  maxFileMb: number;
+  acceptedTypes: string[]; // mime types
+}
+
+export interface PriceImportRow {
+  id: string;
+  importId: string;
+  rawName: string;
+  rawUnit?: string | null;
+  rawPrice?: string | null;
+  rawCity?: string | null;
+  brand?: string | null;
+  notes?: string | null;
+  price: number | null; // SAR, normalised
+  unit: string;
+  city: string | null;
+  materialId: string | null;
+  material?: Material | null;
+  confidence: number; // 0..1 match confidence
+  alternatives: Array<{ material: Material; confidence: number }>;
+  status: ImportRowStatus;
+  createMaterial: boolean; // when no match: create a new catalogue item from this row on publish
+}
+
+export interface PriceImport {
+  id: string;
+  kind: ImportKind;
+  status: ImportStatus;
+  sourceName: string; // e.g. supplier name, feed name, "Quotation – Al Rajhi BM"
+  supplierName?: string | null; // for quotations: who issued it
+  companyId?: string | null; // supplier company the prices belong to (when known)
+  company?: Company | null;
+  uploadedById: string;
+  uploadedBy?: Pick<User, "id" | "name" | "role"> | null;
+  fileName?: string | null;
+  mimeType?: string | null;
+  city?: string | null;
+  quotationDate?: string | null;
+  aiUsed: boolean;
+  model?: string | null;
+  extractedCount: number;
+  publishedCount: number;
+  error?: string | null;
+  rows?: PriceImportRow[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublishImportResult {
+  published: number;
+  skipped: number;
+  createdMaterials: number;
+  import: PriceImport;
+}
+
+export interface OutreachSupplier {
+  company: Company;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  listingCount: number;
+  lastPriceUpdate: string | null;
+  staleDays: number | null;
+  pendingRequest: { id: string; channel: OutreachChannel; sentAt: string; expiresAt: string } | null;
+}
+
+export interface OutreachRequestResult {
+  companyId: string;
+  companyName: string;
+  link: string; // public magic link WEB_URL/update-prices/<token>
+  whatsappUrl: string | null; // https://wa.me/<phone>?text=…
+  emailed: boolean;
+}
+
+export interface PriceUpdateRequestInfo {
+  company: Pick<Company, "id" | "name" | "nameAr" | "city" | "verified">;
+  expiresAt: string;
+  completedAt: string | null;
+  listings: Array<PriceListing & { material: Material }>;
+}
+
+export interface PriceUpdateSubmission {
+  items: Array<{ listingId: string; price: number; stock?: number | null; leadTimeDays?: number }>;
+  newItems?: SupplierCatalogItem[];
+  contactName?: string;
+}

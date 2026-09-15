@@ -20,13 +20,13 @@ const rowSchema = z.object({
 router.get("/admin/feeds", asyncHandler(async (_req, res) => res.json(serialize(await prisma.feed.findMany({ orderBy: { createdAt: "desc" } })))));
 
 router.post("/admin/feeds", asyncHandler(async (req, res) => {
-  const data = z.object({ name: z.string().min(2), url: z.string().url(), format: z.enum(["json", "csv"]).default("json"), enabled: z.boolean().default(true) }).parse(req.body);
+  const data = z.object({ name: z.string().min(2), url: z.string().url(), format: z.enum(["json", "csv", "html"]).default("json"), enabled: z.boolean().default(true), companyId: z.string().nullable().optional(), city: z.string().nullable().optional(), autoPublish: z.boolean().default(false) }).parse(req.body);
   res.status(201).json(serialize(await prisma.feed.create({ data })));
 }));
 
 router.post("/admin/feeds/:id/run", asyncHandler(async (req, res) => {
   try {
-    res.json(await runFeed(req.params.id));
+    res.json(await runFeed(req.params.id, req.user!.id));
   } catch (e) {
     throw new HttpError(502, `Feed run failed: ${(e as Error).message}`);
   }

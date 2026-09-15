@@ -80,6 +80,33 @@ Orders (`/orders`) now return `OrderExtended` (with `type`, `items`, `subtotal`,
 | GET | `/health` | `HealthStatus` (checks the database; returns 503 when down) |
 | GET | `/sitemap.xml` | product + category URLs for the web app |
 
+## AI price collection
+Prices enter the platform four ways: supplier self-service, AI-read documents, AI-read web pages (feeds with `format: "html"`), and magic-link updates. All AI imports land in a **review queue** before publishing.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/ai/config` | `AiConfig` |
+| POST | `/imports` | auth BUYER/SUPPLIER/ADMIN. `multipart/form-data`: `file` (pdf, xlsx, xls, csv, png, jpg, webp; ≤15 MB) **or** `text`; fields `kind` (SUPPLIER_PRICE_LIST for suppliers, BUYER_QUOTATION for buyers, TEXT), `city?`, `sourceName?`, `supplierName?` (quotations), `quotationDate?`. Processes synchronously (10–60 s) and returns `PriceImport` with `rows` (matched to the catalogue with confidence + alternatives), status `REVIEW` |
+| GET | `/imports?status=&kind=&page=` | `Paginated<PriceImport>` (mine; admin sees all) |
+| GET | `/imports/:id` | `PriceImport` with `rows` |
+| PATCH | `/imports/:id/rows/:rowId` | `{ materialId?, price?, unit?, city?, status?, createMaterial? }` -> `PriceImportRow` (setting `materialId` recomputes confidence to 1) |
+| POST | `/imports/:id/approve-all` | `{ minConfidence?: 0.8 }` -> `PriceImport` (SUGGESTED rows with confidence ≥ min become APPROVED) |
+| POST | `/imports/:id/publish` | `{ includeSuggested?: boolean, minConfidence?: 0.8 }` -> `PublishImportResult`. Supplier imports create/update the supplier's SUPPLIER listings; buyer quotations create `QUOTATION` listings attributed to the quoting supplier (matched by name, else `sourceName`); admin/web imports create MARKET listings. Rows with `createMaterial` and no match create new catalogue items |
+| POST | `/imports/:id/reject` | -> `PriceImport` |
+| GET | `/materials?q=` | (existing) use for the "change match" search box |
+
+`PriceSource` now includes `QUOTATION` (a price a buyer actually received). Material pages and BOQ research show it with a "quoted" badge.
+
+### Web-page feeds (AI scraping)
+`POST /admin/feeds` accepts `format: "html"` plus optional `companyId`, `city`, `autoPublish`. Running such a feed fetches the page, extracts prices with AI and creates a `PriceImport` (kind WEB_PAGE) in REVIEW — or publishes directly when `autoPublish` is true. `POST /admin/feeds/:id/run` then returns `{ importId, extracted, published }`. `Feed` gains `format: "json" | "csv" | "html"`, `companyId?`, `city?`, `autoPublish`.
+
+### Supplier outreach & magic-link price updates
+| GET | `/admin/outreach?staleDays=14&q=` | `OutreachSupplier[]` sorted by staleness |
+| POST | `/admin/outreach/requests` | `{ companyIds: string[], channel: "EMAIL"|"WHATSAPP"|"LINK", message? }` -> `OutreachRequestResult[]` (EMAIL sends the link; WHATSAPP returns a wa.me URL to open; LINK just returns the link). Links expire in 14 days |
+| GET | `/price-update/:token` | public -> `PriceUpdateRequestInfo` (supplier's current listings) |
+| POST | `/price-update/:token` | public -> `PriceUpdateSubmission` -> `{ updated, added, completedAt }` |
+A weekly job emails suppliers whose prices are older than `OUTREACH_STALE_DAYS` (default 14) when `OUTREACH_AUTO=true`.
+
 ## Auth
 | POST | `/auth/register` | body `RegisterPayload` -> `AuthResponse` (SUPPLIER must include `company`) |
 | POST | `/auth/login` | body `LoginPayload` -> `AuthResponse` |

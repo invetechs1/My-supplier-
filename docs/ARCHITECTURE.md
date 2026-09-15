@@ -80,6 +80,31 @@
 * Scrapers or partner ETL jobs can call the same endpoints, so onboarding a new price source is
   configuration, not code.
 
+## AI price collection (`services/ai.ts`, `services/imports.ts`, `routes/imports.ts`, `routes/outreach.ts`)
+```
+PDF / Excel / photo / text ──┐
+quotation from a buyer ──────┼──► extractPrices ──► matchLine (catalogue) ──► PriceImport + rows (REVIEW)
+supplier web page (feed) ────┘        │                                            │
+                                      │ Claude structured output                    ▼ uploader / admin reviews
+                                      │ (heuristic parser when no API key)   approve · change match · edit price
+                                                                                    │
+                                                                                    ▼ publish
+                                        SUPPLIER listing (own price list) · QUOTATION listing (buyer quotation)
+                                        MARKET listing (web page / admin) · new Material when unmatched
+```
+* `extractWithAi` sends the document to Claude (`claude-opus-5`, structured output with a strict JSON
+  schema validated again with zod). PDFs and images go as native document/image blocks; spreadsheets
+  are converted to CSV text first. Prices shown incl. VAT are normalised to excl. VAT.
+* Without `ANTHROPIC_API_KEY` the heuristic parser handles text/CSV/Excel (last numeric cell = price,
+  unit-word cell = unit, extra numeric cells = quantity); PDFs and photos return a clear error.
+* Each row gets `materialId` + `confidence` (0–1) + up to 3 alternatives from the BOQ matcher; rows
+  under 0.5 are flagged `createMaterial` so publishing can create a new catalogue item.
+* Attribution: supplier imports → the supplier's SUPPLIER listings; buyer quotations → `QUOTATION`
+  listings attributed to the quoting company (matched by name); web pages / admin → MARKET listings.
+* Outreach: `GET /admin/outreach` ranks suppliers by price staleness; requests create single-use
+  14-day magic links (`/update-prices/<token>`) delivered by email, WhatsApp (wa.me link) or copy.
+  A weekly job (`OUTREACH_AUTO=true`) emails stale suppliers automatically.
+
 ## Bidding flow
 `Buyer creates RFQ` → suppliers in the delivery city or that stock the requested materials are
 notified → suppliers bid per line item → buyer sees ranked bids → `accept` (transaction: bid
