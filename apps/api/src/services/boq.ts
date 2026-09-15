@@ -32,12 +32,12 @@ const UNIT_ALIASES: Record<string, string> = {
   tons: "ton", tonne: "ton", tonnes: "ton", t: "ton", طن: "ton",
   kgs: "kg", kilogram: "kg", كجم: "kg", كغ: "kg",
   bags: "bag", كيس: "bag", شيكارة: "bag", شكارة: "bag",
-  "m³": "m3", cum: "m3", cbm: "m3", "cu.m": "m3", "m^3": "m3", م3: "m3", "متر مكعب": "m3",
-  "m²": "m2", sqm: "m2", "sq.m": "m2", "m^2": "m2", م2: "m2", "متر مربع": "m2",
+  "m³": "m3", cum: "m3", cbm: "m3", "cu.m": "m3", "m^3": "m3", م3: "m3", "م³": "m3", "متر مكعب": "m3", "م.م": "m3",
+  "m²": "m2", sqm: "m2", "sq.m": "m2", "m^2": "m2", م2: "m2", "م²": "m2", "متر مربع": "m2",
   lm: "m", rm: "m", mtr: "m", meter: "m", metre: "m", متر: "m",
   pcs: "piece", pc: "piece", nos: "piece", no: "piece", each: "piece", ea: "piece", unit: "piece", قطعة: "piece", عدد: "piece", حبة: "piece",
-  pallets: "pallet", rolls: "roll", lfl: "roll", litres: "litre", liter: "litre", l: "litre", ltr: "litre", لتر: "litre",
-  drums: "drum", sheets: "sheet", sht: "sheet", لوح: "sheet", bundles: "bundle",
+  pallets: "pallet", طبلية: "pallet", rolls: "roll", lfl: "roll", لفة: "roll", لفه: "roll", لفات: "roll", litres: "litre", liter: "litre", l: "litre", ltr: "litre", لتر: "litre",
+  drums: "drum", برميل: "drum", sheets: "sheet", sht: "sheet", لوح: "sheet", الواح: "sheet", bundles: "bundle", ربطة: "bundle", ربطه: "bundle",
 };
 
 const KNOWN_UNITS = new Set(["ton", "kg", "bag", "m3", "m2", "m", "piece", "pallet", "roll", "litre", "drum", "sheet", "bundle"]);
@@ -85,25 +85,38 @@ function normaliseArabic(s: string): string {
     .replace(/ة/g, "ه");
 }
 
-export function tokenize(text: string): { words: string[]; numbers: string[] } {
+const SIZE_SUFFIXES = new Set(["mm", "cm", "m", "kg", "g", "kn", "mpa", "w", "kw", "btu", "l", "ltr", "inch", "in", "mm2", "mm²", "m2", "m²", "m3", "m³", "v", "a", "ah", "مم", "سم", "م", "كجم", "كغ", "بوصة", "لتر", "واط", "أمبير", "فولت"]);
+
+export function tokenize(text: string): { words: string[]; numbers: string[]; sized: string[] } {
   const clean = normaliseArabic(text.toLowerCase())
     .replace(/["“”'’]/g, " inch ")
     .replace(/[×xX]/g, " x ")
     .replace(/[^\p{L}\p{N}./-]+/gu, " ");
   const numbers = new Set<string>();
+  const sized = new Set<string>(); // numbers that carry a size unit (16mm, 50kg, C30) rather than a bare designation (Type 1)
   const words: string[] = [];
-  for (const raw of clean.split(/\s+/)) {
-    if (!raw) continue;
+  const raws = clean.split(/\s+/).filter(Boolean);
+  for (let i = 0; i < raws.length; i++) {
+    const raw = raws[i];
     // 16mm, 20cm, 50kg, c30, 3/4, 60x60, 2.5mm2
-    const m = raw.match(/^(\d+(?:[./]\d+)?)([a-z؀-ۿ²³]*)$/u);
+    const m = raw.match(/^(\d+(?:[./]\d+)?)([a-z\u0600-\u06FF²³]*)$/u);
     if (m) {
       numbers.add(m[1]);
-      if (m[2]) words.push(m[2]);
+      const next = raws[i + 1];
+      if (m[2]) {
+        words.push(m[2]);
+        if (SIZE_SUFFIXES.has(m[2]) || m[1].includes("/") || m[1].includes(".")) sized.add(m[1]);
+      } else if (next && SIZE_SUFFIXES.has(next)) {
+        sized.add(m[1]);
+      } else if (m[1].includes("/") || m[1].includes(".")) {
+        sized.add(m[1]);
+      }
       continue;
     }
-    const grade = raw.match(/^([a-z])(\d+)$/); // c30, b500
+    const grade = raw.match(/^([a-z])(\d+)$/); // c30, b500, a142
     if (grade) {
       numbers.add(grade[2]);
+      sized.add(grade[2]);
       words.push(grade[1] === "c" ? "concrete" : grade[1]);
       continue;
     }
@@ -111,15 +124,19 @@ export function tokenize(text: string): { words: string[]; numbers: string[] } {
     const syn = SYNONYMS[raw] ?? SYNONYMS[normaliseArabic(raw)];
     words.push(syn ?? raw.replace(/s$/, ""));
   }
-  return { words: [...new Set(words)], numbers: [...numbers] };
+  return { words: [...new Set(words)], numbers: [...numbers], sized: [...sized] };
 }
 
 export function materialTokens(m: CatalogueMaterial) {
   const specText = m.specs ? Object.values(m.specs).join(" ") : "";
-  return tokenize(`${m.name} ${m.nameAr} ${m.brand ?? ""} ${m.categoryName ?? ""} ${specText}`);
+  const all = tokenize(`${m.name} ${m.nameAr} ${m.brand ?? ""} ${m.categoryName ?? ""} ${specText}`);
+  // Sizes that appear in the product name itself (16mm, 50kg, C30) – spec codes like "SASO 2847" and bare
+  // designations like "Type 1" are excluded.
+  const nameNumbers = tokenize(`${m.name} ${m.nameAr}`).sized;
+  return { ...all, nameNumbers };
 }
 
-export function scoreMatch(query: ReturnType<typeof tokenize>, material: CatalogueMaterial, mTokens = materialTokens(material)): number {
+export function scoreMatch(query: ReturnType<typeof tokenize>, material: CatalogueMaterial, mTokens: ReturnType<typeof materialTokens> = materialTokens(material)): number {
   if (!query.words.length && !query.numbers.length) return 0;
   const mWords = new Set(mTokens.words);
   const mNums = new Set(mTokens.numbers);
@@ -138,10 +155,16 @@ export function scoreMatch(query: ReturnType<typeof tokenize>, material: Catalog
   let score = 0.55 * wordScore + 0.15 * coverage + (query.numbers.length ? 0.3 * numScore : 0.3 * Math.min(1, wordScore));
   // A number mismatch (e.g. 12mm vs 16mm rebar) is a strong negative signal when the material carries numbers.
   if (query.numbers.length && mNums.size && numScore === 0) score *= 0.45;
+  // Sizes the material carries that the query never mentions (8mm when the query says 12mm) also count against it,
+  // so a brand match cannot outweigh the wrong diameter/grade.
+  if (query.numbers.length && mTokens.nameNumbers.length) {
+    const missing = mTokens.nameNumbers.filter((n) => !query.numbers.includes(n)).length;
+    if (missing) score *= Math.max(0.5, 1 - 0.25 * missing);
+  }
   return Math.max(0, Math.min(1, Math.round(score * 1000) / 1000));
 }
 
-export function matchLine(description: string, catalogue: CatalogueMaterial[], tokenCache?: Map<string, ReturnType<typeof tokenize>>, limit = 3): Candidate[] {
+export function matchLine(description: string, catalogue: CatalogueMaterial[], tokenCache?: Map<string, ReturnType<typeof materialTokens>>, limit = 3): Candidate[] {
   const q = tokenize(description);
   const skuHit = catalogue.find((m) => description.toLowerCase().includes(m.sku.toLowerCase()));
   const scored: Candidate[] = catalogue.map((m) => ({

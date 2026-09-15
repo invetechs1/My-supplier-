@@ -59,16 +59,21 @@ async function storeRows(importId: string, extraction: Extraction, defaultCity: 
       const candidates = matchLine(`${r.brand ?? ""} ${r.name} ${r.nameAr ?? ""}`, catalogue, cache, 4);
       const best = candidates[0];
       const price = r.price !== null && r.price > 0 ? round2(r.price * vatFactor) : null;
+      // Keep the document's unit when we cannot normalise it (e.g. "truck", "carton") so the reviewer sees it,
+      // and lower confidence when it differs from the matched material's unit (price per truck != price per m3).
+      const unit = normaliseUnit(r.unit) ?? (r.unit?.trim() || best?.material.unit || "piece");
+      const unitMismatch = Boolean(best && unit !== best.material.unit);
+      const confidence = best ? (unitMismatch ? round2(best.score * 0.7) : best.score) : 0;
       return {
         importId, position,
         rawName: r.name, rawUnit: r.unit, rawPrice: r.price === null ? null : String(r.price), rawCity: r.city, brand: r.brand,
         notes: [r.nameAr, r.quantity ? `qty ${r.quantity}` : null, r.notes].filter(Boolean).join(" · ") || null,
-        price, unit: normaliseUnit(r.unit) ?? best?.material.unit ?? "piece",
+        price, unit,
         city: r.city ?? extraction.city ?? defaultCity ?? null,
-        materialId: best && best.score >= 0.5 ? best.material.id : null,
-        confidence: best?.score ?? 0,
+        materialId: best && confidence >= 0.5 ? best.material.id : null,
+        confidence,
         alternatives: candidates.slice(0, 3).map((c) => ({ materialId: c.material.id, confidence: c.score })) as Prisma.InputJsonValue,
-        createMaterial: !best || best.score < 0.5,
+        createMaterial: !best || confidence < 0.5,
       };
     });
   await prisma.priceImportRow.createMany({ data: rows });
