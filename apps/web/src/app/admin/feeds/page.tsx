@@ -1,9 +1,10 @@
 "use client";
 import React from "react";
 
+import Link from "next/link";
 import { useState } from "react";
-import type { Feed } from "@mysupplier/shared";
-import { api, errorMessage, importErrorText, type CatalogImportResult, type FeedRow } from "@/lib/api";
+import { SAUDI_CITIES, type Feed } from "@mysupplier/shared";
+import { api, errorMessage, importErrorText, type CatalogImportResult, type FeedFormat, type FeedRow, type FeedRunResult } from "@/lib/api";
 import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatDateTime, formatNumber } from "@/lib/format";
@@ -23,8 +24,22 @@ function statusTone(status: string | null | undefined): "green" | "red" | "amber
   return "slate";
 }
 
-function ResultSummary({ result }: { result: CatalogImportResult }) {
+function ResultSummary({ result }: { result: FeedRunResult }) {
   const errs = result.errors ?? [];
+  if (result.importId) {
+    return (
+      <div className="space-y-1">
+        <p className="text-sm text-slate-700">
+          <span className="font-semibold text-brand-700">{result.extracted ?? 0}</span> rows extracted ·{" "}
+          <span className="font-semibold text-emerald-700">{result.published ?? 0}</span> published
+          {!result.published && <span className="text-slate-500"> (awaiting review)</span>}
+        </p>
+        <Link href={`/admin/imports/${result.importId}`} className="text-sm font-semibold text-brand-700 hover:underline">
+          Review import →
+        </Link>
+      </div>
+    );
+  }
   return (
     <div className="space-y-2">
       <p className="text-sm text-slate-700">
@@ -48,13 +63,15 @@ export default function AdminFeedsPage() {
   const feeds = useAsync(() => api.adminFeeds(), []);
   const [flash, setFlash] = useFlash(6000);
 
-  const [form, setForm] = useState<{ name: string; url: string; format: "json" | "csv"; enabled: boolean }>({ name: "", url: "", format: "json", enabled: true });
+  const emptyFeedForm = { name: "", url: "", format: "json" as FeedFormat, enabled: true, companyId: "", city: "", autoPublish: false };
+  const [form, setForm] = useState(emptyFeedForm);
+  const suppliers = useAsync(() => api.suppliers(), []);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [creating, setCreating] = useState(false);
 
   const [running, setRunning] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [runResults, setRunResults] = useState<Record<string, CatalogImportResult | { error: string }>>({});
+  const [runResults, setRunResults] = useState<Record<string, FeedRunResult | { error: string }>>({});
 
   const [sourceName, setSourceName] = useState("");
   const [json, setJson] = useState("");
@@ -76,9 +93,15 @@ export default function AdminFeedsPage() {
     if (Object.keys(errs).length > 0) return;
     setCreating(true);
     try {
-      await api.adminCreateFeed({ name: form.name.trim(), url: form.url.trim(), format: form.format, enabled: form.enabled });
+      await api.adminCreateFeed({
+        name: form.name.trim(),
+        url: form.url.trim(),
+        format: form.format,
+        enabled: form.enabled,
+        ...(form.format === "html" ? { companyId: form.companyId || undefined, city: form.city || undefined, autoPublish: form.autoPublish } : {}),
+      });
       setFlash({ kind: "success", message: `Feed "${form.name.trim()}" created.` });
-      setForm({ name: "", url: "", format: "json", enabled: true });
+      setForm(emptyFeedForm);
       feeds.reload();
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
@@ -92,7 +115,12 @@ export default function AdminFeedsPage() {
     try {
       const res = await api.adminRunFeed(f.id);
       setRunResults((r) => ({ ...r, [f.id]: res }));
-      setFlash({ kind: "success", message: `"${f.name}" ran: ${res.created ?? 0} created, ${res.updated ?? 0} updated, ${res.listings ?? 0} listings.` });
+      setFlash({
+        kind: "success",
+        message: res.importId
+          ? `"${f.name}" ran: ${res.extracted ?? 0} rows extracted${res.published ? `, ${res.published} published` : ", awaiting review"}.`
+          : `"${f.name}" ran: ${res.created ?? 0} created, ${res.updated ?? 0} updated, ${res.listings ?? 0} listings.`,
+      });
       feeds.reload();
     } catch (err) {
       const message = errorMessage(err);
@@ -194,7 +222,20 @@ export default function AdminFeedsPage() {
         </div>
       ),
     },
-    { key: "format", header: "Format", render: (f) => <Badge tone="slate">{f.format.toUpperCase()}</Badge> },
+    {
+      key: "format",
+      header: "Format",
+      render: (f) => {
+        const fx = f as Omit<Feed, "format"> & { format: string; city?: string | null; autoPublish?: boolean };
+        return (
+          <div className="flex flex-wrap items-center gap-1">
+            <Badge tone={fx.format === "html" ? "purple" : "slate"}>{fx.format === "html" ? "HTML · AI" : fx.format.toUpperCase()}</Badge>
+            {fx.city && <span className="text-xs text-slate-500">{fx.city}</span>}
+            {fx.autoPublish && <Badge tone="amber">auto-publish</Badge>}
+          </div>
+        );
+      },
+    },
     { key: "enabled", header: "Enabled", render: (f) => (f.enabled ? <Badge tone="green">Enabled</Badge> : <Badge tone="slate">Disabled</Badge>) },
     { key: "lastRun", header: "Last run", render: (f) => <span className="text-slate-600">{f.lastRunAt ? formatDateTime(f.lastRunAt, lang) : "Never"}</span> },
     { key: "status", header: t("common.status"), render: (f) => (f.lastStatus ? <Badge tone={statusTone(f.lastStatus)}>{f.lastStatus}</Badge> : <span className="text-slate-400">—</span>) },
@@ -221,7 +262,7 @@ export default function AdminFeedsPage() {
 
   return (
     <div>
-      <PageHeader title={t("admin.feeds")} subtitle="Collect construction products from external sources. Materials are created with source FEED and prices are stored as MARKET reference listings. Enabled feeds also run daily." />
+      <PageHeader title={t("admin.feeds")} subtitle="Collect construction products from external sources. JSON/CSV feeds import directly; HTML feeds are read by AI and land in the imports review queue. Prices are stored as MARKET reference listings. Enabled feeds also run daily." />
       <FlashMessage flash={flash} className="mb-4" />
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -234,7 +275,7 @@ export default function AdminFeedsPage() {
               <Alert onRetry={feeds.reload}>{feeds.error}</Alert>
             </div>
           ) : (
-            <Table columns={columns} rows={list} rowKey={(f) => f.id} empty={<EmptyState title="No feeds yet" description="Add a JSON or CSV source on the right and run it." />} />
+            <Table columns={columns} rows={list} rowKey={(f) => f.id} empty={<EmptyState title="No feeds yet" description="Add a JSON, CSV or HTML (AI-read) source on the right and run it." />} />
           )}
           {resultsToShow.length > 0 && (
             <div className="space-y-3 border-t border-slate-100 px-5 py-4">
@@ -258,7 +299,35 @@ export default function AdminFeedsPage() {
             <form onSubmit={create} noValidate className="space-y-4">
               <Input label="Name" name="feedName" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={formErrors.name} placeholder="e.g. Supplier XYZ catalogue" required />
               <Input label="URL" name="feedUrl" type="url" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} error={formErrors.url} placeholder="https://example.com/products.json" dir="ltr" required />
-              <Select label="Format" name="feedFormat" value={form.format} onChange={(e) => setForm({ ...form, format: e.target.value === "csv" ? "csv" : "json" })} options={[{ value: "json", label: "JSON" }, { value: "csv", label: "CSV" }]} />
+              <Select
+                label="Format"
+                name="feedFormat"
+                value={form.format}
+                onChange={(e) => setForm({ ...form, format: (e.target.value as FeedFormat) || "json" })}
+                options={[
+                  { value: "json", label: "JSON" },
+                  { value: "csv", label: "CSV" },
+                  { value: "html", label: "HTML web page (AI extraction)" },
+                ]}
+              />
+              {form.format === "html" && (
+                <div className="space-y-3 rounded-xl border border-violet-100 bg-violet-50/50 p-3">
+                  <p className="text-xs text-violet-800">The page is fetched, prices are extracted with AI and an import is created for review (kind: web page).</p>
+                  <Select label="City" name="feedCity" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Not specified" options={SAUDI_CITIES.map((c) => ({ value: c, label: c }))} />
+                  <Select
+                    label="Supplier company (optional)"
+                    name="feedCompany"
+                    value={form.companyId}
+                    onChange={(e) => setForm({ ...form, companyId: e.target.value })}
+                    placeholder={suppliers.loading ? "Loading suppliers…" : "Attribute to a supplier…"}
+                    options={[...(suppliers.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)).map((c) => ({ value: c.id, label: `${c.name} · ${c.city}` }))}
+                  />
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" checked={form.autoPublish} onChange={(e) => setForm({ ...form, autoPublish: e.target.checked })} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600" />
+                    Auto-publish (skip review)
+                  </label>
+                </div>
+              )}
               <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600" />
                 Enabled (runs daily)

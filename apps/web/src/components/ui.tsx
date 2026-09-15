@@ -139,13 +139,21 @@ const statusTone: Record<string, BadgeTone> = {
   SUPPLIER: "green",
   MARKET: "blue",
   IMPORTED: "slate",
+  QUOTATION: "purple",
+  REVIEW: "amber",
+  PROCESSING: "amber",
+  PUBLISHED: "green",
+  FAILED: "red",
+  SUGGESTED: "amber",
+  APPROVED: "green",
   BUYER: "blue",
   ADMIN: "purple",
 };
 
-export function Badge({ children, tone, className }: { children: React.ReactNode; tone?: BadgeTone; className?: string }) {
+export function Badge({ children, tone, className, title }: { children: React.ReactNode; tone?: BadgeTone; className?: string; title?: string }) {
   return (
     <span
+      title={title}
       className={cn(
         "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset",
         badgeTones[tone ?? "slate"],
@@ -159,6 +167,31 @@ export function Badge({ children, tone, className }: { children: React.ReactNode
 
 export function StatusBadge({ status }: { status: string }) {
   return <Badge tone={statusTone[status] ?? "slate"}>{status.replace(/_/g, " ")}</Badge>;
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  SUPPLIER: "Supplier",
+  MARKET: "Market",
+  IMPORTED: "Imported",
+  QUOTATION: "Quoted",
+};
+const SOURCE_TITLE: Record<string, string> = {
+  SUPPLIER: "Published by the supplier",
+  MARKET: "Market reference price",
+  IMPORTED: "Price list loaded on the supplier's behalf",
+  QUOTATION: "Price a buyer actually received",
+};
+
+/** Price listing source pill; QUOTATION renders purple as "Quoted" with an explanatory tooltip. */
+export function SourceBadge({ source, className }: { source: string | null | undefined; className?: string }) {
+  const key = (source ?? "MARKET").toUpperCase();
+  return (
+    <span title={SOURCE_TITLE[key] ?? key} className="inline-flex">
+      <Badge tone={statusTone[key] ?? "slate"} className={className}>
+        {SOURCE_LABEL[key] ?? key.replace(/_/g, " ")}
+      </Badge>
+    </span>
+  );
 }
 
 export function VerifiedBadge({ verified }: { verified: boolean }) {

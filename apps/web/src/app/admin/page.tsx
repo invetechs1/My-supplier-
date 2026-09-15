@@ -18,6 +18,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function AdminOverview() {
   const { t, lang } = useI18n();
   const state = useAsync(() => api.adminStats(), []);
+  const review = useAsync(() => api.imports({ status: "REVIEW", pageSize: 1 }), []);
 
   if (state.loading) return <LoadingBlock />;
   if (state.error || !state.data) return <Alert onRetry={state.reload}>{state.error ?? "Could not load stats"}</Alert>;
@@ -45,6 +46,21 @@ export default function AdminOverview() {
         <StatTile label={t("stats.bids")} value={formatNumber(s.bids, lang)} />
         <StatTile label={t("stats.orders")} value={formatNumber(s.orders, lang)} />
         <StatTile label="GMV" value={`SAR ${formatCompact(s.gmv)}`} tone="brand" sub={formatSar(s.gmv, lang)} />
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Link href="/admin/imports" className="block rounded-xl transition hover:shadow-card-hover">
+          <StatTile
+            label="Imports awaiting review"
+            value={review.loading ? "…" : review.error ? "—" : formatNumber(review.data?.total ?? 0, lang)}
+            sub={review.error ? review.error : "AI-read price lists, quotations & web pages →"}
+            tone={(review.data?.total ?? 0) > 0 ? "amber" : "default"}
+            className="h-full"
+          />
+        </Link>
+        <Link href="/admin/outreach" className="block rounded-xl transition hover:shadow-card-hover">
+          <StatTile label="Supplier outreach" value="Update links" sub="Nudge suppliers with stale prices →" className="h-full" />
+        </Link>
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">

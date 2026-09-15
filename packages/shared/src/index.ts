@@ -515,7 +515,10 @@ export interface Feed {
   id: string;
   name: string;
   url: string;
-  format: "json" | "csv";
+  format: "json" | "csv" | "html"; // html = supplier web page read by AI into the review queue
+  companyId?: string | null;
+  city?: string | null;
+  autoPublish?: boolean;
   enabled: boolean;
   lastRunAt?: string | null;
   lastStatus?: string | null;

@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatDate, formatSar, timeAgo } from "@/lib/format";
-import { Alert, Badge, Card, CardHeader, EmptyState, LinkButton, LoadingBlock, StatTile, StatusBadge, Table, VerifiedBadge, type Column } from "@/components/ui";
+import { Alert, Badge, Card, CardHeader, EmptyState, LinkButton, LoadingBlock, SourceBadge, StatTile, Table, VerifiedBadge, type Column } from "@/components/ui";
 import { PriceHistoryChart } from "@/components/PriceHistoryChart";
 
 export default function MaterialDetailPage() {
@@ -52,7 +52,7 @@ export default function MaterialDetailPage() {
     { key: "price", header: `Price / ${m.unit}`, align: "end", render: (l) => <span className="font-semibold tabular-nums text-slate-900">{formatSar(l.price, lang)}</span> },
     { key: "minQty", header: "Min qty", align: "end", render: (l) => `${l.minQty} ${m.unit}` },
     { key: "lead", header: "Lead time", align: "end", render: (l) => `${l.leadTimeDays} d` },
-    { key: "source", header: "Source", render: (l) => <StatusBadge status={l.source} /> },
+    { key: "source", header: "Source", render: (l) => <SourceBadge source={l.source} /> },
     { key: "updated", header: "Updated", render: (l) => <span className="text-slate-500" title={formatDate(l.updatedAt, lang)}>{timeAgo(l.updatedAt)}</span> },
   ];
 

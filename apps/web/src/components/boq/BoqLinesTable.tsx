@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import type { BoqLineResult } from "@mysupplier/shared";
 import { cn, formatSar } from "@/lib/format";
-import { Badge, StatusBadge, VerifiedBadge } from "@/components/ui";
+import { Badge, SourceBadge, VerifiedBadge } from "@/components/ui";
 import { isMarketSupplier } from "./BoqSummary";
 
 export function ConfidenceBadge({ value }: { value: number }) {
@@ -156,7 +156,7 @@ export function BoqLinesTable({ lines, lang, onRepin, repinning }: Props) {
                                   <VerifiedBadge verified={o.verified} />
                                 </span>
                               </td>
-                              <td className="py-1.5"><StatusBadge status={o.source} /></td>
+                              <td className="py-1.5"><SourceBadge source={o.source} /></td>
                               <td className="py-1.5">{o.city}</td>
                               <td className="py-1.5 text-end tabular-nums">{formatSar(o.price, lang)}</td>
                               <td className="py-1.5 text-end tabular-nums">{o.minQty}</td>

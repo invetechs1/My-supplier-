@@ -9,7 +9,7 @@ import { clampQty, isPurchasable, minQtyFor, useCart } from "@/lib/cart";
 import { useAsync } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatSar } from "@/lib/format";
-import { Alert, Badge, Button, Card, CardHeader, EmptyState, LoadingBlock, StatusBadge, Table, VerifiedBadge, type Column } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardHeader, EmptyState, LoadingBlock, SourceBadge, Table, VerifiedBadge, type Column } from "@/components/ui";
 import { PriceHistoryChart } from "@/components/PriceHistoryChart";
 import { ProductImage, ProductRail, SectionHeading, StockPill, dealPercent } from "@/components/shop/ProductCard";
 
@@ -120,7 +120,7 @@ export default function ShopProductPage() {
     { key: "minQty", header: "Min qty", align: "end", render: (o) => `${o.minQty} ${p.unit}` },
     { key: "lead", header: "Lead time", align: "end", render: (o) => `${o.leadTimeDays} d` },
     { key: "stock", header: "Stock", render: (o) => <StockPill offer={o} /> },
-    { key: "source", header: "Source", render: (o) => <StatusBadge status={o.source} /> },
+    { key: "source", header: "Source", render: (o) => <SourceBadge source={o.source} /> },
     { key: "action", header: "", align: "end", render: (o) => <OfferAddButton offer={o} product={p} /> },
   ];
 

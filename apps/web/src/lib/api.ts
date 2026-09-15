@@ -1,4 +1,5 @@
 import type {
+  AiConfig,
   ApiError,
   AuthResponse,
   Bid,
@@ -14,6 +15,9 @@ import type {
   CreateRfqPayload,
   Feed,
   HealthStatus,
+  ImportKind,
+  ImportRowStatus,
+  ImportStatus,
   InvoiceData,
   LoginPayload,
   Material,
@@ -21,6 +25,9 @@ import type {
   Order,
   OrderExtended,
   OrderStatus,
+  OutreachChannel,
+  OutreachRequestResult,
+  OutreachSupplier,
   Paginated,
   PaymentConfig,
   PaymentIntent,
@@ -28,11 +35,16 @@ import type {
   PaymentStatus,
   PlatformStats,
   PriceHistoryPoint,
+  PriceImport,
+  PriceImportRow,
   PriceIndexEntry,
   PriceListing,
   PriceSummary,
+  PriceUpdateRequestInfo,
+  PriceUpdateSubmission,
   Product,
   ProductDetail,
+  PublishImportResult,
   RegisterPayload,
   Rfq,
   Role,
@@ -144,6 +156,46 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   return data;
 }
 
+/**
+ * Multipart upload. The Content-Type header is deliberately NOT set so the browser
+ * adds the multipart boundary itself; the bearer token is still attached.
+ */
+export async function requestForm<T>(path: string, form: FormData, options: { method?: "POST" | "PATCH" | "PUT"; signal?: AbortSignal } = {}): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method: options.method ?? "POST",
+      headers,
+      body: form,
+      signal: options.signal,
+      cache: "no-store",
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new ApiRequestError("Cannot reach the MySupplier API. Please check your connection.", 0);
+  }
+
+  const text = await res.text();
+  let payload: unknown = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = text;
+    }
+  }
+  if (!res.ok) {
+    const apiErr = (payload ?? {}) as Partial<ApiError>;
+    const message = typeof apiErr.error === "string" ? apiErr.error : `Request failed (${res.status})`;
+    throw new ApiRequestError(message, res.status, apiErr.details);
+  }
+  return payload as T;
+}
+
 export function errorMessage(err: unknown, fallback = "Something went wrong"): string {
   if (err instanceof ApiRequestError) return err.message;
   if (err instanceof Error) return err.message || fallback;
@@ -233,6 +285,55 @@ export interface FeedRow {
   city: string;
   imageUrl?: string;
   stock?: number;
+}
+
+export type FeedFormat = "json" | "csv" | "html";
+
+export interface CreateFeedPayload {
+  name: string;
+  url: string;
+  format: FeedFormat;
+  enabled?: boolean;
+  /** html feeds only */
+  companyId?: string;
+  city?: string;
+  autoPublish?: boolean;
+}
+
+/** Result of POST /admin/feeds/:id/run — json/csv feeds return catalogue counts, html feeds an import reference. */
+export type FeedRunResult = Partial<CatalogImportResult> & { importId?: string | null; extracted?: number; published?: number };
+
+export type ImportsQuery = {
+  status?: ImportStatus | "";
+  kind?: ImportKind | "";
+  page?: number;
+  pageSize?: number;
+};
+
+export interface ImportRowPatch {
+  materialId?: string | null;
+  price?: number | null;
+  unit?: string;
+  city?: string | null;
+  status?: ImportRowStatus;
+  createMaterial?: boolean;
+}
+
+export interface PublishImportOptions {
+  includeSuggested?: boolean;
+  minConfidence?: number;
+}
+
+export interface OutreachPayload {
+  companyIds: string[];
+  channel: OutreachChannel;
+  message?: string;
+}
+
+export interface PriceUpdateResult {
+  updated: number;
+  added: number;
+  completedAt: string;
 }
 
 export const api = {
@@ -370,12 +471,32 @@ export const api = {
 
   // Admin feeds
   adminFeeds: () => request<Feed[]>("/admin/feeds"),
-  adminCreateFeed: (body: { name: string; url: string; format: "json" | "csv"; enabled?: boolean }) =>
-    request<Feed>("/admin/feeds", { method: "POST", body }),
-  adminRunFeed: (id: string) => request<CatalogImportResult>(`/admin/feeds/${encodeURIComponent(id)}/run`, { method: "POST" }),
+  adminCreateFeed: (body: CreateFeedPayload) => request<Feed>("/admin/feeds", { method: "POST", body }),
+  adminRunFeed: (id: string) => request<FeedRunResult>(`/admin/feeds/${encodeURIComponent(id)}/run`, { method: "POST" }),
   adminDeleteFeed: (id: string) => request<{ ok: boolean }>(`/admin/feeds/${encodeURIComponent(id)}`, { method: "DELETE" }),
   adminFeedImport: (body: { sourceName: string; items: FeedRow[] }) =>
     request<CatalogImportResult>("/admin/feeds/import", { method: "POST", body }),
+
+  // AI price collection (imports in a review queue)
+  aiConfig: () => request<AiConfig>("/ai/config"),
+  /** multipart: `file` or `text`, plus kind, city?, sourceName?, supplierName?, quotationDate?. Synchronous (10–60 s). */
+  createImport: (formData: FormData) => requestForm<PriceImport>("/imports", formData),
+  imports: (query: ImportsQuery = {}) => request<Paginated<PriceImport>>("/imports", { query }),
+  importDetail: (id: string) => request<PriceImport>(`/imports/${encodeURIComponent(id)}`),
+  updateImportRow: (importId: string, rowId: string, patch: ImportRowPatch) =>
+    request<PriceImportRow>(`/imports/${encodeURIComponent(importId)}/rows/${encodeURIComponent(rowId)}`, { method: "PATCH", body: patch }),
+  approveAllRows: (id: string, minConfidence = 0.8) =>
+    request<PriceImport>(`/imports/${encodeURIComponent(id)}/approve-all`, { method: "POST", body: { minConfidence } }),
+  publishImport: (id: string, opts: PublishImportOptions = {}) =>
+    request<PublishImportResult>(`/imports/${encodeURIComponent(id)}/publish`, { method: "POST", body: opts }),
+  rejectImport: (id: string) => request<PriceImport>(`/imports/${encodeURIComponent(id)}/reject`, { method: "POST" }),
+
+  // Supplier outreach (admin) & public magic-link price updates
+  outreachSuppliers: (query: { staleDays?: number | string; q?: string } = {}) => request<OutreachSupplier[]>("/admin/outreach", { query }),
+  sendOutreach: (payload: OutreachPayload) => request<OutreachRequestResult[]>("/admin/outreach/requests", { method: "POST", body: payload }),
+  priceUpdateInfo: (token: string) => request<PriceUpdateRequestInfo>(`/price-update/${encodeURIComponent(token)}`),
+  submitPriceUpdate: (token: string, payload: PriceUpdateSubmission) =>
+    request<PriceUpdateResult>(`/price-update/${encodeURIComponent(token)}`, { method: "POST", body: payload }),
 };
 
 /** Printable invoice URL; the JWT travels in the query because browsers can't send headers on navigation. */

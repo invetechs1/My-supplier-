@@ -70,6 +70,23 @@ export default function BuyerOverview() {
         </div>
       </Link>
 
+      <Link href="/dashboard/quotations" className="mt-4 block rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-50 to-white p-5 shadow-card transition hover:shadow-card-hover">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185z" />
+              </svg>
+            </span>
+            <div>
+              <p className="text-base font-semibold text-slate-900">Upload a quotation</p>
+              <p className="text-sm text-slate-600">Got a supplier quote? Our AI reads it and adds the prices to the market data as quoted prices — and you see the supplier&apos;s other prices in return.</p>
+            </div>
+          </div>
+          <span className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white">{t("dash.quotations")} →</span>
+        </div>
+      </Link>
+
       <Card className="mt-6">
         <CardHeader title="Recent RFQs" action={<Link href="/dashboard/rfqs" className="text-sm font-semibold text-brand-700 hover:underline">{t("common.viewAll")} →</Link>} />
         {rfqs.loading ? (

@@ -9,7 +9,7 @@ import { api } from "@/lib/api";
 import { useAsync, usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { cn, formatSar, timeAgo } from "@/lib/format";
-import { Alert, Button, Card, EmptyState, LinkButton, LoadingBlock, PageHeader, Select, VerifiedBadge } from "@/components/ui";
+import { Alert, Button, Card, EmptyState, LinkButton, LoadingBlock, PageHeader, Select, SourceBadge, VerifiedBadge } from "@/components/ui";
 import { MaterialAutocomplete } from "@/components/MaterialAutocomplete";
 
 function CompareInner() {
@@ -48,6 +48,7 @@ function CompareInner() {
           <div className="flex flex-wrap items-center gap-1.5">
             {cheapest.company ? <Link href={`/suppliers/${cheapest.company.id}`} className="hover:text-brand-700">{cheapest.company.name}</Link> : cheapest.sourceName ?? "Market"}
             {cheapest.company && <VerifiedBadge verified={cheapest.company.verified} />}
+            <SourceBadge source={cheapest.source} />
             <span className="text-xs text-slate-500">({cheapest.city})</span>
           </div>
         );

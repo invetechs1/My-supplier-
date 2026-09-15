@@ -21,7 +21,15 @@ const GROUPS: Array<{ id: string; title: string; items: Faq[] }> = [
         q: "Where do the prices on MySupplier come from?",
         a: (
           <>
-            <p>Three labelled sources: <strong>Supplier</strong> prices published by verified suppliers from their dashboard or catalogue feed, <strong>Imported</strong> price lists we load on a supplier’s behalf, and <strong>Market</strong> reference prices aggregated from published sources. Only supplier and imported listings can be ordered; market prices are for benchmarking.</p>
+            <p>Every listing is labelled with where it came from:</p>
+            <ul className="list-disc space-y-1 ps-5">
+              <li><strong>Suppliers</strong> publish prices from their dashboard, a CSV or a catalogue feed.</li>
+              <li><strong>AI-read documents</strong> — suppliers upload a PDF, Excel sheet, photo or pasted text; our AI extracts the rows and matches them to the catalogue, and the supplier approves them before they go live.</li>
+              <li><strong>Quotations from buyers</strong> — contractors upload quotes they actually received; these appear as <em>Quoted</em> prices attributed to the supplier, with the buyer kept anonymous.</li>
+              <li><strong>Market feeds</strong> — published price lists and supplier web pages collected automatically, reviewed by our team and shown as <em>Market</em> reference prices.</li>
+              <li><strong>Weekly update links</strong> — suppliers with ageing prices get a one-click link to refresh them in two minutes, no login needed.</li>
+            </ul>
+            <p>Only supplier listings can be ordered; quoted, imported and market prices are for benchmarking.</p>
           </>
         ),
       },

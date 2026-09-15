@@ -222,6 +222,12 @@ export default function SupplierPricesPage() {
         action={
           <>
             <LinkButton href="/supplier/catalog" variant="outline">{t("sup.catalog")}</LinkButton>
+            <LinkButton href="/supplier/imports" variant="primary" className="gap-1.5">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+              </svg>
+              Import from PDF / Excel / photo
+            </LinkButton>
             <Button variant="accent" onClick={openCreate}>+ Add price</Button>
           </>
         }
