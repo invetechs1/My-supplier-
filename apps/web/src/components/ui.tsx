@@ -210,6 +210,86 @@ export function VerifiedBadge({ verified }: { verified: boolean }) {
   );
 }
 
+const VERIFICATION_TONE: Record<string, BadgeTone> = { VERIFIED: "green", UNDER_REVIEW: "blue", PENDING: "amber", REJECTED: "red" };
+const VERIFICATION_LABEL: Record<string, string> = { VERIFIED: "Verified", UNDER_REVIEW: "Under review", PENDING: "Pending", REJECTED: "Rejected" };
+
+/** Company verification pill (PENDING / UNDER_REVIEW / VERIFIED / REJECTED). */
+export function VerificationBadge({ status, className }: { status: string | null | undefined; className?: string }) {
+  const key = (status ?? "PENDING").toUpperCase();
+  if (key === "VERIFIED") {
+    return (
+      <Badge tone="green" className={cn("gap-1", className)}>
+        <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3" aria-hidden>
+          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+        </svg>
+        Verified
+      </Badge>
+    );
+  }
+  return (
+    <Badge tone={VERIFICATION_TONE[key] ?? "slate"} className={className}>
+      {VERIFICATION_LABEL[key] ?? key.replace(/_/g, " ")}
+    </Badge>
+  );
+}
+
+/** Star rating (read-only, or interactive when onChange is passed). */
+export function Stars({ value, count, onChange, size = "sm", className }: { value: number; count?: number; onChange?: (rating: number) => void; size?: "sm" | "md" | "lg"; className?: string }) {
+  const dim = size === "lg" ? "h-7 w-7" : size === "md" ? "h-5 w-5" : "h-4 w-4";
+  const rounded = Math.round(value * 2) / 2;
+  return (
+    <span className={cn("inline-flex items-center gap-1", className)} role={onChange ? "radiogroup" : "img"} aria-label={`${value.toFixed(1)} out of 5`}>
+      <span className="inline-flex items-center">
+        {[1, 2, 3, 4, 5].map((n) => {
+          const filled = rounded >= n;
+          const half = !filled && rounded >= n - 0.5;
+          const star = (
+            <svg viewBox="0 0 20 20" className={cn(dim, filled || half ? "text-amber-500" : "text-slate-300")} aria-hidden>
+              {half && (
+                <defs>
+                  <linearGradient id={`half-${n}`}>
+                    <stop offset="50%" stopColor="currentColor" />
+                    <stop offset="50%" stopColor="#cbd5e1" />
+                  </linearGradient>
+                </defs>
+              )}
+              <path fill={half ? `url(#half-${n})` : "currentColor"} d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z" />
+            </svg>
+          );
+          if (!onChange) return <span key={n}>{star}</span>;
+          return (
+            <button key={n} type="button" role="radio" aria-checked={Math.round(value) === n} aria-label={`${n} star${n > 1 ? "s" : ""}`} onClick={() => onChange(n)} className="rounded p-0.5 transition hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
+              {star}
+            </button>
+          );
+        })}
+      </span>
+      {count !== undefined && <span className="text-xs text-slate-500">({count})</span>}
+    </span>
+  );
+}
+
+/** On/off switch styled like a toggle. */
+export function Toggle({ checked, onChange, disabled, label, className }: { checked: boolean; onChange: (next: boolean) => void; disabled?: boolean; label?: string; className?: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        checked ? "bg-brand-600" : "bg-slate-300",
+        className,
+      )}
+    >
+      <span className={cn("inline-block h-5 w-5 transform rounded-full bg-white shadow transition", checked ? "translate-x-5 rtl:-translate-x-5" : "translate-x-0.5 rtl:-translate-x-0.5")} />
+    </button>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Form controls
 // ---------------------------------------------------------------------------

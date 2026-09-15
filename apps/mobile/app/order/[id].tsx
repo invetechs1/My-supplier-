@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import type { OrderExtended, OrderStatus, PaymentConfig, PaymentMethod } from "@mysupplier/shared";
-import { Screen, Button, StatusBadge, Card, SectionHeader, KeyValue, LoadingView, ErrorView, RequireAuth, ProductImage, SvgImage } from "@/components";
-import { api, getErrorMessage, invoiceHtmlUrl } from "@/lib/api";
+import type { OrderEvent, OrderExtended, OrderMessage, OrderStatus, PaymentConfig, PaymentMethod, Review } from "@mysupplier/shared";
+import { Screen, Button, StatusBadge, Card, SectionHeader, KeyValue, LoadingView, ErrorView, RequireAuth, ProductImage, SvgImage, TextField, statusLabel } from "@/components";
+import { api, deliveryNoteUrl, getErrorMessage, invoiceHtmlUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { formatDate, formatDateTime, formatSar } from "@/lib/format";
@@ -35,6 +35,264 @@ function paymentMethodLabel(method: PaymentMethod | null | undefined, t: (k: "co
   if (method === "BANK_TRANSFER") return t("bankTransfer");
   if (method === "CARD") return t("card");
   return "—";
+}
+
+const EVENT_ICON: Record<OrderEvent["type"], keyof typeof Ionicons.glyphMap> = {
+  CREATED: "receipt-outline",
+  STATUS: "sync-outline",
+  PAYMENT: "cash-outline",
+  NOTE: "create-outline",
+  MESSAGE: "chatbubble-outline",
+  REVIEW: "star-outline",
+};
+
+function eventTitle(e: OrderEvent): string {
+  if (e.type === "STATUS" && e.status) return `Status → ${statusLabel(e.status)}`;
+  if (e.type === "CREATED") return "Order placed";
+  if (e.type === "PAYMENT") return e.message ? `Payment · ${e.message}` : "Payment update";
+  if (e.type === "MESSAGE") return "New message";
+  if (e.type === "REVIEW") return "Review left";
+  return e.message || "Note";
+}
+
+/** Order activity timeline (GET /orders/:id/events). */
+function ActivitySection({ orderId, version, t }: { orderId: string; version: string; t: (k: "activity") => string }) {
+  const events = useApi(() => api.orderEvents(orderId), [orderId, version], Boolean(orderId));
+  return (
+    <>
+      <SectionHeader title={t("activity")} />
+      <Card style={{ paddingVertical: spacing.xs }}>
+        {events.data?.length ? (
+          [...events.data]
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .map((e, i, arr) => (
+              <View key={e.id} style={styles.event}>
+                <View style={styles.eventIndicator}>
+                  <View style={styles.eventDot}>
+                    <Ionicons name={EVENT_ICON[e.type] ?? "ellipse-outline"} size={13} color={colors.primary} />
+                  </View>
+                  {i < arr.length - 1 ? <View style={styles.eventLine} /> : null}
+                </View>
+                <View style={styles.eventBody}>
+                  <Text style={styles.eventTitle}>{eventTitle(e)}</Text>
+                  {e.message && e.type !== "NOTE" && e.type !== "PAYMENT" ? (
+                    <Text style={typography.bodySmall} numberOfLines={3}>
+                      {e.message}
+                    </Text>
+                  ) : null}
+                  <Text style={typography.caption}>
+                    {formatDateTime(e.createdAt)}
+                    {e.user?.name ? ` · ${e.user.name}` : ""}
+                  </Text>
+                </View>
+              </View>
+            ))
+        ) : events.loading ? (
+          <Text style={[typography.bodySmall, { paddingVertical: spacing.sm }]}>Loading activity…</Text>
+        ) : (
+          <Text style={[typography.bodySmall, { paddingVertical: spacing.sm }]}>{events.error ?? "No activity recorded yet."}</Text>
+        )}
+      </Card>
+    </>
+  );
+}
+
+/** Buyer <-> supplier thread; polls every 20 s while the screen is mounted. */
+function MessagesSection({ orderId, meId, canPost, t }: { orderId: string; meId?: string; canPost: boolean; t: (k: "messages" | "sendMessage" | "writeMessage") => string }) {
+  const thread = useApi(() => api.orderMessages(orderId), [orderId], Boolean(orderId));
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const { silentReload, setData } = thread;
+
+  useEffect(() => {
+    if (!orderId) return;
+    const timer = setInterval(() => {
+      silentReload();
+    }, 20_000);
+    return () => clearInterval(timer);
+  }, [orderId, silentReload]);
+
+  const send = useCallback(async () => {
+    const body = draft.trim();
+    if (!body) return;
+    setSending(true);
+    try {
+      const msg = await api.sendOrderMessage(orderId, body);
+      setData((prev) => [...(prev ?? []).filter((m) => m.id !== msg.id), msg]);
+      setDraft("");
+    } catch (err) {
+      Alert.alert("Could not send", getErrorMessage(err));
+    } finally {
+      setSending(false);
+    }
+  }, [draft, orderId, setData]);
+
+  const messages: OrderMessage[] = [...(thread.data ?? [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  return (
+    <>
+      <SectionHeader title={t("messages")} actionTitle={thread.refreshing ? "Refreshing…" : "Refresh"} onAction={() => thread.refresh()} />
+      <Card>
+        {messages.length ? (
+          messages.map((m) => {
+            const mine = m.sender?.id === meId;
+            return (
+              <View key={m.id} style={[styles.bubbleRow, mine && { justifyContent: "flex-end" }]}>
+                <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                  {!mine ? (
+                    <Text style={styles.bubbleSender}>
+                      {m.sender?.name ?? "—"}
+                      {m.sender?.role ? ` · ${m.sender.role.toLowerCase()}` : ""}
+                    </Text>
+                  ) : null}
+                  <Text style={[typography.body, mine && { color: "#fff" }]}>{m.body}</Text>
+                  <Text style={[typography.caption, { marginTop: 4 }, mine && { color: "rgba(255,255,255,0.75)" }]}>
+                    {formatDateTime(m.createdAt)}
+                    {mine ? (m.readAt ? " · Read" : " · Sent") : ""}
+                  </Text>
+                </View>
+              </View>
+            );
+          })
+        ) : thread.loading ? (
+          <Text style={typography.bodySmall}>Loading messages…</Text>
+        ) : (
+          <Text style={typography.bodySmall}>{thread.error ?? "No messages yet. Questions about delivery, quantities or payment go here."}</Text>
+        )}
+        {canPost ? (
+          <View style={styles.composer}>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder={t("writeMessage")}
+              placeholderTextColor={colors.textMuted}
+              style={styles.composerInput}
+              multiline
+              maxLength={2000}
+            />
+            <Pressable onPress={send} disabled={sending || !draft.trim()} style={[styles.sendBtn, (sending || !draft.trim()) && { opacity: 0.5 }]} accessibilityLabel={t("sendMessage")}>
+              <Ionicons name="send" size={18} color="#fff" />
+            </Pressable>
+          </View>
+        ) : null}
+      </Card>
+    </>
+  );
+}
+
+function Stars({ value, onChange, size = 28 }: { value: number; onChange?: (n: number) => void; size?: number }) {
+  return (
+    <View style={styles.stars}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Pressable key={n} onPress={() => onChange?.(n)} disabled={!onChange} hitSlop={4}>
+          <Ionicons name={n <= value ? "star" : "star-outline"} size={size} color={colors.accent} />
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+/** Finds the review for this order (embedded on the order when the API sends it, else via the supplier's public reviews). */
+async function loadOrderReview(order: OrderExtended): Promise<Review | null> {
+  const embedded = (order as OrderExtended & { review?: Review | null }).review;
+  if (embedded) return embedded;
+  if (!order.companyId) return null;
+  for (let page = 1; page <= 3; page += 1) {
+    const res = await api.supplierReviews(order.companyId, page);
+    const found = res.data.find((r) => r.orderId === order.id);
+    if (found) return found;
+    if (res.data.length < res.pageSize || page * res.pageSize >= res.total) break;
+  }
+  return null;
+}
+
+function ReviewSection({ order, isBuyer, isOrderSupplier, t }: { order: OrderExtended; isBuyer: boolean; isOrderSupplier: boolean; t: (k: "rateSupplier" | "reply") => string }) {
+  const review = useApi(() => loadOrderReview(order), [order.id, order.status], order.status === "DELIVERED");
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [reply, setReply] = useState("");
+  const [busy, setBusy] = useState(false);
+  const { setData } = review;
+
+  if (order.status !== "DELIVERED") return null;
+
+  const submitReview = async () => {
+    if (rating < 1) {
+      Alert.alert("Pick a rating", "Tap the stars to rate this supplier from 1 to 5.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const created = await api.createReview(order.id, { rating, comment: comment.trim() || undefined });
+      setData(created);
+      setComment("");
+    } catch (err) {
+      Alert.alert("Could not submit review", getErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitReply = async () => {
+    if (!review.data || !reply.trim()) return;
+    setBusy(true);
+    try {
+      const updated = await api.replyReview(review.data.id, reply.trim());
+      setData(updated);
+      setReply("");
+    } catch (err) {
+      Alert.alert("Could not send reply", getErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const r = review.data;
+  if (!r && !isBuyer && !review.loading) return null;
+
+  return (
+    <>
+      <SectionHeader title={r ? "Review" : t("rateSupplier")} />
+      <Card>
+        {review.loading && !r ? (
+          <Text style={typography.bodySmall}>Checking for a review…</Text>
+        ) : r ? (
+          <>
+            <View style={styles.reviewHead}>
+              <Stars value={r.rating} size={18} />
+              <Text style={typography.caption}>{formatDate(r.createdAt)}</Text>
+            </View>
+            <Text style={[typography.caption, { marginTop: 2 }]}>{r.buyer?.company?.name ?? r.buyer?.name ?? "Buyer"}</Text>
+            {r.comment ? <Text style={[typography.body, { marginTop: spacing.sm }]}>{r.comment}</Text> : <Text style={[typography.bodySmall, { marginTop: spacing.sm }]}>No comment left.</Text>}
+            {r.reply ? (
+              <View style={styles.replyBox}>
+                <View style={styles.replyHead}>
+                  <Ionicons name="return-down-forward-outline" size={14} color={colors.primary} />
+                  <Text style={styles.replyTitle}>Supplier reply{r.repliedAt ? ` · ${formatDate(r.repliedAt)}` : ""}</Text>
+                </View>
+                <Text style={typography.body}>{r.reply}</Text>
+              </View>
+            ) : isOrderSupplier ? (
+              <View style={{ marginTop: spacing.md }}>
+                <TextField label={t("reply")} value={reply} onChangeText={setReply} placeholder="Thank the buyer or address their feedback" multiline maxLength={1000} />
+                <Button title={`Send ${t("reply").toLowerCase()}`} loading={busy} disabled={!reply.trim()} onPress={submitReply} fullWidth />
+              </View>
+            ) : null}
+          </>
+        ) : isBuyer ? (
+          <>
+            <Text style={typography.bodySmall}>How was {order.company?.name ?? "this supplier"}? Your rating helps other buyers.</Text>
+            <View style={{ alignItems: "center", marginVertical: spacing.md }}>
+              <Stars value={rating} onChange={setRating} size={34} />
+              <Text style={[typography.caption, { marginTop: 4 }]}>{["", "Poor", "Fair", "Good", "Very good", "Excellent"][rating] || "Tap to rate"}</Text>
+            </View>
+            <TextField value={comment} onChangeText={setComment} placeholder="Delivery on time? Quality as described? (optional)" multiline maxLength={1000} />
+            <Button title="Submit review" icon="star-outline" loading={busy} disabled={rating < 1} onPress={submitReview} fullWidth />
+          </>
+        ) : null}
+      </Card>
+    </>
+  );
 }
 
 function OrderDetailContent() {
@@ -159,6 +417,11 @@ function OrderDetailContent() {
     WebBrowser.openBrowserAsync(invoiceHtmlUrl(order.id, token)).catch(() => undefined);
   };
 
+  const openDeliveryNote = () => {
+    if (!token) return;
+    WebBrowser.openBrowserAsync(deliveryNoteUrl(order.id, token)).catch(() => undefined);
+  };
+
   return (
     <Screen scroll refreshing={refreshing} onRefresh={refresh} edges={["bottom", "left", "right"]}>
       <Stack.Screen options={{ title: order.reference }} />
@@ -235,6 +498,9 @@ function OrderDetailContent() {
           onPress={() => changeStatus(next.status, `Set this order to "${next.label.replace(/^Mark |^Confirm /, "")}"?`)}
           style={{ marginTop: spacing.md }}
         />
+      ) : null}
+      {(isOrderSupplier || isAdmin) && !cancelled ? (
+        <Button title={t("deliveryNote")} variant="outline" icon="clipboard-outline" fullWidth onPress={openDeliveryNote} style={{ marginTop: spacing.md }} />
       ) : null}
       {isBuyer && order.status === "PENDING" ? (
         <Button
@@ -397,6 +663,12 @@ function OrderDetailContent() {
         </>
       ) : null}
 
+      <ReviewSection order={order} isBuyer={isBuyer} isOrderSupplier={isOrderSupplier} t={t} />
+
+      <MessagesSection orderId={order.id} meId={user?.id} canPost={(isBuyer || isOrderSupplier || isAdmin) && !cancelled} t={t} />
+
+      <ActivitySection orderId={order.id} version={`${order.status}:${paymentStatus}:${order.updatedAt}`} t={t} />
+
       {order.rfq || (type === "RFQ" && order.rfqId) ? (
         <Button title="View original RFQ" variant="ghost" onPress={() => router.push(`/rfq/${order.rfqId}`)} style={{ marginTop: spacing.sm }} />
       ) : null}
@@ -452,4 +724,23 @@ const styles = StyleSheet.create({
   itemsTotalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6 },
   itemsTotalLabel: { ...typography.h3 },
   itemsTotalValue: { fontSize: 17, fontWeight: "800", color: colors.primary },
+  event: { flexDirection: "row", gap: spacing.md, minHeight: 44 },
+  eventIndicator: { alignItems: "center", width: 24 },
+  eventDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center" },
+  eventLine: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 2 },
+  eventBody: { flex: 1, paddingTop: 2, paddingBottom: spacing.md },
+  eventTitle: { ...typography.body, fontWeight: "600" },
+  bubbleRow: { flexDirection: "row", marginBottom: spacing.sm },
+  bubble: { maxWidth: "85%", padding: spacing.md, borderRadius: radius.lg },
+  bubbleMine: { backgroundColor: colors.primary, borderBottomRightRadius: 4 },
+  bubbleTheirs: { backgroundColor: colors.neutralLight, borderBottomLeftRadius: 4 },
+  bubbleSender: { ...typography.caption, fontWeight: "600", marginBottom: 2 },
+  composer: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm, marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  composerInput: { flex: 1, minHeight: 42, maxHeight: 120, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, fontSize: 15, color: colors.text, backgroundColor: colors.surface },
+  sendBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  stars: { flexDirection: "row", gap: 4 },
+  reviewHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  replyBox: { marginTop: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primaryLight },
+  replyHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  replyTitle: { ...typography.label, color: colors.primary },
 });

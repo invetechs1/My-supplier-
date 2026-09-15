@@ -10,6 +10,7 @@ import { paged, paginate } from "../lib/pagination";
 import { nextReference } from "../lib/reference";
 import { companyUserIds, notify } from "../services/notifications";
 import { bidTotal, rankBids } from "../services/pricing";
+import { recordOrderEvent } from "../services/portal";
 
 const router = Router();
 
@@ -361,6 +362,7 @@ router.post(
       return [order, rfq];
     });
 
+    await recordOrderEvent(order.id, "CREATED", { status: "PENDING", message: `Created from ${bid.rfq.reference} (bid accepted)`, userId: req.user!.id });
     const winnerUsers = await companyUserIds([bid.companyId]);
     await notify({
       userIds: winnerUsers,

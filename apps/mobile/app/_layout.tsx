@@ -63,6 +63,12 @@ export default function RootLayout() {
                 <Stack.Screen name="order/[id]" options={{ title: "Order" }} />
                 <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
                 <Stack.Screen name="supplier/prices" options={{ title: "My price list" }} />
+                <Stack.Screen name="supplier/dashboard" options={{ title: "Business dashboard" }} />
+                <Stack.Screen name="supplier/inventory" options={{ title: "Inventory" }} />
+                <Stack.Screen name="supplier/inventory/[listingId]" options={{ title: "Stock" }} />
+                <Stack.Screen name="supplier/finance" options={{ title: "Finance" }} />
+                <Stack.Screen name="supplier/team" options={{ title: "Team" }} />
+                <Stack.Screen name="supplier/company" options={{ title: "Company profile" }} />
                 <Stack.Screen name="imports/index" options={{ title: "Imports" }} />
                 <Stack.Screen name="imports/new" options={{ title: "Read prices" }} />
                 <Stack.Screen name="imports/[id]" options={{ title: "Review import" }} />

@@ -105,6 +105,26 @@ supplier web page (feed) ────┘        │                             
   14-day magic links (`/update-prices/<token>`) delivered by email, WhatsApp (wa.me link) or copy.
   A weekly job (`OUTREACH_AUTO=true`) emails stale suppliers automatically.
 
+## Supplier portal (multi-tenant)
+* **Tenancy** – every supplier record hangs off `Company`; all `/supplier/*` endpoints resolve the
+  caller's `companyId` from the JWT and never accept a company id from the client. Users carry a
+  `companyRole` (`OWNER`, `MANAGER`, `SALES`, `WAREHOUSE`) enforced by `requireCompanyRole` on top of
+  the platform role; the last active owner cannot be demoted.
+* **Team** – invitations are single-use, hashed tokens (7 days) delivered by email; accepting one
+  creates the user inside the company or attaches an existing account.
+* **Inventory** – `StockMovement` is the ledger (`IN`, `OUT`, `ADJUST`, `RESERVE`, `RELEASE`) and
+  `PriceListing.stock` the running balance. Checkout writes `OUT` per item; cancellations write
+  `RELEASE`; the inventory view adds reservations from orders not yet dispatched. A daily job
+  notifies warehouse/owner users of items at or below the company threshold.
+* **Orders** – `OrderEvent` is the timeline (created, status, payment, message, review) and
+  `OrderMessage` the buyer–supplier thread. Delivery notes and tax invoices are server-rendered HTML.
+* **Finance** – commission is `PlatformSetting.commissionPct` unless the company has an override;
+  statements are computed from non-cancelled orders; payouts group paid + delivered orders not yet
+  paid out, per company and period, and are marked paid by the admin with a bank reference.
+* **Trust** – documents (CR, VAT, licence) upload to `UPLOAD_DIR` (swap for object storage via
+  `UPLOAD_BASE_URL`), admins approve documents and set the verification status; reviews are one per
+  delivered order and roll up into the company rating.
+
 ## Bidding flow
 `Buyer creates RFQ` → suppliers in the delivery city or that stock the requested materials are
 notified → suppliers bid per line item → buyer sees ranked bids → `accept` (transaction: bid

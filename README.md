@@ -21,6 +21,13 @@ Docs: [API contract](docs/API.md) · [Architecture](docs/ARCHITECTURE.md) · [Ro
   (15%) and delivery fees, split checkout that creates one order per supplier, payment method
   (cash on delivery, bank transfer, card placeholder) and order tracking. Reference prices from
   market sources are shown next to real offers but are not purchasable.
+* **Multi-tenant supplier portal** – every supplier company gets its own workspace: analytics
+  dashboard (revenue and order trends, win rate, price competitiveness against the market, top
+  products), storefront profile with logo and public page, team members with roles (owner,
+  manager, sales, warehouse) and email invitations, branches, inventory with stock movements,
+  reservations and low-stock alerts, order timeline and buyer–supplier messaging, printable
+  delivery notes, reviews with replies, finance statements with platform commission, payouts, and
+  verification documents reviewed by the admin.
 * **AI price collection** – suppliers upload a price list as PDF, Excel, photo or pasted text;
   contractors upload quotations they received; admins point a feed at a supplier web page.
   Claude reads the document, every line is matched to the catalogue with a confidence score and

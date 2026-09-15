@@ -11,6 +11,8 @@ type AnyStatus =
   | "SUGGESTED" | "APPROVED"
   | "PAID" | "UNPAID" | "REFUNDED"
   | "DIRECT" | "RFQ"
+  | "UNDER_REVIEW" | "VERIFIED"
+  | "OWNER" | "MANAGER" | "SALES" | "WAREHOUSE"
   | (string & {});
 
 const palette: Record<string, { bg: string; fg: string }> = {
@@ -42,6 +44,13 @@ const palette: Record<string, { bg: string; fg: string }> = {
   REFUNDED: { bg: colors.neutralLight, fg: colors.textSecondary },
   DIRECT: { bg: colors.accentLight, fg: "#B07A00" },
   RFQ: { bg: colors.infoLight, fg: colors.info },
+  // Company verification & roles (supplier portal)
+  UNDER_REVIEW: { bg: colors.infoLight, fg: colors.info },
+  VERIFIED: { bg: colors.successLight, fg: colors.success },
+  OWNER: { bg: colors.primaryLight, fg: colors.primary },
+  MANAGER: { bg: colors.infoLight, fg: colors.info },
+  SALES: { bg: colors.accentLight, fg: "#B07A00" },
+  WAREHOUSE: { bg: colors.purpleLight, fg: colors.purple },
 };
 
 export function statusLabel(status: string): string {

@@ -6,33 +6,47 @@ import type {
   BoqAnalysis,
   BoqLineInput,
   BoqToRfqPayload,
+  Branch,
   Cart,
   Category,
   CheckoutPayload,
   CheckoutResult,
   Company,
+  CompanyDocument,
+  CompanyInvite,
+  CompanyProfile,
+  CompanyRole,
   CreateBidPayload,
   CreateRfqPayload,
+  DocumentStatus,
+  DocumentType,
   Feed,
+  FinanceSummary,
   HealthStatus,
   ImportKind,
   ImportRowStatus,
   ImportStatus,
+  InventoryItem,
   InvoiceData,
   LoginPayload,
   Material,
   Notification,
   Order,
+  OrderEvent,
   OrderExtended,
+  OrderMessage,
   OrderStatus,
   OutreachChannel,
   OutreachRequestResult,
   OutreachSupplier,
   Paginated,
+  Payout,
+  PayoutStatus,
   PaymentConfig,
   PaymentIntent,
   PaymentRecord,
   PaymentStatus,
+  PlatformSettings,
   PlatformStats,
   PriceHistoryPoint,
   PriceImport,
@@ -46,13 +60,37 @@ import type {
   ProductDetail,
   PublishImportResult,
   RegisterPayload,
+  Review,
   Rfq,
   Role,
   ShopHome,
+  StatementLine,
+  StockMovement,
+  StockMovementType,
   SupplierCatalogItem,
+  SupplierDashboard,
+  SupplierPublicProfile,
+  TeamMember,
   UpsertPricePayload,
   User,
+  VerificationStatus,
 } from "@mysupplier/shared";
+
+/** Origin of the API (without the `/api/v1` prefix) – uploaded files are served from `<origin>/uploads/...`. */
+export const API_ORIGIN = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1").origin;
+  } catch {
+    return "http://localhost:4000";
+  }
+})();
+
+/** Resolve a file URL returned by the API (absolute URLs pass through, `/uploads/...` is prefixed with the API origin). */
+export function fileUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (/^(https?:)?\/\//i.test(path) || path.startsWith("data:") || path.startsWith("blob:")) return path;
+  return `${API_ORIGIN}${path.startsWith("/") ? "" : "/"}${path}`;
+}
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
@@ -336,6 +374,97 @@ export interface PriceUpdateResult {
   completedAt: string;
 }
 
+
+// Supplier portal (multi-tenant) ------------------------------------------------
+
+/** `GET /auth/me` now returns the caller's company role; older API builds omit it (treated as OWNER). */
+export type AppUser = User & { companyRole?: CompanyRole | null; company?: (Company & Partial<CompanyProfile>) | null };
+
+export type CompanyProfilePatch = Partial<
+  Pick<
+    CompanyProfile,
+    | "name"
+    | "nameAr"
+    | "slug"
+    | "description"
+    | "descriptionAr"
+    | "citiesServed"
+    | "minOrderValue"
+    | "deliveryFee"
+    | "deliveryDays"
+    | "workingHours"
+    | "phone"
+    | "email"
+    | "website"
+    | "bankName"
+    | "iban"
+    | "beneficiary"
+    | "lowStockThreshold"
+  >
+>;
+
+export interface BranchPayload {
+  name: string;
+  city: string;
+  address?: string | null;
+  phone?: string | null;
+  isDefault?: boolean;
+}
+
+export interface TeamResponse {
+  members: TeamMember[];
+  invites: CompanyInvite[];
+}
+
+export interface InviteInfo {
+  company: { id: string; name: string };
+  email: string;
+  role: CompanyRole;
+  expiresAt: string;
+}
+
+export interface AcceptInvitePayload {
+  token: string;
+  name: string;
+  password: string;
+  phone?: string;
+}
+
+export type InventoryQuery = {
+  q?: string;
+  branchId?: string;
+  lowStock?: 1 | undefined;
+  page?: number;
+  pageSize?: number;
+};
+
+export interface StockMovementPayload {
+  type: Extract<StockMovementType, "IN" | "OUT" | "ADJUST">;
+  quantity: number;
+  reason?: string;
+}
+
+export type FinanceStatementQuery = {
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export interface GeneratePayoutsPayload {
+  periodStart: string;
+  periodEnd: string;
+  companyId?: string;
+}
+
+export interface VerificationPatch {
+  status: VerificationStatus;
+  notes?: string;
+  commissionPct?: number | null;
+}
+
+export type AdminCompanyDetail = CompanyProfile & { documents: CompanyDocument[]; members: TeamMember[]; branches: Branch[] };
+
 export const api = {
   // Public
   health: () => request<HealthStatus>("/health"),
@@ -497,12 +626,112 @@ export const api = {
   priceUpdateInfo: (token: string) => request<PriceUpdateRequestInfo>(`/price-update/${encodeURIComponent(token)}`),
   submitPriceUpdate: (token: string, payload: PriceUpdateSubmission) =>
     request<PriceUpdateResult>(`/price-update/${encodeURIComponent(token)}`, { method: "POST", body: payload }),
+
+  // Supplier portal: dashboard
+  supplierDashboard: (days = 30) => request<SupplierDashboard>("/supplier/dashboard", { query: { days } }),
+
+  // Supplier portal: company profile, logo, documents, branches
+  supplierCompany: () => request<CompanyProfile>("/supplier/company"),
+  updateSupplierCompany: (body: CompanyProfilePatch) => request<CompanyProfile>("/supplier/company", { method: "PATCH", body }),
+  uploadCompanyLogo: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    return requestForm<CompanyProfile>("/supplier/company/logo", fd);
+  },
+  companyDocuments: () => request<CompanyDocument[]>("/supplier/company/documents"),
+  uploadCompanyDocument: (file: File, type: DocumentType) => {
+    const fd = new FormData();
+    fd.append("type", type);
+    fd.append("file", file, file.name);
+    return requestForm<CompanyDocument>("/supplier/company/documents", fd);
+  },
+  deleteCompanyDocument: (id: string) =>
+    request<{ ok: boolean }>(`/supplier/company/documents/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  branches: () => request<Branch[]>("/supplier/branches"),
+  createBranch: (body: BranchPayload) => request<Branch>("/supplier/branches", { method: "POST", body }),
+  updateBranch: (id: string, body: Partial<BranchPayload>) =>
+    request<Branch>(`/supplier/branches/${encodeURIComponent(id)}`, { method: "PATCH", body }),
+  deleteBranch: (id: string) => request<{ ok: boolean }>(`/supplier/branches/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  // Supplier portal: team & invites
+  team: () => request<TeamResponse>("/supplier/team"),
+  inviteMember: (body: { email: string; role: CompanyRole; name?: string }) =>
+    request<CompanyInvite>("/supplier/team/invite", { method: "POST", body }),
+  cancelInvite: (id: string) => request<{ ok: boolean }>(`/supplier/team/invite/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  updateMember: (userId: string, body: { role?: CompanyRole; active?: boolean }) =>
+    request<TeamMember>(`/supplier/team/${encodeURIComponent(userId)}`, { method: "PATCH", body }),
+  inviteInfo: (token: string) => request<InviteInfo>(`/auth/invite/${encodeURIComponent(token)}`),
+  acceptInvite: (body: AcceptInvitePayload) => request<AuthResponse>("/auth/accept-invite", { method: "POST", body }),
+
+  // Supplier portal: inventory
+  inventory: (query: InventoryQuery = {}) => request<Paginated<InventoryItem>>("/supplier/inventory", { query }),
+  setStock: (listingId: string, body: { stock: number | null; branchId?: string | null }) =>
+    request<InventoryItem>(`/supplier/inventory/${encodeURIComponent(listingId)}`, { method: "PATCH", body }),
+  addStockMovement: (listingId: string, body: StockMovementPayload) =>
+    request<StockMovement>(`/supplier/inventory/${encodeURIComponent(listingId)}/movements`, { method: "POST", body }),
+  stockMovements: (listingId: string) => request<StockMovement[]>(`/supplier/inventory/${encodeURIComponent(listingId)}/movements`),
+
+  // Orders: timeline, messages, reviews
+  orderEvents: (orderId: string) => request<OrderEvent[]>(`/orders/${encodeURIComponent(orderId)}/events`),
+  orderMessages: (orderId: string, signal?: AbortSignal) =>
+    request<OrderMessage[]>(`/orders/${encodeURIComponent(orderId)}/messages`, { signal }),
+  sendOrderMessage: (orderId: string, body: string) =>
+    request<OrderMessage>(`/orders/${encodeURIComponent(orderId)}/messages`, { method: "POST", body: { body } }),
+  createReview: (orderId: string, body: { rating: number; comment?: string }) =>
+    request<Review>(`/orders/${encodeURIComponent(orderId)}/review`, { method: "POST", body }),
+  replyToReview: (reviewId: string, reply: string) =>
+    request<Review>(`/reviews/${encodeURIComponent(reviewId)}/reply`, { method: "POST", body: { reply } }),
+  supplierProfile: (idOrSlug: string) => request<SupplierPublicProfile>(`/suppliers/${encodeURIComponent(idOrSlug)}`),
+  supplierReviews: (id: string, page = 1) =>
+    request<Paginated<Review>>(`/suppliers/${encodeURIComponent(id)}/reviews`, { query: { page } }),
+
+  // Supplier portal: finance & payouts
+  financeSummary: () => request<FinanceSummary>("/supplier/finance/summary"),
+  financeStatement: (query: FinanceStatementQuery = {}) => request<Paginated<StatementLine>>("/supplier/finance/statement", { query }),
+  supplierPayouts: () => request<Payout[]>("/supplier/payouts"),
+
+  // Admin: platform settings, payouts, company verification
+  adminSettings: () => request<PlatformSettings>("/admin/settings"),
+  adminUpdateSettings: (body: Partial<PlatformSettings>) => request<PlatformSettings>("/admin/settings", { method: "PATCH", body }),
+  adminPayouts: (query: { status?: PayoutStatus | ""; page?: number } = {}) => request<Paginated<Payout>>("/admin/payouts", { query }),
+  adminGeneratePayouts: (body: GeneratePayoutsPayload) =>
+    request<{ created: Payout[] }>("/admin/payouts/generate", { method: "POST", body }),
+  adminUpdatePayout: (id: string, body: { status: "PAID"; reference?: string }) =>
+    request<Payout>(`/admin/payouts/${encodeURIComponent(id)}`, { method: "PATCH", body }),
+  adminCompany: (id: string) => request<AdminCompanyDetail>(`/admin/companies/${encodeURIComponent(id)}`),
+  adminSetVerification: (id: string, body: VerificationPatch) =>
+    request<CompanyProfile>(`/admin/companies/${encodeURIComponent(id)}/verification`, { method: "PATCH", body }),
+  adminUpdateDocument: (companyId: string, docId: string, body: { status: DocumentStatus; notes?: string }) =>
+    request<CompanyDocument>(`/admin/companies/${encodeURIComponent(companyId)}/documents/${encodeURIComponent(docId)}`, { method: "PATCH", body }),
 };
 
 /** Printable invoice URL; the JWT travels in the query because browsers can't send headers on navigation. */
 export function invoiceHtmlUrl(orderId: string): string {
   const token = getToken();
   return `${API_URL}/orders/${encodeURIComponent(orderId)}/invoice.html${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+}
+
+/** Printable delivery note / packing slip (supplier); token in the query like the invoice. */
+export function deliveryNoteHtmlUrl(orderId: string): string {
+  const token = getToken();
+  return `${API_URL}/orders/${encodeURIComponent(orderId)}/delivery-note.html${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+}
+
+/** CSV export of all listings with stock (opens as a download; token in the query). */
+export function inventoryExportUrl(): string {
+  const token = getToken();
+  return `${API_URL}/supplier/inventory/export.csv${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+}
+
+/** CSV export of the finance statement for a date range (token in the query). */
+export function financeStatementCsvUrl(query: { from?: string; to?: string } = {}): string {
+  const token = getToken();
+  const params = new URLSearchParams();
+  if (query.from) params.set("from", query.from);
+  if (query.to) params.set("to", query.to);
+  if (token) params.set("token", token);
+  const qs = params.toString();
+  return `${API_URL}/supplier/finance/statement.csv${qs ? `?${qs}` : ""}`;
 }
 
 /** Turn a loose import error row into a readable string. */

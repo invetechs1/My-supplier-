@@ -218,6 +218,18 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 async function main() {
   console.log("Seeding MySupplier…");
   await prisma.notification.deleteMany();
+  await prisma.review.deleteMany();
+  await prisma.orderMessage.deleteMany();
+  await prisma.orderEvent.deleteMany();
+  await prisma.stockMovement.deleteMany();
+  await prisma.payout.deleteMany();
+  await prisma.companyInvite.deleteMany();
+  await prisma.companyDocument.deleteMany();
+  await prisma.branch.deleteMany();
+  await prisma.platformSetting.deleteMany();
+  await prisma.priceImportRow.deleteMany();
+  await prisma.priceImport.deleteMany();
+  await prisma.priceUpdateRequest.deleteMany();
   await prisma.cartItem.deleteMany();
   await prisma.cart.deleteMany();
   await prisma.feed.deleteMany();
@@ -257,7 +269,17 @@ async function main() {
   const companyIds: { id: string; name: string; city: string; factor: number; cats: string[] }[] = [];
   for (const s of suppliers) {
     const { cats, factor, ...data } = s;
-    const created = await prisma.company.create({ data: { ...data, type: "SUPPLIER", crNumber: `10${Math.floor(rand() * 1e8).toString().padStart(8, "0")}`, vatNumber: `3${Math.floor(rand() * 1e13).toString().padStart(13, "0")}00003`, phone: "+9665" + Math.floor(rand() * 1e8).toString().padStart(8, "0") } });
+    const slug = s.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const created = await prisma.company.create({
+      data: {
+        ...data, type: "SUPPLIER", slug, crNumber: `10${Math.floor(rand() * 1e8).toString().padStart(8, "0")}`, vatNumber: `3${Math.floor(rand() * 1e13).toString().padStart(13, "0")}00003`,
+        phone: "+9665" + Math.floor(rand() * 1e8).toString().padStart(8, "0"), email: `sales@${slug}.sa`,
+        verificationStatus: s.verified ? "VERIFIED" : "PENDING", citiesServed: [s.city],
+        description: `${s.name} supplies ${cats.map((c) => c.replace(/-/g, " ")).join(", ")} across ${s.region} Saudi Arabia. Same-week delivery, VAT invoices, volume discounts for contractors.`,
+        deliveryDays: 2 + Math.floor(rand() * 4), minOrderValue: 500, deliveryFee: 150, workingHours: "Sat–Thu 7:00–18:00",
+        branches: { create: { name: `${s.city} main branch`, city: s.city, address: `${s.city} Industrial Area`, phone: "+9665" + Math.floor(rand() * 1e8).toString().padStart(8, "0"), isDefault: true } },
+      },
+    });
     companyIds.push({ id: created.id, name: s.name, city: s.city, factor, cats });
   }
   const demoSupplier = companyIds.find((c) => c.name === "Demo Supplier Co.")!;
@@ -269,12 +291,13 @@ async function main() {
   const password = (p: string) => bcrypt.hashSync(p, 10);
   const admin = await prisma.user.create({ data: { email: "admin@mysupplier.sa", passwordHash: password("Admin123!"), name: "Platform Admin", role: "ADMIN" } });
   const buyer = await prisma.user.create({ data: { email: "buyer@mysupplier.sa", passwordHash: password("Buyer123!"), name: "Fahad Al-Otaibi", phone: "+966501234567", role: "BUYER", companyId: contractor.id } });
-  await prisma.user.create({ data: { email: "supplier@mysupplier.sa", passwordHash: password("Supplier123!"), name: "Sara Al-Ghamdi", phone: "+966557654321", role: "SUPPLIER", companyId: demoSupplier.id } });
+  await prisma.user.create({ data: { email: "supplier@mysupplier.sa", passwordHash: password("Supplier123!"), name: "Sara Al-Ghamdi", phone: "+966557654321", role: "SUPPLIER", companyId: demoSupplier.id, companyRole: "OWNER" } });
+  await prisma.user.create({ data: { email: "warehouse@mysupplier.sa", passwordHash: password("Supplier123!"), name: "Khalid Warehouse", role: "SUPPLIER", companyId: demoSupplier.id, companyRole: "WAREHOUSE" } });
   // One staff user per other supplier so notifications have recipients.
   for (const c of companyIds) {
     if (c.id === demoSupplier.id) continue;
     const slug = c.name.toLowerCase().replace(/[^a-z]+/g, "-").replace(/(^-|-$)/g, "");
-    await prisma.user.create({ data: { email: `sales@${slug}.sa`, passwordHash: password("Supplier123!"), name: `${c.name} Sales`, role: "SUPPLIER", companyId: c.id } });
+    await prisma.user.create({ data: { email: `sales@${slug}.sa`, passwordHash: password("Supplier123!"), name: `${c.name} Sales`, role: "SUPPLIER", companyId: c.id, companyRole: "OWNER" } });
   }
 
   // Price listings: each supplier lists most materials in its categories, in its own city
@@ -323,8 +346,8 @@ async function main() {
 
   // Demo RFQs, bids and one awarded order.
   const byPk = (sku: string) => materialRows.find((m) => m.sku === sku)!;
-  let counter = 0;
-  const ref = (p: string) => `${p}-${new Date().getFullYear()}-${String(++counter).padStart(6, "0")}`;
+  const counters: Record<string, number> = { RFQ: 0, ORD: 0 };
+  const ref = (p: "RFQ" | "ORD") => `${p}-${new Date().getFullYear()}-${String(++counters[p]).padStart(6, "0")}`;
 
   const rfq1 = await prisma.rfq.create({
     data: {
@@ -381,12 +404,43 @@ async function main() {
   await prisma.rfq.update({ where: { id: rfq3.id }, data: { awardedBidId: winning.id } });
   await prisma.order.create({ data: { reference: ref("ORD"), type: "RFQ", rfqId: rfq3.id, bidId: winning.id, buyerId: buyer.id, companyId: qassim.id, subtotal: winning.totalPrice, total: winning.totalPrice, status: "CONFIRMED", paymentMethod: "BANK_TRANSFER", deliveryCity: "Riyadh", items: { create: [{ materialId: byPk("RMC-C30").id, name: byPk("RMC-C30").name, unit: "m3", unitPrice: round2(byPk("RMC-C30").base * 0.97), quantity: 640, lineTotal: winning.totalPrice }] } } });
   await prisma.feed.create({ data: { name: "Example JSON feed (edit URL)", url: "https://example.com/construction-prices.json", format: "json", enabled: false, lastStatus: "never run" } });
-  await prisma.counter.createMany({ data: [{ key: `RFQ-${new Date().getFullYear()}`, value: 3 }, { key: `ORD-${new Date().getFullYear()}`, value: 1 }] });
+  // (counters are written at the end, after every seeded reference)
+  await prisma.platformSetting.createMany({ data: [{ key: "commissionPct", value: 3 }, { key: "payoutDayOfWeek", value: 1 }, { key: "lowStockThresholdDefault", value: 10 }] });
+  // A delivered, paid direct order from the demo supplier with a review, messages and a timeline.
+  const helmet = byPk("PPE-HLM");
+  const helmetListing = await prisma.priceListing.findFirst({ where: { materialId: helmet.id, companyId: demoSupplier.id } });
+  const delivered = await prisma.order.create({
+    data: {
+      reference: ref("ORD"), type: "DIRECT", buyerId: buyer.id, companyId: demoSupplier.id, subtotal: 2800, vat: 420, deliveryFee: 150, total: 3370, status: "DELIVERED", paymentStatus: "PAID", paymentMethod: "BANK_TRANSFER",
+      deliveryCity: "Riyadh", deliveryAddress: "Al Narjis, Plot 233", contactPhone: "+966501234567", createdAt: new Date(now - 9 * 86400000),
+      items: { create: [{ materialId: helmet.id, listingId: helmetListing?.id, name: helmet.name, unit: "piece", unitPrice: 28, quantity: 100, lineTotal: 2800 }] },
+      events: { create: [
+        { type: "CREATED", status: "PENDING", message: "Order placed · bank transfer", userId: buyer.id, createdAt: new Date(now - 9 * 86400000) },
+        { type: "PAYMENT", message: "Payment paid", createdAt: new Date(now - 8 * 86400000) },
+        { type: "STATUS", status: "CONFIRMED", createdAt: new Date(now - 8 * 86400000) },
+        { type: "STATUS", status: "IN_TRANSIT", createdAt: new Date(now - 6 * 86400000) },
+        { type: "STATUS", status: "DELIVERED", createdAt: new Date(now - 5 * 86400000) },
+      ] },
+    },
+  });
+  const supplierUser = await prisma.user.findUniqueOrThrow({ where: { email: "supplier@mysupplier.sa" } });
+  await prisma.orderMessage.createMany({ data: [
+    { orderId: delivered.id, senderId: buyer.id, body: "Can you deliver before 9am? Site gate closes at 10.", createdAt: new Date(now - 7 * 86400000), readAt: new Date(now - 7 * 86400000) },
+    { orderId: delivered.id, senderId: supplierUser.id, body: "Yes, truck leaves at 7:00. Driver will call 30 minutes before.", createdAt: new Date(now - 7 * 86400000 + 3600000), readAt: new Date(now - 6 * 86400000) },
+  ] });
+  await prisma.review.create({ data: { orderId: delivered.id, companyId: demoSupplier.id, buyerId: buyer.id, rating: 5, comment: "On time, helmets exactly as specified, invoice correct.", reply: "Thank you! Looking forward to your next order.", repliedAt: new Date(now - 4 * 86400000) } });
+  await prisma.company.update({ where: { id: demoSupplier.id }, data: { rating: 5, ratingCount: 1 } });
+  if (helmetListing) await prisma.stockMovement.createMany({ data: [
+    { listingId: helmetListing.id, companyId: demoSupplier.id, type: "IN", quantity: 500, balanceAfter: 500, reason: "Opening stock", createdAt: new Date(now - 10 * 86400000) },
+    { listingId: helmetListing.id, companyId: demoSupplier.id, type: "OUT", quantity: 100, balanceAfter: 400, reason: `Order ${delivered.reference}`, orderId: delivered.id, createdAt: new Date(now - 9 * 86400000) },
+  ] });
 
   await prisma.notification.createMany({ data: [
     { userId: buyer.id, type: "NEW_BID", title: `New bid on ${rfq1.reference}`, body: "3 suppliers have quoted your villa foundations RFQ.", link: `/dashboard/rfqs/${rfq1.id}` },
     { userId: admin.id, type: "SYSTEM", title: "Welcome to MySupplier", body: "Seed data loaded. Verify new suppliers under Admin → Companies." },
   ] });
+
+  await prisma.counter.createMany({ data: [{ key: `RFQ-${new Date().getFullYear()}`, value: counters.RFQ }, { key: `ORD-${new Date().getFullYear()}`, value: counters.ORD }] });
 
   console.log(`Seeded ${categories.length} categories, ${materials.length} materials, ${suppliers.length} suppliers, ${listings.length} price listings, ${history.length} history points.`);
 }

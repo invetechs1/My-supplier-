@@ -56,8 +56,9 @@ router.post(
         phone: body.phone,
         role: body.role,
         locale: body.locale,
+        companyRole: body.company ? "OWNER" : undefined,
         company: body.company
-          ? { create: { ...body.company, type: body.role === "SUPPLIER" ? "SUPPLIER" : body.company.type } }
+          ? { create: { ...body.company, type: body.role === "SUPPLIER" ? "SUPPLIER" : body.company.type, citiesServed: [body.company.city], branches: { create: { name: "Main branch", city: body.company.city, isDefault: true } } } }
           : undefined,
       },
       include: userInclude,
@@ -76,6 +77,7 @@ router.post(
     if (!user || !user.active) throw unauthorized("Invalid email or password");
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw unauthorized("Invalid email or password");
+    prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => undefined);
     const token = signToken({ id: user.id, email: user.email, role: user.role, companyId: user.companyId, name: user.name });
     res.json({ token, user: serialize(user) });
   }),
@@ -103,6 +105,36 @@ router.patch(
 );
 
 const hashToken = (t: string) => crypto.createHash("sha256").update(t).digest("hex");
+
+router.get(
+  "/invite/:token",
+  asyncHandler(async (req, res) => {
+    const invite = await prisma.companyInvite.findUnique({ where: { tokenHash: hashToken(req.params.token) }, include: { company: { select: { id: true, name: true, logoUrl: true } } } });
+    if (!invite || invite.acceptedAt || invite.expiresAt.getTime() < Date.now()) throw badRequest("This invitation is invalid or has expired");
+    res.json({ company: invite.company, email: invite.email, name: invite.name, role: invite.role, expiresAt: invite.expiresAt });
+  }),
+);
+
+router.post(
+  "/accept-invite",
+  authLimiter,
+  asyncHandler(async (req, res) => {
+    const { token, name, password, phone } = z.object({ token: z.string().min(20), name: z.string().min(2), password: z.string().min(8), phone: z.string().optional() }).parse(req.body);
+    const invite = await prisma.companyInvite.findUnique({ where: { tokenHash: hashToken(token) } });
+    if (!invite || invite.acceptedAt || invite.expiresAt.getTime() < Date.now()) throw badRequest("This invitation is invalid or has expired");
+    let user = await prisma.user.findUnique({ where: { email: invite.email } });
+    if (user) {
+      if (user.companyId && user.companyId !== invite.companyId) throw conflict("This email already belongs to another company");
+      user = await prisma.user.update({ where: { id: user.id }, data: { companyId: invite.companyId, role: "SUPPLIER", companyRole: invite.role, active: true, phone: phone ?? user.phone } });
+    } else {
+      user = await prisma.user.create({ data: { email: invite.email, name, phone, passwordHash: await bcrypt.hash(password, 10), role: "SUPPLIER", companyId: invite.companyId, companyRole: invite.role } });
+    }
+    await prisma.companyInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
+    const full = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, include: userInclude });
+    const jwtToken = signToken({ id: full.id, email: full.email, role: full.role, companyId: full.companyId, name: full.name });
+    res.status(201).json({ token: jwtToken, user: serialize(full) });
+  }),
+);
 
 router.post(
   "/forgot-password",

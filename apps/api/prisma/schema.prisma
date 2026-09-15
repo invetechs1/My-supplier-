@@ -92,6 +92,8 @@ model User {
   active        Boolean        @default(true)
   companyId     String?
   company       Company?       @relation(fields: [companyId], references: [id])
+  companyRole   CompanyRole?
+  lastLoginAt   DateTime?
   rfqs          Rfq[]
   orders        Order[]
   notifications Notification[]
@@ -99,6 +101,11 @@ model User {
   devices       Device[]
   resetTokens   PasswordResetToken[]
   imports       PriceImport[]
+  sentInvites   CompanyInvite[]
+  stockMoves    StockMovement[]
+  orderEvents   OrderEvent[]
+  messages      OrderMessage[]
+  reviews       Review[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -117,6 +124,28 @@ model Company {
   verified    Boolean        @default(false)
   rating      Float          @default(0)
   ratingCount Int            @default(0)
+  slug        String?        @unique
+  logoUrl     String?
+  description String?
+  descriptionAr String?
+  citiesServed String[]      @default([])
+  minOrderValue Decimal?     @db.Decimal(14, 2)
+  deliveryFee   Decimal?     @db.Decimal(14, 2)
+  deliveryDays  Int?
+  workingHours  String?
+  email         String?
+  bankName      String?
+  iban          String?
+  beneficiary   String?
+  lowStockThreshold Int      @default(10)
+  verificationStatus VerificationStatus @default(PENDING)
+  verificationNotes  String?
+  commissionPct Decimal?     @db.Decimal(5, 2)
+  invites     CompanyInvite[]
+  documents   CompanyDocument[]
+  branches    Branch[]
+  reviews     Review[]
+  payouts     Payout[]
   users       User[]
   listings    PriceListing[]
   bids        Bid[]
@@ -188,6 +217,9 @@ model PriceListing {
   sourceName   String?
   validUntil   DateTime?
   stock        Int?
+  branchId     String?
+  branch       Branch?     @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  movements    StockMovement[]
   cartItems    CartItem[]
   orderItems   OrderItem[]
   createdAt    DateTime    @default(now())
@@ -306,12 +338,19 @@ model Order {
   contactPhone    String?
   notes           String?
   payments        Payment[]
+  events          OrderEvent[]
+  messages        OrderMessage[]
+  review          Review?
+  stockMoves      StockMovement[]
+  payoutId        String?
+  payout          Payout?        @relation(fields: [payoutId], references: [id])
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   @@index([buyerId])
   @@index([companyId])
   @@index([type, status])
+  @@index([payoutId])
 }
 
 model OrderItem {
@@ -528,4 +567,189 @@ model PriceUpdateRequest {
   updatedRows Int             @default(0)
 
   @@index([companyId])
+}
+
+enum CompanyRole {
+  OWNER
+  MANAGER
+  SALES
+  WAREHOUSE
+}
+
+enum VerificationStatus {
+  PENDING
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum DocumentType {
+  CR
+  VAT
+  LICENSE
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUST
+  RESERVE
+  RELEASE
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+}
+
+enum OrderEventType {
+  CREATED
+  STATUS
+  PAYMENT
+  NOTE
+  MESSAGE
+  REVIEW
+}
+
+model CompanyInvite {
+  id          String      @id @default(cuid())
+  companyId   String
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  email       String
+  name        String?
+  role        CompanyRole @default(SALES)
+  tokenHash   String      @unique
+  invitedById String
+  invitedBy   User        @relation(fields: [invitedById], references: [id])
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime    @default(now())
+
+  @@index([companyId])
+}
+
+model CompanyDocument {
+  id           String         @id @default(cuid())
+  companyId    String
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type         DocumentType
+  fileName     String
+  fileUrl      String
+  status       DocumentStatus @default(PENDING)
+  notes        String?
+  uploadedById String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([companyId])
+}
+
+model Branch {
+  id        String         @id @default(cuid())
+  companyId String
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  city      String
+  address   String?
+  phone     String?
+  isDefault Boolean        @default(false)
+  listings  PriceListing[]
+  createdAt DateTime       @default(now())
+
+  @@index([companyId])
+}
+
+model StockMovement {
+  id           String            @id @default(cuid())
+  listingId    String
+  listing      PriceListing      @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  companyId    String
+  type         StockMovementType
+  quantity     Float
+  balanceAfter Float?
+  reason       String?
+  orderId      String?
+  order        Order?            @relation(fields: [orderId], references: [id])
+  userId       String?
+  user         User?             @relation(fields: [userId], references: [id])
+  createdAt    DateTime          @default(now())
+
+  @@index([listingId])
+  @@index([companyId, createdAt])
+}
+
+model OrderEvent {
+  id        String         @id @default(cuid())
+  orderId   String
+  order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type      OrderEventType
+  status    OrderStatus?
+  message   String?
+  userId    String?
+  user      User?          @relation(fields: [userId], references: [id])
+  createdAt DateTime       @default(now())
+
+  @@index([orderId])
+}
+
+model OrderMessage {
+  id        String    @id @default(cuid())
+  orderId   String
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User      @relation(fields: [senderId], references: [id])
+  body      String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([orderId])
+}
+
+model Review {
+  id        String    @id @default(cuid())
+  orderId   String    @unique
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  buyerId   String
+  buyer     User      @relation(fields: [buyerId], references: [id])
+  rating    Int
+  comment   String?
+  reply     String?
+  repliedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([companyId])
+}
+
+model Payout {
+  id          String       @id @default(cuid())
+  companyId   String
+  company     Company      @relation(fields: [companyId], references: [id])
+  amount      Decimal      @db.Decimal(14, 2)
+  currency    String       @default("SAR")
+  periodStart DateTime
+  periodEnd   DateTime
+  orderCount  Int          @default(0)
+  status      PayoutStatus @default(PENDING)
+  reference   String?
+  paidAt      DateTime?
+  createdById String?
+  orders      Order[]
+  createdAt   DateTime     @default(now())
+
+  @@index([companyId, status])
+}
+
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }

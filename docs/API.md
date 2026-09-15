@@ -107,6 +107,62 @@ Prices enter the platform four ways: supplier self-service, AI-read documents, A
 | POST | `/price-update/:token` | public -> `PriceUpdateSubmission` -> `{ updated, added, completedAt }` |
 A weekly job emails suppliers whose prices are older than `OUTREACH_STALE_DAYS` (default 14) when `OUTREACH_AUTO=true`.
 
+## Supplier portal (multi-tenant)
+Every supplier endpoint is scoped to the caller's `companyId`. Company roles: `OWNER` / `MANAGER` (everything), `SALES` (prices, catalogue, bids, orders, messages), `WAREHOUSE` (inventory, order status). `GET /auth/me` now includes `companyRole` and `company` carries the `CompanyProfile` fields.
+
+### Dashboard & analytics
+| GET | `/supplier/dashboard?days=30` | `SupplierDashboard` (KPIs, 30-day revenue/orders series, orders by status, top products, price competitiveness vs market, recent orders & reviews) |
+
+### Company profile, storefront, documents, branches
+| GET | `/supplier/company` | `CompanyProfile` |
+| PATCH | `/supplier/company` | OWNER/MANAGER: any `CompanyProfile` editable field (`name, nameAr, slug, description, descriptionAr, citiesServed, minOrderValue, deliveryFee, deliveryDays, workingHours, phone, email, website, bankName, iban, beneficiary, lowStockThreshold`) -> `CompanyProfile` |
+| POST | `/supplier/company/logo` | multipart `file` (png/jpg/webp ≤ 2 MB) -> `CompanyProfile` (logoUrl) |
+| GET | `/supplier/company/documents` | `CompanyDocument[]` |
+| POST | `/supplier/company/documents` | multipart `file` (pdf/png/jpg ≤ 10 MB) + `type` -> `CompanyDocument` (sets verificationStatus UNDER_REVIEW) |
+| DELETE | `/supplier/company/documents/:id` | `{ ok }` |
+| GET/POST | `/supplier/branches` | `Branch[]` / `{ name, city, address?, phone?, isDefault? }` -> `Branch` |
+| PATCH/DELETE | `/supplier/branches/:id` | update / remove (listings keep working; branch nulled) |
+| GET | `/suppliers/:idOrSlug` | public `SupplierPublicProfile` (now includes logo, description, branches, reviews, stats) |
+| GET | `/suppliers/:id/reviews?page=` | `Paginated<Review>` |
+Uploaded files are served from `/uploads/...` (local disk `UPLOAD_DIR`; switch to S3 in production via `UPLOAD_BASE_URL`).
+
+### Team
+| GET | `/supplier/team` | `{ members: TeamMember[], invites: CompanyInvite[] }` |
+| POST | `/supplier/team/invite` | OWNER/MANAGER: `{ email, role, name? }` -> `CompanyInvite` (emails a link `WEB_URL/join?token=…`, 7 days) |
+| DELETE | `/supplier/team/invite/:id` | cancel |
+| PATCH | `/supplier/team/:userId` | OWNER/MANAGER: `{ role?, active? }` (cannot demote the last OWNER) |
+| GET | `/auth/invite/:token` | public -> `{ company: {id,name}, email, role, expiresAt }` |
+| POST | `/auth/accept-invite` | public `{ token, name, password, phone? }` -> `AuthResponse` (creates SUPPLIER user in the company; if the email already has an account it is attached instead) |
+
+### Inventory
+| GET | `/supplier/inventory?q=&branchId=&lowStock=1&page=` | `Paginated<InventoryItem>` |
+| PATCH | `/supplier/inventory/:listingId` | `{ stock: number | null, branchId? }` sets the level (records an ADJUST movement) |
+| POST | `/supplier/inventory/:listingId/movements` | `{ type: "IN"|"OUT"|"ADJUST", quantity, reason? }` -> `StockMovement` |
+| GET | `/supplier/inventory/:listingId/movements` | `StockMovement[]` (latest 100) |
+| GET | `/supplier/inventory/export.csv` | CSV of all listings with stock |
+Checkout records `OUT` movements per order item; cancelling a PENDING/CONFIRMED order records `RELEASE` and restores stock. Low-stock items (stock ≤ company threshold) raise a `SYSTEM` notification to WAREHOUSE/OWNER users once per day.
+
+### Orders: timeline, messages, delivery note
+| GET | `/orders/:id/events` | `OrderEvent[]` |
+| GET | `/orders/:id/messages` | `OrderMessage[]` (marks the other side's messages read) |
+| POST | `/orders/:id/messages` | `{ body }` -> `OrderMessage` (buyer ↔ supplier; notifies the other party) |
+| GET | `/orders/:id/delivery-note.html?token=` | printable delivery note / packing slip |
+| POST | `/orders/:id/review` | buyer, order DELIVERED: `{ rating 1-5, comment? }` -> `Review` |
+| POST | `/reviews/:id/reply` | supplier: `{ reply }` -> `Review` |
+
+### Finance & payouts
+| GET | `/supplier/finance/summary` | `FinanceSummary` |
+| GET | `/supplier/finance/statement?from=&to=&page=` | `Paginated<StatementLine>` |
+| GET | `/supplier/finance/statement.csv?from=&to=` | CSV |
+| GET | `/supplier/payouts` | `Payout[]` |
+| GET | `/admin/settings` / `PATCH` | `PlatformSettings` (`commissionPct`, `payoutDayOfWeek`, `lowStockThresholdDefault`) |
+| GET | `/admin/payouts?status=&page=` | `Paginated<Payout>` |
+| POST | `/admin/payouts/generate` | `{ periodStart, periodEnd, companyId? }` -> `{ created: Payout[] }` (net of paid + delivered orders not yet paid out) |
+| PATCH | `/admin/payouts/:id` | `{ status: "PAID", reference? }` -> `Payout` (notifies supplier) |
+| PATCH | `/admin/companies/:id/verification` | `{ status: VerificationStatus, notes?, commissionPct? }` -> `CompanyProfile` (VERIFIED also sets `verified=true`) |
+| GET | `/admin/companies/:id` | `CompanyProfile & { documents: CompanyDocument[], members: TeamMember[], branches: Branch[] }` |
+| PATCH | `/admin/companies/:id/documents/:docId` | `{ status, notes? }` |
+
 ## Auth
 | POST | `/auth/register` | body `RegisterPayload` -> `AuthResponse` (SUPPLIER must include `company`) |
 | POST | `/auth/login` | body `LoginPayload` -> `AuthResponse` |

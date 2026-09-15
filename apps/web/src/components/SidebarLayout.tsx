@@ -4,12 +4,13 @@ import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import type { Role } from "@mysupplier/shared";
-import { homeForRole, useAuth } from "@/lib/auth";
+import type { CompanyRole, Role } from "@mysupplier/shared";
+import { canAccessArea, companyRoleOf, homeForRole, useAuth, COMPANY_ROLE_LABEL, type SupplierArea } from "@/lib/auth";
+import { fileUrl } from "@/lib/api";
 import { usePageTitle } from "@/lib/hooks";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/format";
-import { LoadingBlock } from "./ui";
+import { LoadingBlock, VerificationBadge } from "./ui";
 
 export interface NavItem {
   href: string;
@@ -18,6 +19,10 @@ export interface NavItem {
   icon: React.ReactNode;
   /** Small pill rendered after the label, e.g. "AI". */
   badge?: string;
+  /** Group heading (translation key); consecutive items with the same group are rendered under one heading. */
+  group?: TranslationKey;
+  /** Supplier-portal area used for company-role gating (see canAccessArea). */
+  area?: SupplierArea;
 }
 
 const I = {
@@ -39,6 +44,12 @@ const I = {
   receipt: <path strokeLinecap="round" strokeLinejoin="round" d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185zM9.75 9h.008v.008H9.75V9zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 4.5h.008v.008h-.008V13.5zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />,
   megaphone: <path strokeLinecap="round" strokeLinejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46" />,
   user: <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />,
+  archive: <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />,
+  pin: <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />,
+  shield: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />,
+  wallet: <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />,
+  cog: <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z M15 12a3 3 0 11-6 0 3 3 0 016 0z" />,
+  storefront: <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" />,
 };
 
 function Icon({ children }: { children: React.ReactNode }) {
@@ -60,16 +71,27 @@ export const buyerNav: NavItem[] = [
 ];
 
 export const supplierNav: NavItem[] = [
-  { href: "/supplier", labelKey: "dash.overview", exact: true, icon: <Icon>{I.home}</Icon> },
-  { href: "/supplier/marketplace", labelKey: "sup.marketplace", icon: <Icon>{I.store}</Icon> },
-  { href: "/supplier/bids", labelKey: "sup.bids", icon: <Icon>{I.gavel}</Icon> },
-  { href: "/supplier/prices", labelKey: "sup.prices", icon: <Icon>{I.tag}</Icon> },
-  { href: "/supplier/imports", labelKey: "sup.imports", icon: <Icon>{I.sparkle}</Icon>, badge: "AI" },
-  { href: "/supplier/catalog", labelKey: "sup.catalog", icon: <Icon>{I.cart}</Icon> },
-  { href: "/supplier/orders", labelKey: "sup.orders", icon: <Icon>{I.box}</Icon> },
-  { href: "/supplier/notifications", labelKey: "dash.notifications", icon: <Icon>{I.bell}</Icon> },
-  { href: "/account", labelKey: "nav.account", icon: <Icon>{I.user}</Icon> },
+  { href: "/supplier", labelKey: "dash.overview", exact: true, icon: <Icon>{I.home}</Icon>, area: "overview" },
+  { href: "/supplier/marketplace", labelKey: "sup.marketplace", icon: <Icon>{I.store}</Icon>, group: "sup.group.sell", area: "sell" },
+  { href: "/supplier/bids", labelKey: "sup.bids", icon: <Icon>{I.gavel}</Icon>, group: "sup.group.sell", area: "sell" },
+  { href: "/supplier/prices", labelKey: "sup.prices", icon: <Icon>{I.tag}</Icon>, group: "sup.group.sell", area: "sell" },
+  { href: "/supplier/imports", labelKey: "sup.imports", icon: <Icon>{I.sparkle}</Icon>, badge: "AI", group: "sup.group.sell", area: "sell" },
+  { href: "/supplier/catalog", labelKey: "sup.catalog", icon: <Icon>{I.cart}</Icon>, group: "sup.group.sell", area: "sell" },
+  { href: "/supplier/orders", labelKey: "sup.orders", icon: <Icon>{I.box}</Icon>, group: "sup.group.operations", area: "orders" },
+  { href: "/supplier/inventory", labelKey: "sup.inventory", icon: <Icon>{I.archive}</Icon>, group: "sup.group.operations", area: "inventory" },
+  { href: "/supplier/branches", labelKey: "sup.branches", icon: <Icon>{I.pin}</Icon>, group: "sup.group.operations", area: "branches" },
+  { href: "/supplier/company", labelKey: "sup.company", icon: <Icon>{I.storefront}</Icon>, group: "sup.group.company", area: "company" },
+  { href: "/supplier/team", labelKey: "sup.team", icon: <Icon>{I.users}</Icon>, group: "sup.group.company", area: "team" },
+  { href: "/supplier/documents", labelKey: "sup.documents", icon: <Icon>{I.shield}</Icon>, group: "sup.group.company", area: "documents" },
+  { href: "/supplier/finance", labelKey: "sup.finance", icon: <Icon>{I.wallet}</Icon>, group: "sup.group.company", area: "finance" },
+  { href: "/supplier/notifications", labelKey: "dash.notifications", icon: <Icon>{I.bell}</Icon>, area: "notifications" },
+  { href: "/account", labelKey: "nav.account", icon: <Icon>{I.user}</Icon>, area: "account" },
 ];
+
+/** Items of the supplier nav visible to a given company role. */
+export function navForRole(items: NavItem[], role: CompanyRole): NavItem[] {
+  return items.filter((item) => !item.area || canAccessArea(role, item.area));
+}
 
 export const adminNav: NavItem[] = [
   { href: "/admin", labelKey: "dash.overview", exact: true, icon: <Icon>{I.home}</Icon> },
@@ -80,6 +102,8 @@ export const adminNav: NavItem[] = [
   { href: "/admin/imports", labelKey: "admin.imports", icon: <Icon>{I.sparkle}</Icon>, badge: "AI" },
   { href: "/admin/outreach", labelKey: "admin.outreach", icon: <Icon>{I.megaphone}</Icon> },
   { href: "/admin/feeds", labelKey: "admin.feeds", icon: <Icon>{I.rss}</Icon> },
+  { href: "/admin/payouts", labelKey: "admin.payouts", icon: <Icon>{I.wallet}</Icon> },
+  { href: "/admin/settings", labelKey: "admin.settings", icon: <Icon>{I.cog}</Icon> },
   { href: "/account", labelKey: "nav.account", icon: <Icon>{I.user}</Icon> },
 ];
 
@@ -91,7 +115,7 @@ interface SidebarLayoutProps {
   children: React.ReactNode;
 }
 
-export function SidebarLayout({ items, allow, title, children }: SidebarLayoutProps) {
+export function SidebarLayout({ items: allItems, allow, title, children }: SidebarLayoutProps) {
   const { user, loading } = useAuth();
   const { t } = useI18n();
   const pathname = usePathname();
@@ -99,6 +123,9 @@ export function SidebarLayout({ items, allow, title, children }: SidebarLayoutPr
   const [open, setOpen] = useState(false);
 
   const permitted = !!user && (allow.includes(user.role) || user.role === "ADMIN");
+  const companyRole = companyRoleOf(user);
+  const isSupplierArea = user?.role === "SUPPLIER" && allow.includes("SUPPLIER");
+  const items = isSupplierArea ? navForRole(allItems, companyRole) : allItems;
   const activeItem = items.find((item) => (item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`)));
   usePageTitle(activeItem ? `${t(activeItem.labelKey)} · ${title}` : title);
 
@@ -118,39 +145,70 @@ export function SidebarLayout({ items, allow, title, children }: SidebarLayoutPr
   }
 
   const navList = (
-    <nav className="flex flex-col gap-1" aria-label={title}>
-      {items.map((item) => {
+    <nav className="flex flex-col gap-0.5" aria-label={title}>
+      {items.map((item, index) => {
         const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const previous = index > 0 ? items[index - 1] : undefined;
+        const showGroup = item.group && item.group !== previous?.group;
+        const groupEnded = !item.group && previous?.group;
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition",
-              active ? "bg-brand-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+          <React.Fragment key={item.href}>
+            {showGroup && item.group && (
+              <p className="mb-1 mt-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 first:mt-0">{t(item.group)}</p>
             )}
-          >
-            {item.icon}
-            <span className="flex-1">{t(item.labelKey)}</span>
-            {item.badge && (
-              <span className={cn("rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide", active ? "bg-white/20 text-white" : "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-600/20")}>
-                {item.badge}
-              </span>
-            )}
-          </Link>
+            {groupEnded && <span className="my-2 block h-px bg-slate-100" aria-hidden />}
+            <Link
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition",
+                active ? "bg-brand-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+              )}
+            >
+              {item.icon}
+              <span className="flex-1">{t(item.labelKey)}</span>
+              {item.badge && (
+                <span className={cn("rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide", active ? "bg-white/20 text-white" : "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-600/20")}>
+                  {item.badge}
+                </span>
+              )}
+            </Link>
+          </React.Fragment>
         );
       })}
     </nav>
   );
 
+  const company = user.company ?? null;
+  const logo = fileUrl(company?.logoUrl ?? null);
+  const verificationStatus = company ? company.verificationStatus ?? (company.verified ? "VERIFIED" : "PENDING") : null;
+  const header = isSupplierArea && company ? (
+    <div className="mb-3 flex items-center gap-3 px-2 pt-1">
+      {logo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={logo} alt="" className="h-10 w-10 shrink-0 rounded-xl border border-slate-200 bg-white object-contain" />
+      ) : (
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-sm font-semibold text-white">{company.name.slice(0, 2).toUpperCase()}</span>
+      )}
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-slate-900" title={company.name}>{company.name}</p>
+        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+          {verificationStatus && <VerificationBadge status={verificationStatus} />}
+          <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{COMPANY_ROLE_LABEL[companyRole]}</span>
+        </div>
+      </div>
+    </div>
+  ) : (
+    <div className="mb-3 px-3 pt-1">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{title}</p>
+      <p className="truncate text-sm font-medium text-slate-900">{user.company?.name ?? user.name}</p>
+    </div>
+  );
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <aside className="hidden w-60 shrink-0 lg:block">
-        <div className="sticky top-24 rounded-xl border border-slate-200 bg-white p-3 shadow-card">
-          <div className="mb-3 px-3 pt-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{title}</p>
-            <p className="truncate text-sm font-medium text-slate-900">{user.company?.name ?? user.name}</p>
-          </div>
+        <div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 shadow-card">
+          {header}
           {navList}
         </div>
       </aside>

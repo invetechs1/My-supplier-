@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { LoginPayload, RegisterPayload, User } from "@mysupplier/shared";
+import type { CompanyRole, LoginPayload, RegisterPayload, User } from "@mysupplier/shared";
 import { api, getStoredToken, setStoredToken, ApiRequestError } from "./api";
 import { registerForPushAsync, unregisterPushAsync } from "./push";
 
@@ -11,6 +11,10 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isBuyer: boolean;
   isSupplier: boolean;
+  /** Role inside the supplier company (`/auth/me` `companyRole`); missing means OWNER. */
+  companyRole: CompanyRole;
+  /** OWNER / MANAGER: may edit the company profile, see finance and manage the team. */
+  canManageCompany: boolean;
   login: (payload: LoginPayload) => Promise<User>;
   register: (payload: RegisterPayload) => Promise<User>;
   logout: () => Promise<void>;
@@ -19,6 +23,12 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+/** `companyRole` is only present on newer API responses; older ones are treated as OWNER. */
+export function companyRoleOf(user: User | null | undefined): CompanyRole {
+  const role = (user as (User & { companyRole?: CompanyRole | null }) | null | undefined)?.companyRole;
+  return role ?? "OWNER";
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
@@ -100,22 +110,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token]);
 
-  const value = useMemo<AuthContextValue>(
-    () => ({
+  const value = useMemo<AuthContextValue>(() => {
+    const companyRole = companyRoleOf(user);
+    return {
       token,
       user,
       loading,
       isAuthenticated: Boolean(token && user),
       isBuyer: user?.role === "BUYER" || user?.role === "ADMIN",
       isSupplier: user?.role === "SUPPLIER",
+      companyRole,
+      canManageCompany: companyRole === "OWNER" || companyRole === "MANAGER",
       login,
       register,
       logout,
       refreshUser,
       setUser,
-    }),
-    [token, user, loading, login, register, logout, refreshUser],
-  );
+    };
+  }, [token, user, loading, login, register, logout, refreshUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -22,6 +22,9 @@ import deviceRoutes from "./routes/devices";
 import invoiceRoutes from "./routes/invoice";
 import importRoutes from "./routes/imports";
 import outreachRoutes from "./routes/outreach";
+import portalRoutes from "./routes/supplierPortal";
+import orderExtraRoutes from "./routes/orderExtras";
+import { UPLOAD_DIR } from "./lib/uploads";
 
 export function createApp() {
   const app = express();
@@ -49,6 +52,8 @@ export function createApp() {
   api.use(invoiceRoutes);
   api.use(importRoutes);
   api.use(outreachRoutes);
+  api.use(portalRoutes);
+  api.use(orderExtraRoutes);
   api.use("/auth", authRoutes);
   api.use(rfqRoutes);
   api.use(supplierPriceRoutes);
@@ -56,6 +61,7 @@ export function createApp() {
   api.use(notificationRoutes);
   api.use(adminRoutes);
   app.use("/api/v1", api);
+  app.use("/uploads", express.static(UPLOAD_DIR, { maxAge: "7d", immutable: true }));
 
   app.get("/", (_req, res) => res.json({ name: "MySupplier API", docs: "/api/v1/health", version: "v1" }));
   app.use((_req, res) => res.status(404).json({ error: "Route not found" }));

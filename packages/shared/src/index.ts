@@ -682,3 +682,208 @@ export interface PriceUpdateSubmission {
   newItems?: SupplierCatalogItem[];
   contactName?: string;
 }
+
+// Supplier portal (multi-tenant) ------------------------------------------------------
+
+export type CompanyRole = "OWNER" | "MANAGER" | "SALES" | "WAREHOUSE";
+export type VerificationStatus = "PENDING" | "UNDER_REVIEW" | "VERIFIED" | "REJECTED";
+export type DocumentType = "CR" | "VAT" | "LICENSE" | "OTHER";
+export type DocumentStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type StockMovementType = "IN" | "OUT" | "ADJUST" | "RESERVE" | "RELEASE";
+export type PayoutStatus = "PENDING" | "PAID";
+export type OrderEventType = "CREATED" | "STATUS" | "PAYMENT" | "NOTE" | "MESSAGE" | "REVIEW";
+
+/** Company profile fields editable by the supplier (extends Company). */
+export interface CompanyProfile extends Company {
+  slug?: string | null;
+  logoUrl?: string | null;
+  description?: string | null;
+  descriptionAr?: string | null;
+  citiesServed: string[];
+  minOrderValue?: number | null;
+  deliveryFee?: number | null;
+  deliveryDays?: number | null;
+  workingHours?: string | null;
+  email?: string | null;
+  bankName?: string | null;
+  iban?: string | null;
+  beneficiary?: string | null;
+  lowStockThreshold: number;
+  verificationStatus: VerificationStatus;
+  verificationNotes?: string | null;
+  commissionPct?: number | null; // per-company override of the platform take rate
+}
+
+export interface CompanyDocument {
+  id: string;
+  companyId: string;
+  type: DocumentType;
+  fileName: string;
+  fileUrl: string;
+  status: DocumentStatus;
+  notes?: string | null;
+  uploadedById: string;
+  createdAt: string;
+}
+
+export interface Branch {
+  id: string;
+  companyId: string;
+  name: string;
+  city: string;
+  address?: string | null;
+  phone?: string | null;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export interface TeamMember extends Pick<User, "id" | "email" | "name" | "phone" | "createdAt"> {
+  companyRole: CompanyRole;
+  active: boolean;
+  lastLoginAt?: string | null;
+}
+
+export interface CompanyInvite {
+  id: string;
+  email: string;
+  role: CompanyRole;
+  invitedBy?: Pick<User, "id" | "name"> | null;
+  expiresAt: string;
+  acceptedAt?: string | null;
+  createdAt: string;
+}
+
+export interface InventoryItem {
+  listing: PriceListing & { material: Material; branch?: Branch | null };
+  stock: number | null; // null = not tracked
+  reserved: number; // quantity in PENDING/CONFIRMED orders not yet dispatched
+  available: number | null;
+  lowStock: boolean;
+  soldLast30d: number;
+}
+
+export interface StockMovement {
+  id: string;
+  listingId: string;
+  type: StockMovementType;
+  quantity: number;
+  balanceAfter: number | null;
+  reason?: string | null;
+  orderId?: string | null;
+  order?: Pick<Order, "id" | "reference"> | null;
+  user?: Pick<User, "id" | "name"> | null;
+  createdAt: string;
+}
+
+export interface SeriesPoint {
+  date: string; // YYYY-MM-DD
+  value: number;
+}
+
+export interface SupplierDashboard {
+  company: CompanyProfile;
+  kpis: {
+    revenue30d: number;
+    revenueTotal: number;
+    orders30d: number;
+    pendingOrders: number;
+    unpaidOrders: number;
+    openRfqsInMyCities: number;
+    bidsSubmitted: number;
+    bidsWon: number;
+    winRatePct: number;
+    listings: number;
+    lowStockItems: number;
+    unreadMessages: number;
+    rating: number;
+    ratingCount: number;
+    productViews30d: number;
+  };
+  revenueByDay: SeriesPoint[]; // last 30 days
+  ordersByDay: SeriesPoint[];
+  ordersByStatus: Record<OrderStatus, number>;
+  topProducts: Array<{ material: Material; quantity: number; revenue: number; orders: number }>;
+  priceCompetitiveness: Array<{ material: Material; listingId: string; myPrice: number; marketAvg: number; marketMin: number; diffPct: number; rank: number; sellers: number }>;
+  recentOrders: OrderExtended[];
+  recentReviews: Review[];
+}
+
+export interface OrderEvent {
+  id: string;
+  orderId: string;
+  type: OrderEventType;
+  status?: OrderStatus | null;
+  message?: string | null;
+  user?: Pick<User, "id" | "name" | "role"> | null;
+  createdAt: string;
+}
+
+export interface OrderMessage {
+  id: string;
+  orderId: string;
+  sender: Pick<User, "id" | "name" | "role">;
+  body: string;
+  readAt?: string | null;
+  createdAt: string;
+}
+
+export interface Review {
+  id: string;
+  orderId: string;
+  companyId: string;
+  buyer: Pick<User, "id" | "name"> & { company?: Pick<Company, "id" | "name"> | null };
+  rating: number; // 1..5
+  comment?: string | null;
+  reply?: string | null;
+  repliedAt?: string | null;
+  createdAt: string;
+}
+
+export interface FinanceSummary {
+  currency: string;
+  commissionPct: number;
+  grossPaid: number; // paid orders (delivered or not)
+  commission: number;
+  netEarned: number;
+  paidOut: number;
+  pendingPayout: number; // net for paid+delivered orders not yet in a PAID payout
+  awaitingDelivery: number; // paid but not delivered yet
+  unpaidReceivables: number; // COD / bank transfer not yet marked paid
+}
+
+export interface StatementLine {
+  order: Pick<OrderExtended, "id" | "reference" | "createdAt" | "status" | "paymentStatus" | "paymentMethod" | "total">;
+  gross: number;
+  commissionPct: number;
+  commission: number;
+  net: number;
+  payout?: Pick<Payout, "id" | "status" | "reference"> | null;
+}
+
+export interface Payout {
+  id: string;
+  companyId: string;
+  company?: Company;
+  amount: number;
+  currency: string;
+  periodStart: string;
+  periodEnd: string;
+  orderCount: number;
+  status: PayoutStatus;
+  reference?: string | null;
+  paidAt?: string | null;
+  createdAt: string;
+}
+
+export interface PlatformSettings {
+  commissionPct: number;
+  payoutDayOfWeek: number; // 0-6
+  lowStockThresholdDefault: number;
+}
+
+export interface SupplierPublicProfile extends CompanyProfile {
+  branches: Branch[];
+  listings: Array<PriceListing & { material: Material }>;
+  reviews: Review[];
+  stats: { listings: number; bids: number; wonBids: number; ordersDelivered: number; memberSince: string };
+}

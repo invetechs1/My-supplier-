@@ -10,6 +10,7 @@ import { badRequest, forbidden, notFound, unauthorized } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import { cardPaymentsEnabled, fetchMoyasarPayment, toHalalas } from "../services/payments";
 import { companyUserIds, notify } from "../services/notifications";
+import { recordOrderEvent } from "../services/portal";
 
 const router = Router();
 const orderInclude = { company: true, items: { include: { material: true } } } satisfies Prisma.OrderInclude;
@@ -68,6 +69,7 @@ async function settle(orderId: string, providerPaymentId: string, raw: unknown, 
   });
   if (status === "PAID" && order.paymentStatus !== "PAID") {
     const updated = await prisma.order.update({ where: { id: orderId }, data: { paymentStatus: "PAID", paymentMethod: "CARD" }, include: orderInclude });
+    await recordOrderEvent(orderId, "PAYMENT", { message: `Card payment received (${providerPaymentId})` });
     await notify({ userIds: [order.buyerId], type: "ORDER_UPDATE", title: `Payment received for ${order.reference}`, body: `SAR ${Number(order.total).toLocaleString("en-US")} paid by card. Thank you!`, link: `/dashboard/orders/${order.id}` });
     await notify({ userIds: await companyUserIds([order.companyId]), type: "ORDER_UPDATE", title: `${order.reference} paid`, body: "The buyer paid by card. Please confirm and dispatch.", link: `/supplier/orders/${order.id}` });
     return { order: updated, payment };

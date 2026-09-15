@@ -45,7 +45,7 @@ function Row({
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, isAuthenticated, isSupplier, logout, setUser } = useAuth();
+  const { user, isAuthenticated, isSupplier, canManageCompany, logout, setUser } = useAuth();
   const { locale, setLocale, t } = useI18n();
   const [unread, setUnread] = useState(0);
 
@@ -133,7 +133,7 @@ export default function ProfileScreen() {
 
       {user?.company ? (
         <>
-          <SectionHeader title="Company" />
+          <SectionHeader title="Company" actionTitle={isSupplier ? t("companyProfile") : undefined} onAction={isSupplier ? () => router.push("/supplier/company") : undefined} />
           <Card>
             <View style={styles.companyHead}>
               <Text style={typography.h3}>{user.company.name}</Text>
@@ -177,6 +177,11 @@ export default function ProfileScreen() {
         ) : null}
         {isSupplier ? (
           <>
+            <Row icon="speedometer-outline" label={t("dashboard")} onPress={() => router.push("/supplier/dashboard")} />
+            <Row icon="cube-outline" label={t("inventory")} onPress={() => router.push("/supplier/inventory")} />
+            {canManageCompany ? <Row icon="wallet-outline" label={t("finance")} onPress={() => router.push("/supplier/finance")} /> : null}
+            {canManageCompany ? <Row icon="people-outline" label={t("team")} onPress={() => router.push("/supplier/team")} /> : null}
+            <Row icon="business-outline" label={t("companyProfile")} onPress={() => router.push("/supplier/company")} />
             <Row icon="pricetags-outline" label={t("myPriceList")} onPress={() => router.push("/supplier/prices")} />
             <Row icon="scan-outline" label={t("scanPriceList")} onPress={() => router.push("/imports/new")} />
             <Row icon="cloud-upload-outline" label={t("myImports")} onPress={() => router.push("/imports")} />

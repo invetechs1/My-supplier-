@@ -10,6 +10,7 @@ import { nextReference } from "../lib/reference";
 import { companyUserIds, notify } from "../services/notifications";
 import { DELIVERY_FEE_SAME_CITY, VAT_RATE, deliveryFee, isPurchasable, toOffer } from "../services/shop";
 import { round2 } from "../services/pricing";
+import { applyStockMovement, recordOrderEvent } from "../services/portal";
 
 const router = Router();
 router.use(["/cart", "/checkout"], requireAuth());
@@ -137,9 +138,10 @@ router.post("/checkout", asyncHandler(async (req, res) => {
         include: orderInclude,
       });
       for (const i of items) {
-        if (i.listing.stock !== null) await tx.priceListing.update({ where: { id: i.listingId }, data: { stock: { decrement: i.quantity } } });
+        await applyStockMovement(i.listingId, "OUT", i.quantity, { reason: `Order ${reference}`, orderId: created.id, userId, tx });
         await tx.material.update({ where: { id: i.listing.materialId }, data: { popularity: { increment: 5 } } });
       }
+      await tx.orderEvent.create({ data: { orderId: created.id, type: "CREATED", status: "PENDING", message: `Order placed · ${body.paymentMethod.replace("_", " ").toLowerCase()}`, userId } });
       return created;
     });
     orders.push(order);

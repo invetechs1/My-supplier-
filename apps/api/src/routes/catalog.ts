@@ -199,21 +199,32 @@ router.get(
 );
 
 router.get(
+  "/suppliers/:id/reviews",
+  asyncHandler(async (req, res) => {
+    const { page, pageSize, skip, take } = paginate(req.query);
+    const where = { companyId: req.params.id };
+    const [total, items] = await Promise.all([
+      prisma.review.count({ where }),
+      prisma.review.findMany({ where, include: { buyer: { select: { id: true, name: true, company: { select: { id: true, name: true } } } } }, orderBy: { createdAt: "desc" }, skip, take }),
+    ]);
+    res.json(paged(serialize(items), page, pageSize, total));
+  }),
+);
+
+router.get(
   "/suppliers/:id",
   asyncHandler(async (req, res) => {
-    const company = await prisma.company.findUnique({ where: { id: req.params.id } });
+    const company = await prisma.company.findFirst({ where: { OR: [{ id: req.params.id }, { slug: req.params.id }] }, include: { branches: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } } });
     if (!company) throw notFound("Supplier not found");
-    const [listings, bids, wonBids] = await Promise.all([
-      prisma.priceListing.findMany({
-        where: { companyId: company.id, ...activeListingWhere() },
-        include: { material: { include: { category: true } } },
-        orderBy: { updatedAt: "desc" },
-        take: 200,
-      }),
+    const [listings, bids, wonBids, ordersDelivered, reviews] = await Promise.all([
+      prisma.priceListing.findMany({ where: { companyId: company.id, ...activeListingWhere() }, include: { material: { include: { category: true } } }, orderBy: { updatedAt: "desc" }, take: 200 }),
       prisma.bid.count({ where: { companyId: company.id } }),
       prisma.bid.count({ where: { companyId: company.id, status: "ACCEPTED" } }),
+      prisma.order.count({ where: { companyId: company.id, status: "DELIVERED" } }),
+      prisma.review.findMany({ where: { companyId: company.id }, include: { buyer: { select: { id: true, name: true, company: { select: { id: true, name: true } } } } }, orderBy: { createdAt: "desc" }, take: 10 }),
     ]);
-    res.json(serialize({ ...company, listings, stats: { listings: listings.length, bids, wonBids } }));
+    const { bankName: _b, iban: _i, beneficiary: _bn, verificationNotes: _vn, commissionPct: _c, ...publicCompany } = company;
+    res.json(serialize({ ...publicCompany, listings, reviews, stats: { listings: listings.length, bids, wonBids, ordersDelivered, memberSince: company.createdAt } }));
   }),
 );
 

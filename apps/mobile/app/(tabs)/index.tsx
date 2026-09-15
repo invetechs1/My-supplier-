@@ -117,6 +117,19 @@ export default function HomeScreen() {
         <Ionicons name="arrow-forward-circle" size={28} color={colors.accent} />
       </Pressable>
 
+      {user?.role === "SUPPLIER" ? (
+        <Pressable onPress={() => router.push("/supplier/dashboard")} style={({ pressed }) => [styles.dashCard, pressed && { opacity: 0.92 }]}>
+          <View style={styles.dashIcon}>
+            <Ionicons name="speedometer-outline" size={22} color="#fff" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.dashTitle}>{t("businessDashboard")}</Text>
+            <Text style={styles.dashSub}>Revenue, orders, stock alerts and how your prices compare</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#fff" />
+        </Pressable>
+      ) : null}
+
       {user ? (
         <Pressable onPress={() => router.push("/imports/new")} style={({ pressed }) => [styles.importCard, pressed && { opacity: 0.92 }]}>
           <View style={styles.importIcon}>
@@ -265,6 +278,20 @@ const styles = StyleSheet.create({
   boqIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" },
   boqTitle: { fontSize: 16, fontWeight: "700", color: "#fff" },
   boqSub: { fontSize: 13, color: "rgba(255,255,255,0.8)", marginTop: 2 },
+  dashCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary,
+    ...shadow.card,
+  },
+  dashIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
+  dashTitle: { ...typography.body, fontWeight: "700", color: "#fff" },
+  dashSub: { ...typography.caption, color: "rgba(255,255,255,0.85)", marginTop: 2 },
   importCard: {
     flexDirection: "row",
     alignItems: "center",

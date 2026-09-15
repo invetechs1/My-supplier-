@@ -12,15 +12,22 @@ import type {
   CheckoutPayload,
   CheckoutResult,
   Company,
+  CompanyInvite,
+  CompanyProfile,
+  CompanyRole,
   CreateBidPayload,
   CreateRfqPayload,
   DeviceRegistration,
+  FinanceSummary,
+  InventoryItem,
   InvoiceData,
   LoginPayload,
   Material,
   Notification,
   Order,
+  OrderEvent,
   OrderExtended,
+  OrderMessage,
   OrderStatus,
   Paginated,
   PaymentConfig,
@@ -42,7 +49,13 @@ import type {
   PriceSummary,
   PublishImportResult,
   RegisterPayload,
+  Review,
   Rfq,
+  StatementLine,
+  StockMovement,
+  StockMovementType,
+  SupplierDashboard,
+  TeamMember,
   UpsertPricePayload,
   User,
 } from "@mysupplier/shared";
@@ -78,6 +91,11 @@ export async function setStoredToken(token: string | null): Promise<void> {
 /** Printable invoice URL (token in the query because browsers can't send headers on navigation). */
 export function invoiceHtmlUrl(orderId: string, token: string): string {
   return `${API_URL}/orders/${encodeURIComponent(orderId)}/invoice.html?token=${encodeURIComponent(token)}`;
+}
+
+/** Printable delivery note / packing slip (token in the query, like the invoice). */
+export function deliveryNoteUrl(orderId: string, token: string): string {
+  return `${API_URL}/orders/${encodeURIComponent(orderId)}/delivery-note.html?token=${encodeURIComponent(token)}`;
 }
 
 /** Hosted card-payment page served by the API (Moyasar form); redirects back to `mysupplier://payment`. */
@@ -293,7 +311,92 @@ export interface PublishImportOptions {
   minConfidence?: number;
 }
 
+// Supplier portal (multi-tenant) -------------------------------------------
+
+// Type aliases (not interfaces) so they are assignable to the indexed Query type.
+export type InventoryQuery = {
+  q?: string;
+  branchId?: string;
+  lowStock?: 1 | undefined;
+  page?: number;
+};
+
+export type StatementQuery = {
+  from?: string;
+  to?: string;
+  page?: number;
+};
+
+export type CompanyProfilePatch = Partial<
+  Pick<
+    CompanyProfile,
+    | "name"
+    | "nameAr"
+    | "slug"
+    | "description"
+    | "descriptionAr"
+    | "citiesServed"
+    | "minOrderValue"
+    | "deliveryFee"
+    | "deliveryDays"
+    | "workingHours"
+    | "phone"
+    | "email"
+    | "website"
+    | "bankName"
+    | "iban"
+    | "beneficiary"
+    | "lowStockThreshold"
+  >
+>;
+
+export interface StockMovementInput {
+  type: Extract<StockMovementType, "IN" | "OUT" | "ADJUST">;
+  quantity: number;
+  reason?: string;
+}
+
 export const api = {
+  // Supplier portal: dashboard & company
+  supplierDashboard: (days = 30) => request<SupplierDashboard>("/supplier/dashboard", { query: { days } }),
+  supplierCompany: () => request<CompanyProfile>("/supplier/company"),
+  updateSupplierCompany: (patch: CompanyProfilePatch) =>
+    request<CompanyProfile>("/supplier/company", { method: "PATCH", body: patch }),
+
+  // Supplier portal: inventory
+  inventory: (query: InventoryQuery = {}) => request<Paginated<InventoryItem>>("/supplier/inventory", { query }),
+  setInventory: (listingId: string, body: { stock: number | null; branchId?: string }) =>
+    request<InventoryItem>(`/supplier/inventory/${encodeURIComponent(listingId)}`, { method: "PATCH", body }),
+  addStockMovement: (listingId: string, body: StockMovementInput) =>
+    request<StockMovement>(`/supplier/inventory/${encodeURIComponent(listingId)}/movements`, { method: "POST", body }),
+  stockMovements: (listingId: string) =>
+    request<StockMovement[]>(`/supplier/inventory/${encodeURIComponent(listingId)}/movements`),
+
+  // Orders: timeline, messages, reviews
+  orderEvents: (id: string) => request<OrderEvent[]>(`/orders/${encodeURIComponent(id)}/events`),
+  orderMessages: (id: string) => request<OrderMessage[]>(`/orders/${encodeURIComponent(id)}/messages`),
+  sendOrderMessage: (id: string, body: string) =>
+    request<OrderMessage>(`/orders/${encodeURIComponent(id)}/messages`, { method: "POST", body: { body } }),
+  createReview: (orderId: string, body: { rating: number; comment?: string }) =>
+    request<Review>(`/orders/${encodeURIComponent(orderId)}/review`, { method: "POST", body }),
+  replyReview: (id: string, reply: string) =>
+    request<Review>(`/reviews/${encodeURIComponent(id)}/reply`, { method: "POST", body: { reply } }),
+  supplierReviews: (idOrSlug: string, page = 1) =>
+    request<Paginated<Review>>(`/suppliers/${encodeURIComponent(idOrSlug)}/reviews`, { query: { page }, auth: false }),
+
+  // Supplier portal: finance
+  financeSummary: () => request<FinanceSummary>("/supplier/finance/summary"),
+  financeStatement: (query: StatementQuery = {}) =>
+    request<Paginated<StatementLine>>("/supplier/finance/statement", { query }),
+
+  // Supplier portal: team
+  team: () => request<{ members: TeamMember[]; invites: CompanyInvite[] }>("/supplier/team"),
+  inviteMember: (body: { email: string; role: CompanyRole; name?: string }) =>
+    request<CompanyInvite>("/supplier/team/invite", { method: "POST", body }),
+  cancelInvite: (id: string) => request<{ ok: true }>(`/supplier/team/invite/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  updateMember: (userId: string, body: { role?: CompanyRole; active?: boolean }) =>
+    request<TeamMember>(`/supplier/team/${encodeURIComponent(userId)}`, { method: "PATCH", body }),
+
   // AI price collection (imports land in a review queue before publishing)
   aiConfig: () => request<AiConfig>("/ai/config", { auth: false }),
   /** multipart/form-data: `file` or `text`, plus kind, city?, sourceName?, supplierName?, quotationDate? */
