@@ -54,6 +54,32 @@ Orders (`/orders`) now return `OrderExtended` (with `type`, `items`, `subtotal`,
 | POST | `/admin/feeds/import` | same row format inline: `{ sourceName, items: [...] }` (no URL) |
 | DELETE | `/admin/feeds/:id` | `{ ok: true }` |
 
+## Production features
+### Payments (Moyasar-ready; Mada, Visa/Mastercard, Apple Pay)
+| GET | `/payments/config` | `PaymentConfig` – tells clients whether card payments are enabled and the publishable key |
+| POST | `/payments/:orderId/intent` | auth buyer -> `PaymentIntent` (amount in halalas, callback URL) used to render the Moyasar form / hosted page |
+| POST | `/payments/:orderId/verify` | auth buyer: `{ paymentId }` – server verifies with Moyasar (amount + status) and marks the order PAID -> `{ order: OrderExtended, payment: PaymentRecord }` |
+| POST | `/payments/webhook/moyasar` | gateway webhook (secret header `x-webhook-secret`) marks orders paid |
+| GET | `/payments/:orderId` | `PaymentRecord[]` for the order (buyer / supplier / admin) |
+
+### Invoices (ZATCA phase-1 simplified tax invoice QR)
+| GET | `/orders/:id/invoice` | auth (buyer/supplier/admin) -> `InvoiceData` (JSON incl. base64 TLV QR + SVG) |
+| GET | `/orders/:id/invoice.html?token=<jwt>` | printable HTML invoice (open in new tab / print to PDF); token in query because browsers can't send headers on navigation |
+
+### Push notifications & devices
+| POST | `/devices` | auth: `DeviceRegistration` (Expo push token) -> `{ ok: true }`; every in-app notification is also pushed to the user's registered devices and emailed when SMTP is configured |
+| DELETE | `/devices/:token` | auth -> `{ ok: true }` |
+
+### Password reset & account
+| POST | `/auth/forgot-password` | `{ email }` -> `{ ok: true }` always (sends an email with a reset link `WEB_URL/reset-password?token=…`; in development the link is logged) |
+| POST | `/auth/reset-password` | `{ token, password }` -> `{ ok: true }` |
+| POST | `/auth/change-password` | auth: `{ currentPassword, newPassword }` -> `{ ok: true }` |
+| DELETE | `/auth/me` | auth: deactivates the account (app-store requirement) -> `{ ok: true }` |
+
+### Ops
+| GET | `/health` | `HealthStatus` (checks the database; returns 503 when down) |
+| GET | `/sitemap.xml` | product + category URLs for the web app |
+
 ## Auth
 | POST | `/auth/register` | body `RegisterPayload` -> `AuthResponse` (SUPPLIER must include `company`) |
 | POST | `/auth/login` | body `LoginPayload` -> `AuthResponse` |

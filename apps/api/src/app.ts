@@ -17,6 +17,9 @@ import boqRoutes from "./routes/boq";
 import shopRoutes from "./routes/shop";
 import cartRoutes from "./routes/cart";
 import feedRoutes from "./routes/feeds";
+import paymentRoutes from "./routes/payments";
+import deviceRoutes from "./routes/devices";
+import invoiceRoutes from "./routes/invoice";
 
 export function createApp() {
   const app = express();
@@ -39,6 +42,9 @@ export function createApp() {
   api.use(shopRoutes);
   api.use(cartRoutes);
   api.use(feedRoutes);
+  api.use(paymentRoutes);
+  api.use(deviceRoutes);
+  api.use(invoiceRoutes);
   api.use("/auth", authRoutes);
   api.use(rfqRoutes);
   api.use(supplierPriceRoutes);

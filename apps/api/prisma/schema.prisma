@@ -95,6 +95,8 @@ model User {
   orders        Order[]
   notifications Notification[]
   cart          Cart?
+  devices       Device[]
+  resetTokens   PasswordResetToken[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -298,6 +300,7 @@ model Order {
   deliveryAddress String?
   contactPhone    String?
   notes           String?
+  payments        Payment[]
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
@@ -371,4 +374,54 @@ model Notification {
 model Counter {
   key   String @id
   value Int    @default(0)
+}
+
+enum PaymentProvider {
+  MOYASAR
+  MANUAL
+}
+
+enum PaymentRecordStatus {
+  INITIATED
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id                String              @id @default(cuid())
+  orderId           String
+  order             Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider          PaymentProvider     @default(MOYASAR)
+  providerPaymentId String?             @unique
+  amount            Decimal             @db.Decimal(14, 2)
+  currency          String              @default("SAR")
+  status            PaymentRecordStatus @default(INITIATED)
+  raw               Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([orderId])
+}
+
+model Device {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
 }

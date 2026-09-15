@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
+import { env } from "../lib/env";
 import { asyncHandler } from "../middleware/errorHandler";
 import { notFound } from "../lib/errors";
 import { serialize } from "../lib/serialize";
@@ -13,7 +14,36 @@ import { summarize } from "../services/pricing";
 
 const router = Router();
 
-router.get("/health", (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+const startedAt = Date.now();
+router.get(
+  "/health",
+  asyncHandler(async (_req, res) => {
+    let db: "up" | "down" = "up";
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      db = "down";
+    }
+    res.status(db === "up" ? 200 : 503).json({ ok: db === "up", time: new Date().toISOString(), db, version: env.version, uptimeSeconds: Math.round((Date.now() - startedAt) / 1000) });
+  }),
+);
+
+router.get(
+  "/sitemap.xml",
+  asyncHandler(async (_req, res) => {
+    const [materials, categories] = await Promise.all([
+      prisma.material.findMany({ where: { active: true }, select: { id: true, updatedAt: true }, take: 5000 }),
+      prisma.category.findMany({ select: { id: true } }),
+    ]);
+    const urls = [
+      "", "/shop", "/shop/products", "/materials", "/suppliers", "/boq", "/about", "/help", "/terms", "/privacy",
+      ...categories.map((c) => `/shop/products?categoryId=${c.id}`),
+      ...materials.map((m) => `/shop/products/${m.id}`),
+    ];
+    res.setHeader("Content-Type", "application/xml");
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((u) => `<url><loc>${env.webUrl}${u.replace(/&/g, "&amp;")}</loc></url>`).join("")}</urlset>`);
+  }),
+);
 
 router.get("/stats", asyncHandler(async (_req, res) => res.json(await platformStats())));
 

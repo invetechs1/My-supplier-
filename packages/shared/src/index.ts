@@ -522,3 +522,62 @@ export interface Feed {
   lastItemCount: number;
   createdAt: string;
 }
+
+// Production: payments, invoices, devices, password reset --------------------------
+
+export type PaymentProvider = "MOYASAR" | "MANUAL";
+export type PaymentRecordStatus = "INITIATED" | "PAID" | "FAILED" | "REFUNDED";
+
+export interface PaymentConfig {
+  provider: PaymentProvider;
+  cardPaymentsEnabled: boolean; // true when the gateway is configured
+  publishableKey?: string | null; // Moyasar publishable key for the client form
+  currency: string;
+  methods: PaymentMethod[];
+}
+
+export interface PaymentRecord {
+  id: string;
+  orderId: string;
+  provider: PaymentProvider;
+  providerPaymentId?: string | null;
+  amount: number; // SAR
+  currency: string;
+  status: PaymentRecordStatus;
+  createdAt: string;
+}
+
+export interface PaymentIntent {
+  orderId: string;
+  reference: string;
+  amount: number; // SAR
+  amountHalalas: number; // Moyasar expects the minor unit
+  currency: string;
+  description: string;
+  callbackUrl: string;
+  publishableKey: string | null;
+  provider: PaymentProvider;
+}
+
+export interface InvoiceData {
+  order: OrderExtended;
+  seller: Company;
+  buyer: Pick<User, "id" | "name" | "email" | "phone"> & { company?: Company | null };
+  invoiceNumber: string;
+  issuedAt: string;
+  zatcaQr: string; // base64 TLV (ZATCA phase 1 simplified invoice)
+  qrSvg: string; // ready-to-embed SVG of the QR
+}
+
+export interface DeviceRegistration {
+  token: string; // Expo push token
+  platform: "ios" | "android" | "web";
+}
+
+export interface HealthStatus {
+  ok: boolean;
+  time: string;
+  db: "up" | "down";
+  version: string;
+  uptimeSeconds: number;
+}

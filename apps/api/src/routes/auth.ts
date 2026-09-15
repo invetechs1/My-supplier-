@@ -6,6 +6,13 @@ import { asyncHandler } from "../middleware/errorHandler";
 import { requireAuth, signToken } from "../middleware/auth";
 import { badRequest, conflict, unauthorized } from "../lib/errors";
 import { serialize } from "../lib/serialize";
+import crypto from "crypto";
+import rateLimit from "express-rate-limit";
+import { env } from "../lib/env";
+import { layout, sendMail } from "../services/mailer";
+
+/** Tighter limit for credential endpoints (brute-force protection). */
+export const authLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false, message: { error: "Too many attempts, try again later" } });
 
 const router = Router();
 
@@ -33,6 +40,7 @@ const userInclude = { company: true } as const;
 
 router.post(
   "/register",
+  authLimiter,
   asyncHandler(async (req, res) => {
     const body = registerSchema.parse(req.body);
     if (body.role === "SUPPLIER" && !body.company) throw badRequest("Suppliers must provide company details");
@@ -61,6 +69,7 @@ router.post(
 
 router.post(
   "/login",
+  authLimiter,
   asyncHandler(async (req, res) => {
     const { email, password } = z.object({ email: z.string().email(), password: z.string() }).parse(req.body);
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, include: userInclude });
@@ -90,6 +99,65 @@ router.patch(
       .parse(req.body);
     const user = await prisma.user.update({ where: { id: req.user!.id }, data, include: userInclude });
     res.json(serialize(user));
+  }),
+);
+
+const hashToken = (t: string) => crypto.createHash("sha256").update(t).digest("hex");
+
+router.post(
+  "/forgot-password",
+  authLimiter,
+  asyncHandler(async (req, res) => {
+    const { email } = z.object({ email: z.string().email() }).parse(req.body);
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (user && user.active) {
+      const token = crypto.randomBytes(32).toString("hex");
+      await prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 60 * 60_000) } });
+      const url = `${env.webUrl}/reset-password?token=${token}`;
+      await sendMail(user.email, "Reset your MySupplier password", layout("Reset your password", `<p>Hi ${user.name},</p><p>Click the button below to choose a new password. The link is valid for 1 hour.</p>`, { label: "Reset password", url }), `Reset your password: ${url}`);
+    }
+    res.json({ ok: true });
+  }),
+);
+
+router.post(
+  "/reset-password",
+  authLimiter,
+  asyncHandler(async (req, res) => {
+    const { token, password } = z.object({ token: z.string().min(20), password: z.string().min(8) }).parse(req.body);
+    const record = await prisma.passwordResetToken.findUnique({ where: { tokenHash: hashToken(token) } });
+    if (!record || record.usedAt || record.expiresAt.getTime() < Date.now()) throw badRequest("This reset link is invalid or has expired");
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: record.userId }, data: { passwordHash: await bcrypt.hash(password, 10) } }),
+      prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+    ]);
+    res.json({ ok: true });
+  }),
+);
+
+router.post(
+  "/change-password",
+  requireAuth(),
+  asyncHandler(async (req, res) => {
+    const { currentPassword, newPassword } = z.object({ currentPassword: z.string(), newPassword: z.string().min(8) }).parse(req.body);
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id } });
+    if (!(await bcrypt.compare(currentPassword, user.passwordHash))) throw unauthorized("Current password is incorrect");
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } });
+    res.json({ ok: true });
+  }),
+);
+
+/** Account deletion (app-store requirement): deactivates and anonymises the login. */
+router.delete(
+  "/me",
+  requireAuth(),
+  asyncHandler(async (req, res) => {
+    const id = req.user!.id;
+    await prisma.$transaction([
+      prisma.device.deleteMany({ where: { userId: id } }),
+      prisma.user.update({ where: { id }, data: { active: false, email: `deleted-${id}@deleted.mysupplier.sa`, name: "Deleted user", phone: null } }),
+    ]);
+    res.json({ ok: true });
   }),
 );
 
