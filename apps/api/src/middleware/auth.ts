@@ -28,8 +28,10 @@ export function signToken(user: AuthUser): string {
 
 async function loadUser(req: Request): Promise<AuthUser | null> {
   const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) return null;
-  const token = header.slice(7);
+  // Download links (CSV, printable HTML) cannot send headers, so a GET may carry the JWT as ?token=.
+  const queryToken = req.method === "GET" && typeof req.query.token === "string" ? req.query.token : null;
+  if (!header?.startsWith("Bearer ") && !queryToken) return null;
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : queryToken!;
   let payload: jwt.JwtPayload;
   try {
     payload = jwt.verify(token, env.jwtSecret) as jwt.JwtPayload;

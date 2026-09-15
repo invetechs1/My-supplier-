@@ -19,6 +19,8 @@ export default function AdminOverview() {
   const { t, lang } = useI18n();
   const state = useAsync(() => api.adminStats(), []);
   const review = useAsync(() => api.imports({ status: "REVIEW", pageSize: 1 }), []);
+  const unverified = useAsync(() => api.adminCompanies({ verified: "false", page: 1 }), []);
+  const pendingPayouts = useAsync(() => api.adminPayouts({ status: "PENDING", page: 1 }), []);
 
   if (state.loading) return <LoadingBlock />;
   if (state.error || !state.data) return <Alert onRetry={state.reload}>{state.error ?? "Could not load stats"}</Alert>;
@@ -55,6 +57,24 @@ export default function AdminOverview() {
             value={review.loading ? "…" : review.error ? "—" : formatNumber(review.data?.total ?? 0, lang)}
             sub={review.error ? review.error : "AI-read price lists, quotations & web pages →"}
             tone={(review.data?.total ?? 0) > 0 ? "amber" : "default"}
+            className="h-full"
+          />
+        </Link>
+        <Link href="/admin/companies?verified=false" className="block rounded-xl transition hover:shadow-card-hover">
+          <StatTile
+            label="Pending verifications"
+            value={unverified.loading ? "…" : unverified.error ? "—" : formatNumber(unverified.data?.total ?? 0, lang)}
+            sub={unverified.error ? unverified.error : "Companies awaiting document review →"}
+            tone={(unverified.data?.total ?? 0) > 0 ? "amber" : "default"}
+            className="h-full"
+          />
+        </Link>
+        <Link href="/admin/payouts?status=PENDING" className="block rounded-xl transition hover:shadow-card-hover">
+          <StatTile
+            label="Pending payouts"
+            value={pendingPayouts.loading ? "…" : pendingPayouts.error ? "—" : formatNumber(pendingPayouts.data?.total ?? 0, lang)}
+            sub={pendingPayouts.error ? pendingPayouts.error : pendingPayouts.data ? `${formatSar(pendingPayouts.data.data.reduce((s, p) => s + p.amount, 0), lang)} on first page →` : "Supplier transfers to make →"}
+            tone={(pendingPayouts.data?.total ?? 0) > 0 ? "amber" : "default"}
             className="h-full"
           />
         </Link>

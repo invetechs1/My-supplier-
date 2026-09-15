@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import type { OrderExtended, OrderStatus, PaymentMethod, PaymentStatus } from "@mysupplier/shared";
-import { api, errorMessage, invoiceHtmlUrl } from "@/lib/api";
+import React, { useEffect, useRef, useState } from "react";
+import type { OrderEvent, OrderExtended, OrderMessage, OrderStatus, PaymentMethod, PaymentStatus, Review } from "@mysupplier/shared";
+import { api, deliveryNoteHtmlUrl, errorMessage, invoiceHtmlUrl } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { BANK_TRANSFER_DETAILS, usePaymentConfig } from "@/lib/payments";
-import { cn, formatDate, formatDateTime, formatSar } from "@/lib/format";
-import { Alert, Badge, Button, Card, CardHeader, EmptyState, FlashMessage, LinkButton, LoadingBlock, PageHeader, Pagination, StatusBadge, Table, type Column } from "./ui";
+import { cn, formatDate, formatDateTime, formatSar, timeAgo } from "@/lib/format";
+import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, FlashMessage, LinkButton, LoadingBlock, PageHeader, Pagination, Stars, StatusBadge, Table, Textarea, type Column } from "./ui";
 
 export type OrderPerspective = "buyer" | "supplier" | "admin";
 
@@ -184,12 +185,289 @@ export function InvoicePreview({ orderId }: { orderId: string }) {
   );
 }
 
+
+const EVENT_ICON: Record<OrderEvent["type"], string> = { CREATED: "★", STATUS: "→", PAYMENT: "₨", NOTE: "✎", MESSAGE: "✉", REVIEW: "☆" };
+const EVENT_TONE: Record<OrderEvent["type"], string> = {
+  CREATED: "bg-brand-600 text-white",
+  STATUS: "bg-sky-100 text-sky-700",
+  PAYMENT: "bg-emerald-100 text-emerald-700",
+  NOTE: "bg-slate-100 text-slate-600",
+  MESSAGE: "bg-amber-100 text-amber-800",
+  REVIEW: "bg-violet-100 text-violet-700",
+};
+
+function eventTitle(e: OrderEvent): string {
+  switch (e.type) {
+    case "CREATED":
+      return "Order placed";
+    case "STATUS":
+      return e.status ? `Status changed to ${e.status.replace(/_/g, " ").toLowerCase()}` : "Status updated";
+    case "PAYMENT":
+      return e.message ?? "Payment updated";
+    case "MESSAGE":
+      return "New message";
+    case "REVIEW":
+      return "Review received";
+    default:
+      return e.message ?? "Note";
+  }
+}
+
+/** Vertical activity timeline from GET /orders/:id/events. */
+export function OrderActivity({ orderId, refreshKey = 0 }: { orderId: string; refreshKey?: number }) {
+  const { t, lang } = useI18n();
+  const state = useAsync(() => api.orderEvents(orderId), [orderId, refreshKey]);
+  return (
+    <Card>
+      <CardHeader title={t("order.activity")} />
+      {state.loading ? (
+        <LoadingBlock className="py-6" />
+      ) : state.error ? (
+        <div className="px-5 py-4"><Alert kind="info" onRetry={state.reload}>{state.error}</Alert></div>
+      ) : (state.data ?? []).length === 0 ? (
+        <p className="px-5 py-4 text-sm text-slate-500">No activity recorded yet.</p>
+      ) : (
+        <ol className="space-y-0 px-5 py-4">
+          {(state.data ?? []).map((e, i, all) => (
+            <li key={e.id} className="relative flex gap-3 pb-4 last:pb-0">
+              {i < all.length - 1 && <span className="absolute start-[13px] top-7 h-[calc(100%-1.25rem)] w-px bg-slate-200" aria-hidden />}
+              <span className={cn("relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold", EVENT_TONE[e.type] ?? "bg-slate-100 text-slate-600")} aria-hidden>{EVENT_ICON[e.type] ?? "•"}</span>
+              <div className="min-w-0 flex-1 text-sm">
+                <p className="font-medium text-slate-900">{eventTitle(e)}</p>
+                {e.message && e.type !== "PAYMENT" && e.type !== "NOTE" && <p className="text-slate-600">{e.message}</p>}
+                {e.type === "NOTE" && e.message && <p className="text-slate-600">{e.message}</p>}
+                <p className="text-xs text-slate-400">{e.user?.name ? `${e.user.name} · ` : ""}{formatDateTime(e.createdAt, lang)}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </Card>
+  );
+}
+
+const MESSAGE_POLL_MS = 20_000;
+
+/** Buyer ↔ supplier thread on an order; polls every 20 s while mounted. */
+export function OrderMessages({ orderId, perspective, onActivity }: { orderId: string; perspective: OrderPerspective; onActivity?: () => void }) {
+  const { t, lang } = useI18n();
+  const { user } = useAuth();
+  const [messages, setMessages] = useState<OrderMessage[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [unseen, setUnseen] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
+  const seenCount = useRef<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    const load = async () => {
+      try {
+        const data = await api.orderMessages(orderId, controller.signal);
+        if (!active) return;
+        setError(null);
+        setMessages(data);
+        if (seenCount.current !== null && data.length > seenCount.current) {
+          const fresh = data.slice(seenCount.current).filter((m) => m.sender.id !== user?.id).length;
+          if (fresh > 0) setUnseen((u) => u + fresh);
+        }
+        seenCount.current = data.length;
+      } catch (err) {
+        if (!active || (err instanceof DOMException && err.name === "AbortError")) return;
+        setError(errorMessage(err));
+      }
+    };
+    void load();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, MESSAGE_POLL_MS);
+    return () => {
+      active = false;
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [orderId, user?.id]);
+
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [messages?.length]);
+
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = body.trim();
+    if (!text) return;
+    setSending(true);
+    const optimistic: OrderMessage = { id: `tmp-${Date.now()}`, orderId, sender: { id: user?.id ?? "me", name: user?.name ?? "You", role: user?.role ?? "BUYER" }, body: text, createdAt: new Date().toISOString() };
+    setMessages((prev) => [...(prev ?? []), optimistic]);
+    setBody("");
+    try {
+      const saved = await api.sendOrderMessage(orderId, text);
+      setMessages((prev) => (prev ?? []).map((m) => (m.id === optimistic.id ? saved : m)));
+      seenCount.current = (seenCount.current ?? 0) + 1;
+      onActivity?.();
+    } catch (err) {
+      setMessages((prev) => (prev ?? []).filter((m) => m.id !== optimistic.id));
+      setBody(text);
+      setError(errorMessage(err));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const counterpart = perspective === "buyer" ? "the supplier" : "the buyer";
+
+  return (
+    <Card className="flex flex-col">
+      <CardHeader
+        title={<span className="inline-flex items-center gap-2">{t("order.messages")}{unseen > 0 && <Badge tone="amber">{unseen} new</Badge>}</span>}
+        subtitle={`Ask ${counterpart} about delivery, quantities or documents. Both sides are notified.`}
+      />
+      <div ref={listRef} className="max-h-80 min-h-[120px] space-y-3 overflow-y-auto px-5 py-4" onScroll={() => setUnseen(0)}>
+        {messages === null && !error && <LoadingBlock className="py-4" />}
+        {error && <Alert kind="info">{error}</Alert>}
+        {messages && messages.length === 0 && <p className="py-4 text-center text-sm text-slate-500">No messages yet. Say hello to {counterpart}.</p>}
+        {(messages ?? []).map((m) => {
+          const mine = m.sender.id === user?.id || (perspective !== "admin" && m.sender.role === (perspective === "buyer" ? "BUYER" : "SUPPLIER"));
+          return (
+            <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
+              <div className={cn("max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-sm", mine ? "rounded-br-sm bg-brand-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-900", m.id.startsWith("tmp-") && "opacity-60")}>
+                {!mine && <p className="mb-0.5 text-[11px] font-semibold text-slate-500">{m.sender.name}</p>}
+                <p className="whitespace-pre-line break-words">{m.body}</p>
+                <p className={cn("mt-1 text-[10px]", mine ? "text-brand-100" : "text-slate-400")} title={formatDateTime(m.createdAt, lang)}>
+                  {timeAgo(m.createdAt)}{mine && m.readAt ? " · read" : ""}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {perspective !== "admin" && (
+        <form onSubmit={send} className="flex items-end gap-2 border-t border-slate-100 px-4 py-3">
+          <Textarea
+            name={`msg-${orderId}`}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={1}
+            placeholder="Write a message…"
+            className="flex-1 [&_textarea]:min-h-[40px] [&_textarea]:resize-none"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void send(e);
+              }
+            }}
+            aria-label="Message"
+          />
+          <Button type="submit" loading={sending} disabled={!body.trim()}>Send</Button>
+        </form>
+      )}
+    </Card>
+  );
+}
+
+/** Rating block: buyer rates a DELIVERED order once; supplier can reply once; both see the result. */
+export function OrderReview({ order, perspective, review, onChange }: { order: OrderExtended; perspective: OrderPerspective; review: Review | null; onChange: (r: Review) => void }) {
+  const { t } = useI18n();
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [reply, setReply] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canRate = perspective === "buyer" && order.status === "DELIVERED" && !review;
+  const canReply = perspective === "supplier" && !!review && !review.reply;
+  if (!review && !canRate) return null;
+
+  const submitRating = async () => {
+    if (rating < 1) {
+      setError("Pick a star rating first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      onChange(await api.createReview(order.id, { rating, comment: comment.trim() || undefined }));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitReply = async () => {
+    if (!review || reply.trim().length < 2) {
+      setError("Write a short reply first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      onChange(await api.replyToReview(review.id, reply.trim()));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader title={review ? "Review" : t("order.rateSupplier")} subtitle={review ? undefined : "How did this supplier do? Your rating is public on their storefront."} />
+      <CardBody className="space-y-3">
+        {error && <Alert>{error}</Alert>}
+        {review ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <Stars value={review.rating} size="md" />
+              <span className="text-xs text-slate-400">{formatDate(review.createdAt)}</span>
+            </div>
+            <p className="text-sm text-slate-800">{review.comment || <span className="italic text-slate-400">No comment left.</span>}</p>
+            <p className="text-xs text-slate-500">— {review.buyer?.name}{review.buyer?.company ? `, ${review.buyer.company.name}` : ""}</p>
+            {review.reply ? (
+              <div className="rounded-xl border-s-4 border-brand-600 bg-brand-50 px-3 py-2 text-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Supplier reply{review.repliedAt ? ` · ${formatDate(review.repliedAt)}` : ""}</p>
+                <p className="mt-0.5 text-slate-800">{review.reply}</p>
+              </div>
+            ) : canReply ? (
+              <div className="space-y-2">
+                <Textarea name="reply" rows={3} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Thank the buyer or explain what happened. You can reply once." />
+                <Button size="sm" onClick={submitReply} loading={busy}>Post reply</Button>
+              </div>
+            ) : perspective === "supplier" ? null : (
+              <p className="text-xs text-slate-400">The supplier has not replied yet.</p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <Stars value={rating} onChange={setRating} size="lg" />
+            <Textarea name="reviewComment" rows={3} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Quality, punctuality, communication… (optional)" />
+            <Button onClick={submitRating} loading={busy} disabled={rating < 1}>Submit rating</Button>
+          </div>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+/** Reviews may be embedded on the order by newer API builds; tolerate both `review` and `reviews[0]`. */
+function embeddedReview(o: OrderExtended): Review | null {
+  const anyOrder = o as OrderExtended & { review?: Review | null; reviews?: Review[] };
+  if (anyOrder.review) return anyOrder.review;
+  if (Array.isArray(anyOrder.reviews) && anyOrder.reviews.length > 0) return anyOrder.reviews[0];
+  return null;
+}
+
 export function OrderDetail({ id, perspective, backHref }: { id: string; perspective: OrderPerspective; backHref: string }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const state = useAsync(() => api.order(id), [id]);
   const { config: paymentConfig } = usePaymentConfig();
   const [flash, setFlash] = useFlash();
   const [busy, setBusy] = useState<OrderStatus | "PAID" | null>(null);
+  const [activityKey, setActivityKey] = useState(0);
+  const [review, setReview] = useState<Review | null | undefined>(undefined);
+  const bumpActivity = () => setActivityKey((k) => k + 1);
 
   const setStatus = async (status: OrderStatus) => {
     if (status === "CANCELLED" && !window.confirm("Cancel this order?")) return;
@@ -197,6 +475,7 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
     try {
       const updated = await api.updateOrderStatus(id, status);
       state.setData((prev) => (prev ? { ...prev, ...updated } : updated));
+      bumpActivity();
       setFlash({ kind: "success", message: `Order marked ${status.replace("_", " ").toLowerCase()}.` });
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
@@ -211,6 +490,7 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
     try {
       const updated = await api.updateOrderPayment(id, "PAID");
       state.setData((prev) => (prev ? { ...prev, ...updated } : updated));
+      bumpActivity();
       setFlash({ kind: "success", message: "Payment recorded." });
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
@@ -223,6 +503,8 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
   if (state.error || !state.data) return <Alert onRetry={state.reload}>{state.error ?? "Order not found"}</Alert>;
   const o = state.data;
   const type = orderType(o);
+  const currentReview = review === undefined ? embeddedReview(o) : review;
+  const canPrintDeliveryNote = perspective === "supplier" || perspective === "admin";
 
   const supplierNext: Partial<Record<OrderStatus, OrderStatus>> = { PENDING: "CONFIRMED", CONFIRMED: "IN_TRANSIT", IN_TRANSIT: "DELIVERED" };
   const nextStatus = supplierNext[o.status];
@@ -263,6 +545,11 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
             <Button variant="outline" onClick={() => window.open(invoiceHtmlUrl(o.id), "_blank", "noopener,noreferrer")}>
               View invoice
             </Button>
+            {canPrintDeliveryNote && (
+              <Button variant="outline" onClick={() => window.open(deliveryNoteHtmlUrl(o.id), "_blank", "noopener,noreferrer")} title="Printable packing slip for the driver">
+                {t("order.deliveryNote")}
+              </Button>
+            )}
             {canPayByCard && (
               <LinkButton href={`/pay/${o.id}`} variant="accent">
                 Pay now
@@ -430,6 +717,23 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
             </dl>
           </Card>
         </div>
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <OrderMessages orderId={o.id} perspective={perspective} onActivity={bumpActivity} />
+          <OrderReview
+            order={o}
+            perspective={perspective}
+            review={currentReview}
+            onChange={(r) => {
+              setReview(r);
+              bumpActivity();
+              setFlash({ kind: "success", message: perspective === "buyer" ? "Thanks for your review." : "Reply posted." });
+            }}
+          />
+        </div>
+        <OrderActivity orderId={o.id} refreshKey={activityKey} />
       </div>
     </div>
   );

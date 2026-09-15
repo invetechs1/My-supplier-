@@ -55,7 +55,7 @@ function toForm(c: CompanyProfile): FormState {
   };
 }
 
-export function slugify(input: string): string {
+function slugify(input: string): string {
   return input
     .toLowerCase()
     .trim()
