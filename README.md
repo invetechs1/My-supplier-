@@ -86,7 +86,9 @@ cd mobile && npm run typecheck
 
 ## Deploy
 
-`docker compose up --build` starts PostgreSQL + the API (which also serves `web/dist`). Set `JWT_SECRET`, `ADMIN_PASSWORD`, `CORS_ORIGINS`, and `SEED_DEMO_DATA=0` for production — see `backend/.env.example`. Put nginx/Caddy in front for HTTPS. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+**Production, step by step: [DEPLOYMENT.md](DEPLOYMENT.md)** (server + HTTPS, Moyasar, Unifonic, SMTP, app stores, go-live checklist).
+
+Quick version: `cp .env.production.example .env`, fill it, then `docker compose -f docker-compose.prod.yml up -d --build` — Caddy gives you HTTPS, the API image builds the web app and serves it, migrations run on start. Dev: `docker compose up --build`. A GitHub Action publishes the image to GHCR on every push to `main`.
 
 ## Repository layout
 ```

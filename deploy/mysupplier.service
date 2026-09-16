@@ -1,0 +1,15 @@
+# Alternative to Docker: run the API directly with systemd (after: python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt; cd web && npm ci && npm run build)
+[Unit]
+Description=My Supplier API (Build for Less)
+After=network.target postgresql.service
+
+[Service]
+User=www-data
+WorkingDirectory=/opt/mysupplier/backend
+EnvironmentFile=/opt/mysupplier/.env
+ExecStartPre=/opt/mysupplier/backend/.venv/bin/alembic upgrade head
+ExecStart=/opt/mysupplier/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2 --proxy-headers
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

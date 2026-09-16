@@ -70,7 +70,8 @@ def health():
 
 
 # Serve the built web app (web/dist) when present, so one container can host API + site.
-WEB_DIST = Path(__file__).resolve().parent.parent.parent / "web" / "dist"
+_candidates = [Path(__file__).resolve().parent.parent.parent / "web" / "dist", Path("/web/dist")]
+WEB_DIST = next((c for c in _candidates if c.exists()), _candidates[0])
 if WEB_DIST.exists():
     app.mount("/assets", StaticFiles(directory=WEB_DIST / "assets"), name="assets")
 
