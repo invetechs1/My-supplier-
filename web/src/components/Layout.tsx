@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth, useQuoteList } from '../auth'
 import { useI18n } from '../i18n'
+import { Wordmark } from './Logo'
 
 export function TopNav() {
   const { t, lang, setLang } = useI18n()
@@ -20,7 +21,7 @@ export function TopNav() {
   return (
     <nav className="nav">
       <div className="container">
-        <Link to="/" className="logo"><span className="mark">🏗️</span>{t('brand')}</Link>
+        <Link to="/" className="logo"><Wordmark light /></Link>
         <button className="pill menu-btn" onClick={() => setOpen(o => !o)}>☰</button>
         <div className={`links row ${open ? 'open' : ''}`} onClick={() => setOpen(false)}>
           <NavLink to="/catalog" className="link">{t('catalog')}</NavLink>
@@ -50,7 +51,7 @@ export function SiteLayout() {
     <>
       <TopNav />
       <main><Outlet /></main>
-      <footer><div className="container row between"><span>© {new Date().getFullYear()} {t('brand')} — {t('footer')}</span><span className="ltr">API: /api/v1 · Docs: /docs</span></div></footer>
+      <footer><div className="container row between"><span className="row"><Wordmark /><span className="muted">© {new Date().getFullYear()} — {t('footer')}</span></span><span className="ltr">API: /api/v1 · Docs: /docs</span></div></footer>
     </>
   )
 }

@@ -74,3 +74,13 @@ footer { border-top: 1px solid var(--line); padding: 26px 0; margin-top: 40px; c
 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
 .bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; } .bars div { flex: 1; background: var(--primary-2); border-radius: 3px 3px 0 0; min-height: 2px; } .bars div:hover { background: var(--primary); }
 .notif { padding: 10px 12px; border-bottom: 1px solid var(--line-2); } .notif.unread { background: var(--accent-soft); }
+
+/* brand slogan */
+.hero .slogan { font-family: var(--font-body); font-weight: 700; font-size: 3.2rem; letter-spacing: -.02em; color: #fff; line-height: 1; margin-bottom: 14px; display: inline-block; border-bottom: 5px solid var(--primary-2); padding-bottom: 6px; }
+.hero h1 { font-size: 1.5rem; font-weight: 600; opacity: .95; }
+@media (max-width: 640px) { .hero .slogan { font-size: 2.2rem; } .hero h1 { font-size: 1.15rem; } }
+.mission { display: grid; grid-template-columns: auto 1fr auto; gap: 22px; align-items: center; background: var(--card); border: 1px solid var(--line); border-inline-start: 6px solid var(--primary-2); border-radius: var(--radius); padding: 18px 22px; }
+.mission-mark { font-weight: 800; font-size: 1.6rem; line-height: 1; color: var(--primary-2); text-align: center; padding: 10px 14px; background: var(--accent-soft); border-radius: var(--radius-sm); }
+.mission-stat { text-align: center; min-width: 140px; } .mission-stat .num { font-size: 2rem; font-weight: 700; color: var(--primary); } .mission-stat .small { color: var(--muted); }
+@media (max-width: 760px) { .mission { grid-template-columns: 1fr; } }
+.auth-box .slogan-sm { text-align: center; color: var(--primary-2); font-weight: 700; letter-spacing: .06em; margin-bottom: 10px; }

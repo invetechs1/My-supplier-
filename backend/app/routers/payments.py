@@ -164,7 +164,7 @@ td,th{{padding:8px;border-bottom:1px solid #E1EAE3;text-align:right}}.n{{font-fa
 <table><thead><tr><th>البند</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead><tbody>{rows}</tbody>
 <tfoot><tr><td colspan=3>المجموع قبل الضريبة</td><td class=n>{inv.subtotal:,.2f}</td></tr><tr><td colspan=3>ضريبة القيمة المضافة 15%</td><td class=n>{inv.vat:,.2f}</td></tr>
 <tr class=tot><td colspan=3>الإجمالي شامل الضريبة (ر.س)</td><td class=n>{inv.total:,.2f}</td></tr></tfoot></table>
-<p style="color:#888;font-size:12px">الطلب #{inv.order_id} · {config.PLATFORM_NAME} · QR: ZATCA TLV</p><button onclick="print()">طباعة / Print</button></body></html>"""
+<p style="color:#888;font-size:12px">الطلب #{inv.order_id} · {config.PLATFORM_NAME} — <b style="color:#2E9E5B">{config.PLATFORM_TAGLINE}</b> · QR: ZATCA TLV</p><button onclick="print()">طباعة / Print</button></body></html>"""
 
 
 # ---- supplier payouts ----

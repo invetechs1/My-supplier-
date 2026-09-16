@@ -5,7 +5,7 @@ export let lang: Lang = 'ar';
 export const setLang = (l: Lang) => { lang = l; I18nManager.allowRTL(l === 'ar'); };
 
 const d: Record<string, [string, string]> = {
-  brand: ['مورّدي', 'My Supplier'], search: ['ابحث عن مادة بناء…', 'Search a material…'], prices: ['الأسعار', 'Prices'], rfq: ['طلبات التسعير', 'RFQs'],
+  brand: ['مورّدي', 'My Supplier'], slogan: ['Build for Less', 'Build for Less'], slogan_ar: ['ابنِ بأقل تكلفة', 'Build for less'], search: ['ابحث عن مادة بناء…', 'Search a material…'], prices: ['الأسعار', 'Prices'], rfq: ['طلبات التسعير', 'RFQs'],
   orders: ['الطلبات', 'Orders'], me: ['حسابي', 'Account'], login: ['تسجيل الدخول', 'Log in'], register: ['إنشاء حساب', 'Sign up'], logout: ['تسجيل الخروج', 'Log out'],
   email: ['البريد الإلكتروني', 'Email'], password: ['كلمة المرور', 'Password'], full_name: ['الاسم', 'Full name'], company: ['الشركة', 'Company'], city: ['المدينة', 'City'],
   buyer: ['مشترٍ', 'Buyer'], supplier: ['مورّد', 'Supplier'], best_price: ['أفضل سعر', 'Best price'], avg: ['المتوسط', 'Average'], offers: ['عروض', 'offers'],

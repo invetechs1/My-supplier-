@@ -5,7 +5,12 @@ export type Lang = 'ar' | 'en'
 const dict: Record<string, [string, string]> = {
   // [ar, en]
   brand: ['مورّدي', 'My Supplier'],
-  tagline: ['أسعار مواد البناء من كل المورّدين في مكان واحد', 'Building material prices from every supplier, in one place'],
+  slogan: ['Build for Less', 'Build for Less'],
+  slogan_ar: ['ابنِ بأقل تكلفة', 'Build for less'],
+  mission_title: ['رسالتنا', 'Our mission'],
+  mission: ['أن يحصل كل من يبني في المملكة — مقاولاً كان أو مالك مشروع — على أفضل سعر لكل مادة بناء، بشفافية كاملة وبضغطة واحدة. كل ريال توفّره في المواد هو ريال يبني به أكثر.', 'Everyone who builds in the Kingdom — contractor or project owner — gets the best price on every material, transparently and in one click. Every riyal saved on materials is a riyal that builds more.'],
+  saved_label: ['وفّر عملاؤنا مقارنةً بمتوسط السوق', 'saved by our buyers vs. the market average'],
+  tagline: ['ابنِ بأقل تكلفة — أسعار مواد البناء من كل المورّدين في مكان واحد', 'Build for Less — building material prices from every supplier, in one place'],
   hero_sub: ['قارن الأسعار، اطلب عروض تسعير من المورّدين المسجّلين، واشترِ بأفضل سعر لموقع مشروعك', 'Compare prices, request quotes from registered suppliers, and buy at the best price for your site'],
   search_ph: ['ابحث عن أسمنت، حديد، بلوك، سيراميك…', 'Search cement, rebar, blocks, tiles…'],
   search: ['بحث', 'Search'],
@@ -134,7 +139,7 @@ const dict: Record<string, [string, string]> = {
   withdrawn: ['مسحوب', 'Withdrawn'],
   rate_supplier: ['قيّم المورّد', 'Rate supplier'],
   sar: ['ر.س', 'SAR'],
-  footer: ['منصة سعودية لتسعير مواد البناء — كل الأسعار قبل ضريبة القيمة المضافة ما لم يُذكر خلاف ذلك.', 'A Saudi building-materials pricing platform — all prices exclude VAT unless stated.'],
+  footer: ['Build for Less — منصة سعودية لتسعير مواد البناء. كل الأسعار قبل ضريبة القيمة المضافة ما لم يُذكر خلاف ذلك.', 'Build for Less — a Saudi building-materials pricing platform. All prices exclude VAT unless stated.'],
   get_app: ['حمّل التطبيق', 'Get the app'],
   quote_list: ['قائمة التسعير', 'Quote list'],
   clear: ['مسح', 'Clear'],

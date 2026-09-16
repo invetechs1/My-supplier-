@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "مورّدي — My Supplier",
+    "name": "مورّدي — Build for Less",
     "slug": "mysupplier",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,6 +8,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
+      "image": "./assets/splash.png",
       "backgroundColor": "#0F3D24",
       "resizeMode": "contain"
     },
@@ -21,12 +22,14 @@
     "android": {
       "package": "sa.mysupplier.app",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F3D24"
       },
       "permissions": []
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
     },
     "extra": {
       "apiBase": "https://api.mysupplier.sa",
@@ -41,6 +44,8 @@
           "color": "#175934"
         }
       ]
-    ]
+    ],
+    "description": "Build for Less — building material prices from every supplier, RFQs and bidding.",
+    "icon": "./assets/icon.png"
   }
 }

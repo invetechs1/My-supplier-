@@ -1,4 +1,9 @@
-# مورّدي — My Supplier
+<p align="center"><img src="brand/logo.png" alt="My Supplier — Build for Less" width="640"></p>
+
+# مورّدي — My Supplier · **Build for Less**
+
+> **رسالتنا:** أن يحصل كل من يبني في المملكة — مقاولاً كان أو مالك مشروع — على أفضل سعر لكل مادة بناء، بشفافية كاملة وبضغطة واحدة. كل ريال توفّره في المواد هو ريال يبني به أكثر.
+> **Our mission:** everyone who builds in the Kingdom gets the best price on every material, transparently and in one click. *Build for Less.*
 
 **منصة أسعار مواد البناء وطلبات التسعير في المملكة العربية السعودية.**
 Building-materials price comparison, RFQ (request-for-quotation) and supplier-bidding platform — web, dashboard, and iOS/Android app.

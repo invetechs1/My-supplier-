@@ -21,6 +21,7 @@ export default function LoginScreen({ navigation, route }: any) {
   };
   return (
     <ScrollView style={S.screen} contentContainerStyle={S.pad}>
+      <View style={{ alignItems: 'center', marginBottom: 14 }}><Text style={[S.h1, { marginBottom: 0 }]}>{t('brand')}</Text><Text style={{ color: C.primary2, fontWeight: '800', letterSpacing: 2 }}>BUILD FOR LESS</Text><Text style={S.muted}>{t('slogan_ar')}</Text></View>
       <View style={[S.row, { marginBottom: 12 }]}>
         {(['login', 'register'] as const).map(m => <TouchableOpacity key={m} onPress={() => setMode(m)} style={[S.btnGhost, { flex: 1 }, mode === m && { backgroundColor: C.primary }]}><Text style={[S.btnGhostText, mode === m && { color: '#fff' }]}>{t(m)}</Text></TouchableOpacity>)}
       </View>

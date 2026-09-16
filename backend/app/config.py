@@ -9,6 +9,8 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 PLATFORM_NAME = os.environ.get("PLATFORM_NAME", "My Supplier")
 PLATFORM_NAME_AR = os.environ.get("PLATFORM_NAME_AR", "مورّدي")
+PLATFORM_TAGLINE = os.environ.get("PLATFORM_TAGLINE", "Build for Less")
+PLATFORM_TAGLINE_AR = os.environ.get("PLATFORM_TAGLINE_AR", "ابنِ بأقل تكلفة")
 
 # SQLite by default; set DATABASE_URL=postgresql+psycopg://user:pass@host/db for production.
 DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DATA_DIR / 'mysupplier.db'}")

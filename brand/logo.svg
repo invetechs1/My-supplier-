@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200" width="640" height="200">
+  <!-- My Supplier — Build for Less — brand lockup (mark + wordmark + slogan) -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#175934"/><stop offset="1" stop-color="#0F3D24"/></linearGradient>
+  </defs>
+  <rect x="20" y="20" width="160" height="160" rx="36" fill="url(#g)"/>
+  <!-- roof -->
+  <path d="M52 96 L100 54 L148 96" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- bricks -->
+  <rect x="62" y="104" width="34" height="18" rx="4" fill="#fff"/>
+  <rect x="104" y="104" width="34" height="18" rx="4" fill="#fff"/>
+  <rect x="80" y="128" width="40" height="18" rx="4" fill="#C6E5D1"/>
+  <!-- downward arrow = lower cost -->
+  <path d="M100 140 v18 M92 152 l8 8 8-8" fill="none" stroke="#2E9E5B" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="210" y="88" font-family="'Noto Kufi Arabic','Segoe UI',Tahoma,sans-serif" font-size="58" font-weight="700" fill="#0F3D24">مورّدي</text>
+  <text x="404" y="88" font-family="'IBM Plex Sans Arabic','Segoe UI',sans-serif" font-size="26" font-weight="600" fill="#6B7A70" letter-spacing="2">MY SUPPLIER</text>
+  <text x="210" y="150" font-family="'IBM Plex Sans Arabic','Segoe UI',sans-serif" font-size="52" font-weight="700" fill="#2E9E5B">Build for Less</text>
+  <text x="560" y="150" font-family="'Noto Kufi Arabic','Segoe UI',Tahoma,sans-serif" font-size="22" font-weight="600" fill="#175934" text-anchor="end" direction="rtl"></text>
+</svg>

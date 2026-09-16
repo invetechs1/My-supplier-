@@ -31,8 +31,8 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title=f"{PLATFORM_NAME} API", version="1.0.0", lifespan=lifespan,
-              description="Building materials price comparison, RFQ and supplier bidding platform.")
+app = FastAPI(title=f"{PLATFORM_NAME} — {config.PLATFORM_TAGLINE}", version="1.1.0", lifespan=lifespan,
+              description="Build for Less: building materials price comparison, RFQ and supplier bidding platform.")
 
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=False,
                    allow_methods=["*"], allow_headers=["*"])
@@ -66,7 +66,7 @@ async def rate_limit(request: Request, call_next):
 
 @app.get(f"{API_PREFIX}/health", tags=["meta"])
 def health():
-    return {"status": "ok", "platform": PLATFORM_NAME, "platform_ar": PLATFORM_NAME_AR}
+    return {"status": "ok", "platform": PLATFORM_NAME, "platform_ar": PLATFORM_NAME_AR, "tagline": config.PLATFORM_TAGLINE, "tagline_ar": config.PLATFORM_TAGLINE_AR}
 
 
 # Serve the built web app (web/dist) when present, so one container can host API + site.

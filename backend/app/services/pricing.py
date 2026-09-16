@@ -199,8 +199,18 @@ def trending(db: Session, limit: int = 8, city: str | None = None) -> list[dict]
     return rows
 
 
+def average_saving_pct(db: Session) -> float | None:
+    """How much cheaper the best offer is than the average offer, averaged over products with 2+ offers."""
+    pids = [p.id for p in db.query(Product.id).filter(Product.is_active.is_(True)).all()]
+    savings = [(s["avg_price"] - s["min_price"]) / s["avg_price"] * 100
+               for s in bulk_summaries(db, pids).values() if s.get("offer_count", 0) >= 2 and s.get("avg_price")]
+    return round(sum(savings) / len(savings), 1) if savings else None
+
+
 def public_stats(db: Session) -> dict:
     return {
+        "tagline": "Build for Less",
+        "avg_saving_pct": average_saving_pct(db),
         "products": db.query(func.count(Product.id)).filter(Product.is_active.is_(True)).scalar() or 0,
         "suppliers": db.query(func.count(Supplier.id)).filter(Supplier.is_external.is_(False)).scalar() or 0,
         "verified_suppliers": db.query(func.count(Supplier.id)).filter(Supplier.verified.is_(True)).scalar() or 0,

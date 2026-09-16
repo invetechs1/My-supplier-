@@ -38,12 +38,13 @@ export default function AccountScreen({ navigation }: any) {
       ) : (
         <>
           <Text style={S.h1}>{t('brand')}</Text>
+          <Text style={{ color: '#2E9E5B', fontWeight: '800', letterSpacing: 2, marginBottom: 12 }}>BUILD FOR LESS — {t('slogan_ar')}</Text>
           <Btn title={t('login')} onPress={() => navigation.navigate('Login')} style={{ marginBottom: 8 }} />
           <Btn title={t('register')} ghost onPress={() => navigation.navigate('Login', { mode: 'register' })} style={{ marginBottom: 8 }} />
         </>
       )}
       <Btn title={`🌐 ${t('language')}`} ghost onPress={() => { setLang(lang === 'ar' ? 'en' : 'ar'); force(x => x + 1); }} />
-      <Text style={[S.muted, { marginTop: 20, textAlign: 'center' }]}>v1.0.0</Text>
+      <Text style={[S.muted, { marginTop: 20, textAlign: 'center' }]}>{t('brand')} · Build for Less · v1.1.0</Text>
     </ScrollView>
   );
 }

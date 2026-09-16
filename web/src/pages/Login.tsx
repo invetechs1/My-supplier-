@@ -18,6 +18,7 @@ export default function Login() {
   return (
     <div className="container"><form className="card auth-box" onSubmit={submit}>
       <h1>{t('login')}</h1>
+      <div className="slogan-sm ltr" style={{ display: 'block' }}>BUILD FOR LESS</div>
       {err && <Alert kind="error">{err}</Alert>}
       <div className="field"><label>{t('email')}</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoFocus /></div>
       <div className="field"><label>{t('password')}</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} required /></div>

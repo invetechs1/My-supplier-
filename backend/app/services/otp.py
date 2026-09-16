@@ -64,7 +64,7 @@ def request_code(db: Session, destination: str, purpose: str = "register", chann
                   expires_at=utcnow() + timedelta(minutes=config.OTP_TTL_MINUTES))
     db.add(row)
     db.commit()
-    title = f"{config.PLATFORM_NAME_AR} — رمز التحقق"
+    title = f"{config.PLATFORM_NAME_AR} · {config.PLATFORM_TAGLINE} — رمز التحقق"
     body = f"رمز التحقق الخاص بك: {code}\nصالح لمدة {config.OTP_TTL_MINUTES} دقائق. لا تشاركه مع أحد.\nYour verification code is {code}."
     try:
         channels.send_direct(channel, dest, title, body)

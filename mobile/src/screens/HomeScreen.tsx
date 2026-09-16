@@ -34,6 +34,7 @@ export default function HomeScreen({ navigation }: any) {
   return (
     <View style={S.screen}>
       <View style={{ backgroundColor: C.deep, padding: 12 }}>
+        <View style={[S.row, S.between, { marginBottom: 8 }]}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 20 }}>{t('brand')}</Text><Text style={{ color: C.light, fontWeight: '800', fontSize: 16, letterSpacing: 1 }}>BUILD FOR LESS</Text></View>
         <TextInput style={[S.input, { marginBottom: 8 }]} placeholder={t('search')} value={q} onChangeText={setQ} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <TouchableOpacity onPress={() => setCity('')} style={[S.btnGhost, { marginEnd: 6, backgroundColor: city ? '#fff2' : C.primary2 }]}><Text style={{ color: '#fff', fontWeight: '700' }}>{t('all')}</Text></TouchableOpacity>

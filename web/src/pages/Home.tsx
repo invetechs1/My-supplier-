@@ -5,7 +5,7 @@ import { Change, Money, useLoad } from '../components/ui'
 import { useI18n } from '../i18n'
 
 export default function Home() {
-  const { t, name } = useI18n()
+  const { t, name, lang } = useI18n()
   const nav = useNavigate()
   const [q, setQ] = useState('')
   const [city, setCity] = useState('')
@@ -19,7 +19,8 @@ export default function Home() {
     <>
       <section className="hero">
         <div className="container">
-          <h1>{t('tagline')}</h1>
+          <div className="slogan ltr">Build for Less</div>
+          <h1>{t('slogan_ar')} — {lang === 'ar' ? 'أسعار مواد البناء من كل المورّدين في مكان واحد' : 'building material prices from every supplier, in one place'}</h1>
           <p>{t('hero_sub')}</p>
           <form className="search" onSubmit={submit}>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder={t('search_ph')} />
@@ -37,6 +38,14 @@ export default function Home() {
               <div><div className="num" style={{ fontSize: '1.6rem', fontWeight: 700 }}>{stats.data.cities.length}</div><div style={{ opacity: .85 }}>{t('stats_cities')}</div></div>
             </div>
           )}
+        </div>
+      </section>
+
+      <section className="container" style={{ padding: '26px 16px 0' }}>
+        <div className="mission">
+          <div className="mission-mark ltr">Build<br />for Less</div>
+          <div><h2 style={{ marginBottom: 4 }}>{t('mission_title')}</h2><p style={{ margin: 0 }}>{t('mission')}</p></div>
+          {stats.data?.avg_saving_pct != null && <div className="mission-stat"><div className="num">{stats.data.avg_saving_pct}%</div><div className="small">{t('saved_label')}</div></div>}
         </div>
       </section>
 

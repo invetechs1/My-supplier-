@@ -40,7 +40,7 @@ class SMTPEmail:
         msg = MIMEMultipart("alternative")
         msg["Subject"], msg["From"], msg["To"] = title, config.SMTP_FROM, destination
         msg.attach(MIMEText(body, "plain", "utf-8"))
-        html = f"<div dir='auto' style='font-family:sans-serif'><h3>{title}</h3><p>{body}</p><p style='color:#888'>{config.PLATFORM_NAME} · {config.WEB_BASE_URL}</p></div>"
+        html = f"<div dir='auto' style='font-family:sans-serif'><h3>{title}</h3><p>{body}</p><p style='color:#2E9E5B;font-weight:700'>{config.PLATFORM_TAGLINE}</p><p style='color:#888'>{config.PLATFORM_NAME} · {config.WEB_BASE_URL}</p></div>"
         msg.attach(MIMEText(html, "html", "utf-8"))
         with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=20) as s:
             if config.SMTP_TLS:

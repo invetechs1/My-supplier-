@@ -23,6 +23,7 @@ export default function Register() {
   return (
     <div className="container"><form className="card auth-box" style={{ maxWidth: 560 }} onSubmit={submit}>
       <h1>{t('register')}</h1>
+      <div className="slogan-sm ltr" style={{ display: 'block' }}>BUILD FOR LESS</div>
       {err && <Alert kind="error">{err}</Alert>}
       <div className="tabs"><button type="button" className={f.role === 'buyer' ? 'active' : ''} onClick={() => set('role', 'buyer')}>{t('role_buyer')}</button><button type="button" className={f.role === 'supplier' ? 'active' : ''} onClick={() => set('role', 'supplier')}>{t('role_supplier')}</button></div>
       <div className="grid grid-2">
