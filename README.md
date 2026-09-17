@@ -87,6 +87,8 @@ cd mobile && npm run typecheck
 
 ## Deploy
 
+**Developer handover (what is built, what remains, how to go live): [docs/DEVELOPER_HANDOVER.pdf](docs/DEVELOPER_HANDOVER.pdf)**
+
 **Production, step by step: [DEPLOYMENT.md](DEPLOYMENT.md)** (server + HTTPS, Moyasar, Unifonic, SMTP, app stores, go-live checklist).
 
 Quick version: `cp .env.production.example .env`, fill it, then `docker compose -f docker-compose.prod.yml up -d --build` — Caddy gives you HTTPS, the API image builds the web app and serves it, migrations run on start. Dev: `docker compose up --build`. A GitHub Action publishes the image to GHCR on every push to `main`.
