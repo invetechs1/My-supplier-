@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 from ..config import VAT_RATE
 from ..db import get_db
 from ..models import ORDER_TRANSITIONS, Offer, Order, OrderItem, Review, Supplier, User, utcnow
-from ..schemas import DirectOrderIn, OrderOut, OrderStatusIn, ReviewIn
+from ..schemas import DirectOrderIn, DisputeIn, DisputeOut, OrderOut, OrderStatusIn, ReviewIn
 from ..security import get_current_user, get_my_supplier, require_buyer
-from ..models import Payment
+from ..models import Dispute, Payment
 from ..services import payments, pricing
 from ..services.notify import notify
 
@@ -114,3 +114,43 @@ def review(order_id: int, body: ReviewIn, user: User = Depends(require_buyer), d
     s.rating_count += 1
     db.commit()
     return {"ok": True, "supplier_rating": s.rating, "rating_count": s.rating_count}
+
+
+@router.post("/{order_id}/dispute", response_model=DisputeOut, status_code=201)
+def open_dispute(order_id: int, body: DisputeIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    o = db.get(Order, order_id)
+    if not o:
+        raise HTTPException(404, "Order not found")
+    is_buyer, is_supplier = o.buyer_id == user.id, o.supplier.user_id == user.id
+    if not (is_buyer or is_supplier):
+        raise HTTPException(403, "Not your order")
+    if db.query(Dispute).filter(Dispute.order_id == o.id, Dispute.status == "open").first():
+        raise HTTPException(409, "A dispute is already open for this order")
+    d = Dispute(order_id=o.id, opened_by=user.id, role="buyer" if is_buyer else "supplier", reason=body.reason)
+    db.add(d)
+    target = o.supplier.user_id if is_buyer else o.buyer_id
+    if target:
+        notify(db, target, f"تم فتح نزاع على الطلب #{o.id}", body.reason[:200], "dispute", "order", o.id)
+    for admin in db.query(User).filter(User.role == "admin").all():
+        notify(db, admin.id, f"نزاع جديد على الطلب #{o.id}", body.reason[:200], "dispute", "order", o.id)
+    db.commit()
+    db.refresh(d)
+    return _dispute_out(d, db)
+
+
+@router.get("/{order_id}/disputes", response_model=list[DisputeOut])
+def order_disputes(order_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    o = db.get(Order, order_id)
+    if not o or not (user.role == "admin" or o.buyer_id == user.id or o.supplier.user_id == user.id):
+        raise HTTPException(404, "Order not found")
+    return [_dispute_out(d, db) for d in db.query(Dispute).filter(Dispute.order_id == o.id).order_by(Dispute.id.desc()).all()]
+
+
+def _dispute_out(d: Dispute, db: Session) -> DisputeOut:
+    out = DisputeOut.model_validate(d)
+    o = db.get(Order, d.order_id)
+    if o:
+        out.order_total = o.total
+        out.buyer_name = (o.buyer.company_name or o.buyer.full_name) if o.buyer else ""
+        out.supplier_name = o.supplier.name if o.supplier else ""
+    return out

@@ -66,3 +66,9 @@ Admin → *Delivery log* lists recent runs and can run any job now (`POST /admin
 ## 6. Mobile specifics
 - Expo push: `expo-notifications` + `expo-device`; token is registered after login (`src/push.ts`). Build with EAS so the Expo push token maps to APNs/FCM (`eas credentials`).
 - Payments open the hosted checkout in the system browser; after payment the buyer returns to the app and the order list refreshes (`/payments/{id}/sync` is called by the web return page; the app re-reads the order).
+
+## 7. File storage (v1.2)
+Uploads (supplier logos, product images, compliance documents) go to local disk by default (`backend/data/uploads`, served at `/uploads/...`). For production set `STORAGE_BACKEND=s3` with `S3_BUCKET`, `S3_REGION`, optional `S3_ENDPOINT` (Oracle OCI, Wasabi, MinIO) and `S3_PUBLIC_BASE` (CDN), plus the standard `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`. Files are type-checked by magic bytes (PNG/JPG/WEBP, PDF for documents) and limited to `MAX_UPLOAD_MB` (8). Documents are stored with random names; for stricter privacy move them to a private bucket and serve signed URLs (see the handover backlog).
+
+## 8. Monitoring
+Set `SENTRY_DSN` (and `ENVIRONMENT=production`) to send exceptions and traces to Sentry; nothing is sent when unset.

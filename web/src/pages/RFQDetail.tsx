@@ -1,7 +1,7 @@
 /** Shared RFQ page: buyer sees ranked bids and awards; supplier sees items with market reference and submits a bid. */
 import { FormEvent, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { api, Bid, RFQ } from '../api'
+import { api, API_BASE, Bid, getToken, RFQ } from '../api'
 import { useAuth } from '../auth'
 import { Alert, Badge, Money, Spinner, Status, useLoad } from '../components/ui'
 import { fmtDate, useI18n } from '../i18n'
@@ -86,7 +86,7 @@ export default function RFQDetail() {
             {r.description && <p style={{ marginBottom: 0 }}>{r.description}</p>}
             {!isOwner && r.buyer_name && <div className="small muted">{r.buyer_name}</div>}
           </div>
-          {isOwner && <div className="row">{r.status === 'draft' && <button className="btn" onClick={publish}>{t('submit_rfq')}</button>}{(r.status === 'open' || r.status === 'draft') && <button className="btn ghost" onClick={close}>{t('close_rfq')}</button>}</div>}
+          {isOwner && <div className="row">{r.bid_count > 0 && <a className="btn secondary" href={`${API_BASE}/rfq/${r.id}/export.xlsx?token=${getToken()}`}>📊 {t('export_xlsx')}</a>}{r.status === 'draft' && <button className="btn" onClick={publish}>{t('submit_rfq')}</button>}{(r.status === 'open' || r.status === 'draft') && <button className="btn ghost" onClick={close}>{t('close_rfq')}</button>}</div>}
         </div>
         {msg && <div style={{ marginTop: 10 }}><Alert kind={msg.kind}>{msg.text}</Alert></div>}
       </div>

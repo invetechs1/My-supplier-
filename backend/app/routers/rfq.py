@@ -1,15 +1,16 @@
 """Buyer RFQs and supplier bidding."""
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from ..config import VAT_RATE
 from ..db import get_db
 from ..models import RFQ, AuditLog, Bid, BidItem, Order, OrderItem, Product, RFQInvite, RFQItem, Supplier, User, utcnow
-from ..schemas import BidIn, BidItemOut, BidOut, RFQDetailOut, RFQIn, RFQItemOut, RFQOut
+from ..schemas import BidIn, BidItemOut, BidOut, BOQItemOut, RFQDetailOut, RFQIn, RFQItemOut, RFQOut
 from ..security import get_current_user, get_my_supplier, require_buyer
-from ..services import matching, pricing
+from ..services import boq, matching, pricing
 from ..services.notify import notify
 from .catalog import product_out
 
@@ -104,6 +105,31 @@ def _notify_suppliers(db: Session, rfq: RFQ) -> int:
             notify(db, s.user_id, f"طلب تسعير جديد: {rfq.title}", f"{len(rfq.items)} بند — {rfq.city}", "rfq", "rfq", rfq.id)
             n += 1
     return n
+
+
+@router.post("/import-boq", response_model=list[BOQItemOut])
+async def import_boq(file: UploadFile = File(...), user: User = Depends(require_buyer), db: Session = Depends(get_db)):
+    """Parse a bill of quantities (Excel/CSV) into RFQ items with suggested product matches."""
+    data = await file.read()
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(413, "File too large")
+    try:
+        items = boq.parse_boq(data, file.filename or "boq.xlsx")
+    except Exception as exc:
+        raise HTTPException(400, f"Could not read the file: {exc}")
+    if not items:
+        raise HTTPException(400, "No rows with a description and quantity were found")
+    return boq.match_products(db, items)
+
+
+@router.get("/{rfq_id}/export.xlsx", include_in_schema=False)
+def export_comparison(rfq_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    r = db.get(RFQ, rfq_id)
+    if not r or (r.buyer_id != user.id and user.role != "admin"):
+        raise HTTPException(404, "RFQ not found")
+    data = boq.bid_comparison_xlsx(r)
+    return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="rfq-{r.id}-comparison.xlsx"'})
 
 
 @router.get("/mine", response_model=list[RFQOut])

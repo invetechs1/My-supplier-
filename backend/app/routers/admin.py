@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 
 from ..config import STALE_OFFER_DAYS
 from ..db import get_db
-from ..models import (RFQ, AuditLog, Bid, Category, JobRun, NotificationDelivery, Offer, Order, Payment, Payout, PriceSource,
-                      Product, Supplier, User, utcnow)
-from ..schemas import (CategoryIn, CategoryOut, DeliveryOut, ImportResult, PaymentOut, PayoutOut, PriceSourceIn, PriceSourceOut,
-                       SupplierOut, UserOut)
+from ..models import (RFQ, AuditLog, Bid, Category, Dispute, JobRun, NotificationDelivery, Offer, Order, Payment, Payout,
+                      PriceSource, Product, Supplier, SupplierDocument, User, utcnow)
+from ..schemas import (CategoryIn, CategoryOut, DeliveryOut, DisputeOut, DisputeResolveIn, DocumentReviewIn, ImportResult, PaymentOut,
+                       PayoutOut, PriceSourceIn, PriceSourceOut, SupplierDocumentOut, SupplierOut, UserOut)
 from ..security import require_admin
 from ..services import ingestion, jobs, payments, pricing
 from ..services.notify import notify
@@ -347,3 +347,66 @@ def run_job_now(name: str, db: Session = Depends(get_db)):
     if name not in jobs.JOBS:
         raise HTTPException(404, "Unknown job")
     return {"name": name, "result": jobs.run_job(name, db)}
+
+
+# ---- supplier documents ----
+@router.get("/documents", response_model=list[SupplierDocumentOut])
+def documents(status: str | None = "pending", supplier_id: int | None = None, db: Session = Depends(get_db)):
+    q = db.query(SupplierDocument)
+    if status:
+        q = q.filter(SupplierDocument.status == status)
+    if supplier_id:
+        q = q.filter(SupplierDocument.supplier_id == supplier_id)
+    out = []
+    for d in q.order_by(SupplierDocument.id.desc()).limit(300).all():
+        o = SupplierDocumentOut.model_validate(d)
+        s = db.get(Supplier, d.supplier_id)
+        o.supplier_name = s.name if s else ""
+        out.append(o)
+    return out
+
+
+@router.post("/documents/{doc_id}/review", response_model=SupplierDocumentOut)
+def review_document(doc_id: int, body: DocumentReviewIn, db: Session = Depends(get_db)):
+    d = db.get(SupplierDocument, doc_id)
+    if not d:
+        raise HTTPException(404, "Document not found")
+    d.status, d.note, d.expires_at, d.reviewed_at = body.status, body.note, body.expires_at, utcnow()
+    s = db.get(Supplier, d.supplier_id)
+    if s and s.user_id:
+        notify(db, s.user_id, f"مستند {d.kind}: {'مقبول ✅' if body.status == 'approved' else 'مرفوض'}", body.note, "account")
+    db.commit()
+    o = SupplierDocumentOut.model_validate(d)
+    o.supplier_name = s.name if s else ""
+    return o
+
+
+# ---- disputes ----
+@router.get("/disputes", response_model=list[DisputeOut])
+def disputes(status: str | None = "open", db: Session = Depends(get_db)):
+    from .orders import _dispute_out
+    q = db.query(Dispute)
+    if status:
+        q = q.filter(Dispute.status == status)
+    return [_dispute_out(d, db) for d in q.order_by(Dispute.id.desc()).limit(300).all()]
+
+
+@router.post("/disputes/{dispute_id}/resolve", response_model=DisputeOut)
+def resolve_dispute(dispute_id: int, body: DisputeResolveIn, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    from .orders import _dispute_out
+    d = db.get(Dispute, dispute_id)
+    if not d or d.status != "open":
+        raise HTTPException(400, "Dispute not found or already closed")
+    d.status, d.resolution, d.resolved_at = body.status, body.resolution, utcnow()
+    o = db.get(Order, d.order_id)
+    if body.refund:
+        paid = db.query(Payment).filter(Payment.order_id == o.id, Payment.status == "paid").first()
+        if paid:
+            payments.refund(db, paid, user)
+            d.refunded = True
+        o.status = "cancelled"
+    for uid in {o.buyer_id, o.supplier.user_id}:
+        if uid:
+            notify(db, uid, f"قرار النزاع على الطلب #{o.id}: {body.status}", body.resolution, "dispute", "order", o.id)
+    db.commit()
+    return _dispute_out(d, db)

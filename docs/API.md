@@ -76,3 +76,6 @@ Base URL: `/api/v1`. Auth: `Authorization: Bearer <token>` from `/auth/login` or
 
 ## Notifications & ops (v1.1)
 `POST /notifications/devices {token, platform, device_name}` · `DELETE /notifications/devices/{token}` · `GET /notifications/deliveries` · admin: `GET /admin/deliveries?status=` · `POST /admin/deliveries/{id}/retry` · `GET /admin/jobs` · `POST /admin/jobs/{name}/run`.
+
+## v1.2: uploads, BOQ, disputes
+`POST /suppliers/me/logo` (multipart) · `GET/POST /suppliers/me/documents?kind=cr|vat|classification|bank|other` · `POST /catalog/products/{id}/image` · `POST /rfq/import-boq` (xlsx/csv → items with suggested `product_id`) · `GET /rfq/{id}/export.xlsx` · `POST /orders/{id}/dispute {reason}` · `GET /orders/{id}/disputes` · admin: `GET /admin/documents?status=` · `POST /admin/documents/{id}/review {status, note, expires_at}` · `GET /admin/disputes?status=` · `POST /admin/disputes/{id}/resolve {status, resolution, refund}`.

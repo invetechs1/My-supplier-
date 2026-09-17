@@ -5,10 +5,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Bid, Offer, Order, Product, Supplier, User, utcnow
-from ..schemas import ImportResult, OfferIn, OfferOut, OfferUpdateIn, SupplierOut, SupplierUpdateIn
+from ..models import Bid, Offer, Order, Product, Supplier, SupplierDocument, User, utcnow
+from ..schemas import ImportResult, OfferIn, OfferOut, OfferUpdateIn, SupplierDocumentOut, SupplierOut, SupplierUpdateIn
 from ..security import get_my_supplier, require_supplier
-from ..services import ingestion, pricing
+from ..services import ingestion, pricing, storage
 from .catalog import offer_out
 
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
@@ -143,6 +143,33 @@ async def import_offers(file: UploadFile = File(...), supplier: Supplier = Depen
         raise HTTPException(400, f"Could not parse file: {exc}")
     return ingestion.import_rows(db, rows, supplier=supplier, source="import", source_name=supplier.name,
                                  default_city=supplier.city, created_by=user.id)
+
+
+@router.post("/me/logo", response_model=SupplierOut)
+async def upload_logo(file: UploadFile = File(...), supplier: Supplier = Depends(get_my_supplier), db: Session = Depends(get_db)):
+    data, ext, mime = await storage.read_upload(file, ("png", "jpg", "webp"))
+    supplier.logo_url = storage.save(data, ext, mime, "logos")
+    db.commit()
+    return supplier_out(supplier, db)
+
+
+@router.get("/me/documents", response_model=list[SupplierDocumentOut])
+def my_documents(supplier: Supplier = Depends(get_my_supplier), db: Session = Depends(get_db)):
+    return db.query(SupplierDocument).filter(SupplierDocument.supplier_id == supplier.id).order_by(SupplierDocument.id.desc()).all()
+
+
+@router.post("/me/documents", response_model=SupplierDocumentOut, status_code=201)
+async def upload_document(kind: str = "other", file: UploadFile = File(...), supplier: Supplier = Depends(get_my_supplier),
+                          db: Session = Depends(get_db)):
+    if kind not in ("cr", "vat", "classification", "bank", "other"):
+        raise HTTPException(400, "kind must be cr | vat | classification | bank | other")
+    data, ext, mime = await storage.read_upload(file, ("png", "jpg", "webp", "pdf"))
+    url = storage.save(data, ext, mime, f"documents/{supplier.id}")
+    doc = SupplierDocument(supplier_id=supplier.id, kind=kind, file_url=url, filename=file.filename or "")
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return doc
 
 
 @router.get("/{supplier_id}", response_model=SupplierOut)

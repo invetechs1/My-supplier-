@@ -33,6 +33,7 @@ Building-materials price comparison, RFQ (request-for-quotation) and supplier-bi
 - **OTP**: SMS/WhatsApp/email one-time codes for registration, passwordless phone login, password reset and phone verification (Unifonic / Twilio / SMTP; console mode for dev).
 - **Notifications**: every event goes to in-app + email + SMS + WhatsApp + Expo push according to the user's preferences, through an outbox with retries and an admin delivery log.
 - **Background jobs**: RFQ expiry, price alerts, daily external feed fetching, payment expiry. Rate limiting, Alembic migrations.
+- **v1.2**: logo/product-image/document uploads (local or S3), supplier compliance document review, Excel/CSV bill-of-quantities import into an RFQ with product matching, bid comparison export to Excel, order disputes with admin resolution and refund, Sentry hook.
 - Details and env variables: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
 **For the platform (admin dashboard)**
@@ -79,7 +80,7 @@ Store builds: `eas build -p ios|android --profile production` (set `apiBase` in 
 
 ### 4. Tests
 ```bash
-cd backend && python -m pytest -q      # 14 end-to-end scenarios (auth, catalog, import, RFQ→bid→award→order→review, admin, payments, OTP, notifications, jobs)
+cd backend && python -m pytest -q      # 17 end-to-end scenarios (auth, catalog, import, RFQ→bid→award→order→review, admin, payments, OTP, notifications, jobs)
 cd web && npm run typecheck
 cd mobile && npm run typecheck
 ```

@@ -17,6 +17,7 @@ import BuyerPayments from './pages/buyer/BuyerPayments'
 import Payouts from './pages/supplier/Payouts'
 import AdminFinance from './pages/admin/AdminFinance'
 import AdminOps from './pages/admin/AdminOps'
+import AdminTrust from './pages/admin/AdminTrust'
 import NotificationsPage from './pages/NotificationsPage'
 import SettingsPage from './pages/SettingsPage'
 import BuyerHome from './pages/buyer/BuyerHome'
@@ -81,6 +82,7 @@ function AdminPortal() {
     { to: '/admin/quality', label: t('data_quality'), icon: '🧪' },
     { to: '/admin/finance', label: t('finance'), icon: '💰' },
     { to: '/admin/ops', label: t('deliveries'), icon: '📡' },
+    { to: '/admin/trust', label: t('disputes'), icon: '🛡️' },
     { to: '/settings', label: t('settings'), icon: '⚙️' },
   ]} />
 }
@@ -132,6 +134,7 @@ export default function App() {
           <Route path="quality" element={<AdminQuality />} />
           <Route path="finance" element={<AdminFinance />} />
           <Route path="ops" element={<AdminOps />} />
+          <Route path="trust" element={<AdminTrust />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

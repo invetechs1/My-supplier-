@@ -19,6 +19,10 @@ from .services import jobs
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
+if config.SENTRY_DSN:
+    import sentry_sdk
+    sentry_sdk.init(dsn=config.SENTRY_DSN, environment=config.ENVIRONMENT, traces_sample_rate=0.1)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -68,6 +72,9 @@ async def rate_limit(request: Request, call_next):
 def health():
     return {"status": "ok", "platform": PLATFORM_NAME, "platform_ar": PLATFORM_NAME_AR, "tagline": config.PLATFORM_TAGLINE, "tagline_ar": config.PLATFORM_TAGLINE_AR}
 
+
+if config.STORAGE_BACKEND == "local":
+    app.mount("/uploads", StaticFiles(directory=str(config.UPLOADS_DIR)), name="uploads")
 
 # Serve the built web app (web/dist) when present, so one container can host API + site.
 _candidates = [Path(__file__).resolve().parent.parent.parent / "web" / "dist", Path("/web/dist")]

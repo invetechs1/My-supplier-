@@ -449,3 +449,32 @@ class JobRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(10), default="ok")
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class SupplierDocument(Base):
+    """Compliance documents (CR, VAT certificate, SCA classification…) reviewed by the platform."""
+    __tablename__ = "supplier_documents"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(30), default="other")  # cr | vat | classification | bank | other
+    file_url: Mapped[str] = mapped_column(String(500))
+    filename: Mapped[str] = mapped_column(String(200), default="")
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)  # pending | approved | rejected
+    note: Mapped[str] = mapped_column(String(400), default="")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class Dispute(Base):
+    __tablename__ = "disputes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    opened_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    role: Mapped[str] = mapped_column(String(10), default="buyer")  # buyer | supplier
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="open", index=True)  # open | resolved | rejected
+    resolution: Mapped[str] = mapped_column(Text, default="")
+    refunded: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

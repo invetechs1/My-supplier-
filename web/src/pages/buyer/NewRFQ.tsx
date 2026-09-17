@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, Product, Supplier } from '../../api'
+import { api, BOQItem, Product, Supplier } from '../../api'
 import { useAuth, useQuoteList } from '../../auth'
 import { Alert } from '../../components/ui'
 import { useI18n } from '../../i18n'
@@ -17,6 +17,16 @@ export default function NewRFQ() {
   const [q, setQ] = useState(''); const [hits, setHits] = useState<Product[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false)
+  const boqRef = useRef<HTMLInputElement>(null)
+  const [boqMsg, setBoqMsg] = useState('')
+  const importBoq = async (file: File) => {
+    setErr(''); setBusy(true)
+    try {
+      const items = await api.upload<BOQItem[]>('/rfq/import-boq', file)
+      setRows(rs => [...rs, ...items.map(i => ({ product_id: i.product_id, description: i.product_id ? (lang === 'ar' ? i.match_name_ar : i.match_name_en) : i.description, quantity: i.quantity, unit: i.unit, target_price: i.target_price != null ? String(i.target_price) : '' }))])
+      setBoqMsg(`${items.length} ${t('items')} · ${items.filter(i => i.product_id).length} ${t('matched')}`)
+    } catch (e: any) { setErr(e.message) } finally { setBusy(false); if (boqRef.current) boqRef.current.value = '' }
+  }
   useEffect(() => { setRows(quote.items.map(i => ({ product_id: i.product_id, description: lang === 'ar' ? i.name_ar : i.name_en, quantity: i.quantity, unit: i.unit, target_price: '' }))) }, [])  // eslint-disable-line
   useEffect(() => { if (!q.trim()) { setHits([]); return } const h = setTimeout(() => api.get<any>('/catalog/products', { q, size: 6 }).then(r => setHits(r.items)).catch(() => {}), 250); return () => clearTimeout(h) }, [q])
   useEffect(() => { if (f.visibility === 'invited' && !suppliers.length) api.get<Supplier[]>('/suppliers').then(setSuppliers).catch(() => {}) }, [f.visibility, suppliers.length])
@@ -46,7 +56,8 @@ export default function NewRFQ() {
       </div>
 
       <div className="card">
-        <h3>{t('items')}</h3>
+        <div className="row between"><h3>{t('items')}</h3><div className="row"><input type="file" accept=".xlsx,.xlsm,.csv" ref={boqRef} style={{ display: 'none' }} onChange={e => e.target.files?.[0] && importBoq(e.target.files[0])} /><button type="button" className="btn secondary sm" onClick={() => boqRef.current?.click()} disabled={busy}>📄 {t('import_boq')}</button>{boqMsg && <span className="small muted">{boqMsg}</span>}</div></div>
+        <p className="small muted">{t('boq_hint')}</p>
         <div className="field" style={{ position: 'relative' }}>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder={t('search_ph')} />
           {hits.length > 0 && <div className="card" style={{ position: 'absolute', zIndex: 5, insetInline: 0, top: '100%', maxHeight: 260, overflow: 'auto', padding: 4 }}>

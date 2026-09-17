@@ -13,6 +13,8 @@ export function OrdersTable({ orders, supplierView, reload }: { orders: Order[];
   const [pay, setPay] = useState<Order | null>(null)
   const [invoices, setInvoices] = useState<Record<number, Invoice[]>>({})
   const loadInvoices = (id: number) => api.get<Invoice[]>(`/payments/invoices/order/${id}`).then(r => setInvoices(x => ({ ...x, [id]: r }))).catch(() => {})
+  const [dispute, setDispute] = useState<Order | null>(null); const [reason, setReason] = useState('')
+  const canDispute = (o: Order) => ['confirmed', 'in_delivery', 'delivered'].includes(o.status)
   const canPay = (o: Order) => !supplierView && !['cancelled', 'delivered'].includes(o.status) && ['unpaid', 'pending'].includes(o.payment_status)
   const move = async (o: Order, status: string) => { try { await api.patch(`/orders/${o.id}/status`, { status }); reload() } catch (e: any) { alert(e.message) } }
   const next: Record<string, string[]> = { pending: ['confirmed', 'cancelled'], confirmed: ['in_delivery', 'cancelled'], in_delivery: ['delivered'] }
@@ -35,6 +37,7 @@ export function OrdersTable({ orders, supplierView, reload }: { orders: Order[];
                 {supplierView && (next[o.status] || []).map(s => <button key={s} className={`btn sm ${s === 'cancelled' ? 'danger' : ''}`} onClick={() => move(o, s)}>{t(s)}</button>)}
                 {!supplierView && o.status === 'pending' && <button className="btn sm danger" onClick={() => move(o, 'cancelled')}>{t('cancelled')}</button>}
                 {!supplierView && o.status === 'delivered' && !o.has_review && <button className="btn sm secondary" onClick={() => setReview(o)}>★ {t('rate_supplier')}</button>}
+                {canDispute(o) && <button className="btn ghost sm" onClick={() => setDispute(o)}>⚠ {t('open_dispute')}</button>}
               </div>
             </td>
           </tr>
@@ -48,6 +51,10 @@ export function OrdersTable({ orders, supplierView, reload }: { orders: Order[];
       ))}</tbody>
     </table></div>
       {pay && <PayModal order={pay} onClose={() => { setPay(null); reload() }} />}
+      {dispute && <Modal title={`${t('open_dispute')} — #${dispute.id}`} onClose={() => setDispute(null)}>
+        <div className="field"><label>{t('reason')}</label><textarea rows={4} value={reason} onChange={e => setReason(e.target.value)} /></div>
+        <button className="btn" disabled={reason.trim().length < 5} onClick={async () => { try { await api.post(`/orders/${dispute.id}/dispute`, { reason }); setDispute(null); setReason(''); reload() } catch (e: any) { alert(e.message) } }}>{t('confirm')}</button>
+      </Modal>}
       {review && <Modal title={`${t('rate_supplier')} — ${review.supplier?.name}`} onClose={() => setReview(null)}>
         <div className="row" style={{ fontSize: '1.6rem', cursor: 'pointer' }}>{[1, 2, 3, 4, 5].map(n => <span key={n} onClick={() => setRating(n)} style={{ color: n <= rating ? '#F2B134' : '#ccc' }}>★</span>)}</div>
         <div className="field"><label>{t('notes')}</label><textarea rows={3} value={comment} onChange={e => setComment(e.target.value)} /></div>

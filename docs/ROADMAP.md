@@ -12,12 +12,17 @@
 - Multi-channel notifications (email, SMS, WhatsApp, Expo push) with per-user preferences, outbox with retries and admin delivery log; mobile push registration.
 - Background jobs (RFQ expiry, price alerts, feed fetching, payment expiry), per-IP rate limiting, Alembic migrations.
 
+## Shipped in v1.2
+- File uploads (local disk or S3-compatible storage): supplier logos, product images, supplier compliance documents (CR, VAT, classification, IBAN letter) with admin review and expiry.
+- Bill-of-quantities import (Excel/CSV) into an RFQ with automatic product matching; bid comparison export to Excel.
+- Order disputes (buyer or supplier) with admin resolution and optional refund; Sentry error monitoring hook.
+
 ## Next (in priority order)
-1. **Production hardening**: S3 uploads for supplier logos and product images, Redis-backed rate limiting and job locks for multi-replica deployments, Sentry.
+1. **Production hardening**: Redis-backed rate limiting and job locks for multi-replica deployments; private bucket + signed URLs for supplier documents.
 2. **Payments phase 2**: ZATCA phase‑2 e-invoicing (XML, signing, clearance), Tabby/Tamara BNPL for buyers, automated payouts via bank API, HyperPay as a second gateway.
-3. **Supplier connectors**: per-supplier CSV templates and adapters for common supplier ERPs (Odoo, SAP B1) and Google Sheets links.
+3. **Supplier connectors**: per-supplier CSV templates and adapters for common supplier ERPs (Odoo, SAP B1) and Google Sheets links (a published-CSV Sheets link already works as a price source).
 4. **Search & scale**: PostgreSQL full-text search, product de-duplication (same item, different brands/names), unit normalisation (ton ↔ bag ↔ m³).
-5. **Buyer teams & projects**: multiple users per company, per-project RFQ folders, BOQ import (Excel) → RFQ in one step, comparison export to Excel/PDF.
-6. **Trust**: supplier document vault (CR, VAT, SCA classification), verified-purchase reviews only, dispute flow on orders.
+5. **Buyer teams & projects**: multiple users per company, per-project RFQ folders, PDF export of comparisons.
+6. **Trust**: document expiry reminders, supplier badges from approved documents, review moderation.
 7. **Intelligence**: price forecasts per category, "should you buy now" signals, city arbitrage view, public weekly index page for SEO.
 8. **Growth**: referral credits, WhatsApp bot for quick price lookups, Arabic SEO landing pages per product/city.

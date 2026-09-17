@@ -102,3 +102,17 @@ FEED_FETCH_INTERVAL_HOURS = int(os.environ.get("FEED_FETCH_INTERVAL_HOURS", "24"
 RATE_LIMIT_AUTH_PER_MINUTE = int(os.environ.get("RATE_LIMIT_AUTH_PER_MINUTE", "30"))
 RATE_LIMIT_OTP_PER_MINUTE = int(os.environ.get("RATE_LIMIT_OTP_PER_MINUTE", "6"))
 AUTO_CREATE_TABLES = os.environ.get("AUTO_CREATE_TABLES", "1") == "1"  # set 0 in production and use alembic
+
+# ---------------------------------------------------------------------------
+# File storage (logos, product images, supplier documents) and monitoring
+# ---------------------------------------------------------------------------
+STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local")  # local | s3
+UPLOADS_DIR = DATA_DIR / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+S3_BUCKET = os.environ.get("S3_BUCKET", "")
+S3_REGION = os.environ.get("S3_REGION", "me-south-1")
+S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "")          # for OCI / Wasabi / MinIO compatible stores
+S3_PUBLIC_BASE = os.environ.get("S3_PUBLIC_BASE", "")    # CDN/base URL for public objects; default = endpoint/bucket
+MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "8"))
+SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")

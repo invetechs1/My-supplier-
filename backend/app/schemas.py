@@ -576,3 +576,61 @@ class DeliveryOut(ORM):
     attempts: int
     sent_at: Optional[datetime]
     created_at: datetime
+
+
+# ---------- v1.2: documents, BOQ, disputes ----------
+class SupplierDocumentOut(ORM):
+    id: int
+    supplier_id: int
+    kind: str
+    file_url: str
+    filename: str
+    status: str
+    note: str
+    expires_at: Optional[datetime]
+    uploaded_at: datetime
+    reviewed_at: Optional[datetime]
+    supplier_name: str = ""
+
+
+class DocumentReviewIn(BaseModel):
+    status: str = Field(pattern="^(approved|rejected)$")
+    note: str = ""
+    expires_at: Optional[datetime] = None
+
+
+class BOQItemOut(BaseModel):
+    description: str
+    quantity: float
+    unit: str = ""
+    target_price: Optional[float] = None
+    product_id: Optional[int] = None
+    match_name_ar: str = ""
+    match_name_en: str = ""
+    confidence: float = 0
+
+
+class DisputeIn(BaseModel):
+    reason: str = Field(min_length=5, max_length=2000)
+
+
+class DisputeResolveIn(BaseModel):
+    status: str = Field(pattern="^(resolved|rejected)$")
+    resolution: str = ""
+    refund: bool = False
+
+
+class DisputeOut(ORM):
+    id: int
+    order_id: int
+    opened_by: int
+    role: str
+    reason: str
+    status: str
+    resolution: str
+    refunded: bool
+    created_at: datetime
+    resolved_at: Optional[datetime]
+    order_total: float = 0
+    buyer_name: str = ""
+    supplier_name: str = ""

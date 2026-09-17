@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,7 @@ from ..models import Category, Offer, PriceAlert, Product, User
 from ..schemas import (CategoryOut, HistoryPoint, OfferOut, PagedProducts, PriceAlertIn, PriceAlertOut, PriceSummary, ProductDetailOut,
                        ProductIn, ProductOut)
 from ..security import get_current_user, require_roles
-from ..services import pricing
+from ..services import pricing, storage
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -112,6 +112,20 @@ def update_product(product_id: int, body: ProductIn, user: User = Depends(requir
         setattr(p, k, v)
     db.commit()
     db.refresh(p)
+    return product_out(p)
+
+
+@router.post("/products/{product_id}/image", response_model=ProductOut)
+async def upload_product_image(product_id: int, file: UploadFile = File(...), user: User = Depends(require_roles("supplier", "admin")),
+                               db: Session = Depends(get_db)):
+    p = db.get(Product, product_id)
+    if not p:
+        raise HTTPException(404, "Product not found")
+    if user.role != "admin" and p.created_by != user.id:
+        raise HTTPException(403, "Only the creator or an admin can change the image")
+    data, ext, mime = await storage.read_upload(file, ("png", "jpg", "webp"))
+    p.image_url = storage.save(data, ext, mime, "products")
+    db.commit()
     return product_out(p)
 
 
