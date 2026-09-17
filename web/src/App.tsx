@@ -13,6 +13,7 @@ import MarketPage from './pages/MarketPage'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ResetPassword from './pages/ResetPassword'
+import { NotFound, StaticPage } from './pages/StaticPages'
 import BuyerPayments from './pages/buyer/BuyerPayments'
 import Payouts from './pages/supplier/Payouts'
 import AdminFinance from './pages/admin/AdminFinance'
@@ -101,6 +102,10 @@ export default function App() {
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
         <Route path="reset-password" element={<ResetPassword />} />
+        <Route path="terms" element={<StaticPage slug="terms" />} />
+        <Route path="privacy" element={<StaticPage slug="privacy" />} />
+        <Route path="about" element={<StaticPage slug="about" />} />
+        <Route path="contact" element={<StaticPage slug="contact" />} />
         <Route path="notifications" element={<Guard roles={['buyer', 'supplier', 'admin']}><NotificationsPage /></Guard>} />
         <Route path="settings" element={<Guard roles={['buyer', 'supplier', 'admin']}><div className="container" style={{ padding: '20px 16px' }}><SettingsPage /></div></Guard>} />
         <Route path="rfq/:id" element={<Guard roles={['buyer', 'supplier', 'admin']}><div className="container" style={{ padding: '20px 16px' }}><RFQDetail /></div></Guard>} />
@@ -136,7 +141,7 @@ export default function App() {
           <Route path="ops" element={<AdminOps />} />
           <Route path="trust" element={<AdminTrust />} />
         </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   )

@@ -51,7 +51,7 @@ export function SiteLayout() {
     <>
       <TopNav />
       <main><Outlet /></main>
-      <footer><div className="container row between"><span className="row"><Wordmark /><span className="muted">© {new Date().getFullYear()} — {t('footer')}</span></span><span className="ltr">API: /api/v1 · Docs: /docs</span></div></footer>
+      <footer><div className="container row between"><span className="row"><Wordmark /><span className="muted">© {new Date().getFullYear()} — {t('footer')}</span></span><span className="row small"><Link to="/about">{t('brand') === 'مورّدي' ? 'عن المنصة' : 'About'}</Link><Link to="/terms">{t('brand') === 'مورّدي' ? 'الشروط' : 'Terms'}</Link><Link to="/privacy">{t('brand') === 'مورّدي' ? 'الخصوصية' : 'Privacy'}</Link><Link to="/contact">{t('brand') === 'مورّدي' ? 'تواصل معنا' : 'Contact'}</Link></span></div></footer>
     </>
   )
 }

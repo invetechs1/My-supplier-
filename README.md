@@ -87,7 +87,7 @@ cd mobile && npm run typecheck
 
 ## Deploy
 
-**Developer handover (what is built, what remains, how to go live): [docs/DEVELOPER_HANDOVER.pdf](docs/DEVELOPER_HANDOVER.pdf)**
+**Complete developer guide (system, deployment, integrations, API, website go-live gap analysis, backlog): [docs/DEVELOPER_GUIDE_FULL.pdf](docs/DEVELOPER_GUIDE_FULL.pdf)** · short handover: [docs/DEVELOPER_HANDOVER.pdf](docs/DEVELOPER_HANDOVER.pdf)
 
 **Production, step by step: [DEPLOYMENT.md](DEPLOYMENT.md)** (server + HTTPS, Moyasar, Unifonic, SMTP, app stores, go-live checklist).
 

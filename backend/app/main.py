@@ -5,14 +5,14 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config
 from .config import CORS_ORIGINS, PLATFORM_NAME, PLATFORM_NAME_AR
-from .db import Base, SessionLocal, engine
+from .db import Base, SessionLocal, engine, get_db
 from .routers import admin, auth, catalog, market, notifications, orders, payments, rfq, suppliers
 from .seed import seed
 from .services import jobs
@@ -81,6 +81,11 @@ _candidates = [Path(__file__).resolve().parent.parent.parent / "web" / "dist", P
 WEB_DIST = next((c for c in _candidates if c.exists()), _candidates[0])
 if WEB_DIST.exists():
     app.mount("/assets", StaticFiles(directory=WEB_DIST / "assets"), name="assets")
+
+    @app.get("/sitemap.xml", include_in_schema=False)
+    def sitemap_alias(db=Depends(get_db)):
+        from .routers.market import sitemap
+        return sitemap(db)
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa(full_path: str):
