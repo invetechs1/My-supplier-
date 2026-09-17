@@ -12,7 +12,7 @@ plus an RFQ / bidding marketplace where registered suppliers compete for your or
 | iOS & Android app | `apps/mobile` | Expo SDK 51, expo-router |
 | Shared types | `packages/shared` | TypeScript |
 
-Docs: [API contract](docs/API.md) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · **[Go-live runbook](deploy/GO-LIVE.md)**
+Docs: [API contract](docs/API.md) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md, docs/DEVELOPER-HANDOVER.md (developer handover: what remains and how to do it)) · **[Go-live runbook](deploy/GO-LIVE.md)**
 
 ## What it does
 * **Construction-only e-commerce (Amazon-style)** – `/shop` storefront with categories, deals,
