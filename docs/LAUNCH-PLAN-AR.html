@@ -4,75 +4,118 @@
 <meta charset="utf-8">
 <title>MySupplier – خطة الانطلاق والتسويق لأول ستة أشهر</title>
 <style>
-@font-face { font-family: "Cairo"; font-weight: 400; src: url("https://fonts.gstatic.com/s/cairo-arabic-400-normal.woff2") format("woff2"), local("Cairo") format("woff2"); }
-@font-face { font-family: "Cairo"; font-weight: 700; src: url("https://fonts.gstatic.com/s/cairo-arabic-700-normal.woff2") format("woff2"), local("Cairo") format("woff2"); }
-@font-face { font-family: "CairoL"; font-weight: 400; src: url("https://fonts.gstatic.com/s/cairo-latin-400-normal.woff2") format("woff2"); }
-@font-face { font-family: "CairoL"; font-weight: 700; src: url("https://fonts.gstatic.com/s/cairo-latin-700-normal.woff2") format("woff2"); }
-@font-face { font-family: "Naskh"; font-weight: 400; src: url("https://fonts.gstatic.com/s/noto-naskh-arabic-arabic-400-normal.woff2") format("woff2"); }
-@font-face { font-family: "Naskh"; font-weight: 700; src: url("https://fonts.gstatic.com/s/noto-naskh-arabic-arabic-700-normal.woff2") format("woff2"); }
-@font-face { font-family: "NaskhL"; font-weight: 400; src: url("https://fonts.gstatic.com/s/noto-naskh-arabic-latin-400-normal.woff2") format("woff2"); }
-@font-face { font-family: "NaskhL"; font-weight: 700; src: url("https://fonts.gstatic.com/s/noto-naskh-arabic-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Cairo"; font-weight: 400; src: local("Cairo"), local("Cairo"); }
+@font-face { font-family: "Cairo"; font-weight: 700; src: local("Cairo"), local("Cairo"); }
+@font-face { font-family: "CairoL"; font-weight: 400; src: local("Cairo"); }
+@font-face { font-family: "CairoL"; font-weight: 700; src: local("Cairo"); }
+@font-face { font-family: "Naskh"; font-weight: 400; src: local("Cairo"); }
+@font-face { font-family: "Naskh"; font-weight: 700; src: local("Cairo"); }
+@font-face { font-family: "NaskhL"; font-weight: 400; src: local("Cairo"); }
+@font-face { font-family: "NaskhL"; font-weight: 700; src: local("Cairo"); }
 
-:root { --navy:#0f2a44; --teal:#0e7c7b; --grey:#5f6b7a; --light:#eef3f8; --line:#c9d3de; --green:#1e7f4f; --amber:#b26a00; --red:#b3261e; }
-@page { size: A4; margin: 16mm 16mm 18mm 16mm; }
+
+:root { --g900:#053225; --g800:#074633; --g700:#095A41; --g600:#0B6E4F; --g500:#1E8A62; --g400:#3FA97F; --g200:#9FD5BF; --g100:#CFEADF; --g50:#EAF6F1;
+        --amber:#F2A900; --amber600:#D18F00; --amber100:#FFF3D1; --ink:#152019; --grey:#5b6b62; --line:#cfe0d7; --red:#b3261e; }
+@page { size: A4; margin: 0; }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
-body { font-family: "Naskh", "NaskhL", "Cairo", "DejaVu Sans", sans-serif; font-size: 11pt; line-height: 1.75; color: #1b2430; direction: rtl; text-align: right; }
-h1, h2, h3, .cover-title, .cover-sub, th, .kpi-num, .tag { font-family: "Cairo", "CairoL", "DejaVu Sans", sans-serif; }
-h1 { font-size: 19pt; color: var(--navy); margin: 0 0 8pt; line-height: 1.4; break-after: avoid; }
-h2 { font-size: 14pt; color: var(--teal); margin: 16pt 0 5pt; line-height: 1.4; break-after: avoid; }
-h3 { font-size: 12pt; color: var(--navy); margin: 12pt 0 3pt; line-height: 1.4; break-after: avoid; }
+body { font-family: "Naskh", "NaskhL", "Cairo", "DejaVu Sans", sans-serif; font-size: 11pt; line-height: 1.75; color: var(--ink); direction: rtl; text-align: right; }
+h1, h2, h3, .cover-title, .cover-sub, th, .kpi-num, .tag, .num, .badge, .wordmark { font-family: "Cairo", "CairoL", "DejaVu Sans", sans-serif; }
+h1 { font-size: 19pt; color: var(--g800); margin: 14pt 0 8pt; line-height: 1.4; break-after: avoid; padding-bottom: 4pt; border-bottom: 2pt solid var(--g600); position: relative; }
+h1::after { content: ""; position: absolute; right: 0; bottom: -2pt; width: 42pt; height: 2pt; background: var(--amber); }
+h2 { font-size: 14pt; color: var(--g600); margin: 16pt 0 5pt; line-height: 1.4; break-after: avoid; }
+h3 { font-size: 12pt; color: var(--g800); margin: 12pt 0 3pt; line-height: 1.4; break-after: avoid; }
 p { margin: 0 0 7pt; }
 ul, ol { margin: 0 0 8pt; padding-right: 20pt; padding-left: 0; }
 li { margin-bottom: 3pt; }
-b { font-weight: 700; }
+li::marker { color: var(--g600); font-weight: 700; }
+b { font-weight: 700; color: var(--g900); }
 .muted { color: var(--grey); font-size: 9.5pt; }
-.num { font-family: "CairoL", "Cairo", sans-serif; direction: ltr; unicode-bidi: isolate; }
+.num { direction: ltr; unicode-bidi: isolate; }
 table { width: 100%; border-collapse: collapse; margin: 6pt 0 12pt; font-size: 9.8pt; line-height: 1.5; break-inside: auto; }
 thead { display: table-header-group; }
 tr { break-inside: avoid; }
-th { background: var(--light); color: var(--navy); border-bottom: 1.5pt solid var(--navy); padding: 5pt 6pt; text-align: right; font-weight: 700; font-size: 9.8pt; }
+th { background: var(--g600); color: #fff; padding: 5pt 6pt; text-align: right; font-weight: 700; font-size: 9.6pt; border-bottom: 2pt solid var(--amber); }
 td { border: 0.4pt solid var(--line); padding: 4.5pt 6pt; vertical-align: top; }
+tbody tr:nth-child(even) td { background: #f6fbf8; }
 td.c, th.c { text-align: center; }
-.box { background: var(--light); border-right: 3pt solid var(--teal); padding: 8pt 12pt; margin: 8pt 0 12pt; break-inside: avoid; }
-.warn { border-right-color: var(--red); }
-.ok { border-right-color: var(--green); }
-.tag { display: inline-block; font-size: 8.5pt; font-weight: 700; padding: 0 6pt; border-radius: 3pt; color: #fff; background: var(--teal); margin-left: 4pt; vertical-align: middle; }
-.tag.red { background: var(--red); } .tag.amber { background: var(--amber); } .tag.green { background: var(--green); }
+.box { background: var(--g50); border-right: 3pt solid var(--g600); padding: 8pt 12pt; margin: 8pt 0 12pt; break-inside: avoid; border-radius: 0 4pt 4pt 0; }
+.warn { border-right-color: var(--amber); background: var(--amber100); }
+.ok { border-right-color: var(--g600); background: var(--g50); }
+.tag { display: inline-block; font-size: 8.5pt; font-weight: 700; padding: 0 7pt; border-radius: 10pt; color: #fff; background: var(--g600); margin-left: 4pt; vertical-align: middle; }
+.tag.red { background: var(--red); } .tag.amber { background: var(--amber600); } .tag.green { background: var(--g500); }
 .page { break-after: page; }
-.cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
-.cover-title { font-size: 34pt; font-weight: 700; color: var(--navy); line-height: 1.3; margin: 0; }
-.cover-sub { font-size: 16pt; color: var(--grey); margin: 6pt 0 18pt; }
-.cover-en { font-family: "CairoL", "Cairo", sans-serif; direction: ltr; text-align: left; color: var(--teal); font-weight: 700; font-size: 13pt; letter-spacing: .5pt; }
-.cover table { width: auto; min-width: 120mm; font-size: 10.5pt; margin-top: 18pt; }
-.cover td { border: 0; border-bottom: 0.4pt solid var(--line); padding: 5pt 8pt; }
-.cover td:first-child { font-weight: 700; color: var(--navy); white-space: nowrap; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt 14pt; margin-bottom: 10pt; }
-.kpi { border: 0.5pt solid var(--line); border-radius: 4pt; padding: 6pt 10pt; break-inside: avoid; }
-.kpi-num { font-size: 18pt; font-weight: 700; color: var(--navy); line-height: 1.2; }
+.kpi { border: 0.5pt solid var(--line); border-top: 3pt solid var(--amber); border-radius: 4pt; padding: 6pt 10pt; break-inside: avoid; background: #fff; }
+.kpi-num { font-size: 19pt; font-weight: 700; color: var(--g600); line-height: 1.2; }
 .kpi-lbl { font-size: 9.5pt; color: var(--grey); }
-.month { border-right: 3pt solid var(--navy); padding-right: 10pt; margin: 10pt 0 12pt; break-inside: avoid; }
+.month { border-right: 3pt solid var(--g600); padding-right: 10pt; margin: 10pt 0 12pt; break-inside: avoid; }
 .month h3 { margin-top: 0; }
-.toc li { margin-bottom: 2pt; }
+.toc { list-style: none; padding: 0; columns: 2; column-gap: 20pt; }
+.toc li { margin-bottom: 4pt; break-inside: avoid; }
+.toc .badge { margin-left: 6pt; }
+.badge { display: inline-flex; align-items: center; justify-content: center; width: 18pt; height: 18pt; border-radius: 50%; background: var(--g600); color: #fff; font-size: 9pt; font-weight: 700; direction: ltr; }
+/* ---- body pages: padding replaces @page margin so the cover can bleed ---- */
+.doc { padding: 20mm 16mm 18mm 16mm; }
+/* ---- cover ---- */
+.cover { height: 297mm; width: 210mm; background: var(--g600); color: #fff; padding: 22mm 18mm; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
+.cover::before { content: ""; position: absolute; left: -60mm; bottom: -60mm; width: 170mm; height: 170mm; border-radius: 50%; background: var(--g700); opacity: .55; }
+.cover::after { content: ""; position: absolute; left: -20mm; bottom: -90mm; width: 150mm; height: 150mm; border-radius: 50%; background: var(--g800); opacity: .55; }
+.cover > * { position: relative; z-index: 1; }
+.brand { display: flex; align-items: center; gap: 10pt; direction: ltr; justify-content: flex-start; }
+.logo { width: 46pt; height: 46pt; border-radius: 10pt; box-shadow: 0 4pt 12pt rgba(0,0,0,.18); background:#fff; }
+.wordmark { font-size: 22pt; font-weight: 700; letter-spacing: -.3pt; line-height: 1; }
+.wordmark span { color: var(--amber); }
+.slogan { font-family: "Cairo","CairoL",sans-serif; font-size: 40pt; font-weight: 700; color: var(--amber); line-height: 1.1; direction: ltr; text-align: left; margin-top: 8pt; }
+.slogan-ar { font-size: 15pt; color: var(--g100); direction: rtl; text-align: right; margin-top: 2pt; }
+.cover-title { font-size: 30pt; font-weight: 700; line-height: 1.3; margin: 0; }
+.cover-sub { font-size: 14pt; color: var(--g100); margin: 6pt 0 0; line-height: 1.6; }
+.cover-meta { display: grid; grid-template-columns: auto 1fr; gap: 4pt 14pt; font-size: 10.5pt; margin-top: 16pt; }
+.cover-meta dt { font-weight: 700; color: var(--amber); font-family: "Cairo","CairoL",sans-serif; }
+.cover-meta dd { margin: 0; color: #fff; }
+.cover-foot { font-size: 9.5pt; color: var(--g100); border-top: 0.6pt solid rgba(255,255,255,.35); padding-top: 8pt; display: flex; justify-content: space-between; }
+/* ---- back page ---- */
+.back { break-before: page; height: 297mm; width: 210mm; background: var(--g800); color: #fff; padding: 22mm 18mm; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+.back .logo { width: 70pt; height: 70pt; }
+.back .wordmark { font-size: 28pt; margin-top: 12pt; }
+.back .slogan { font-size: 30pt; text-align: center; }
+.back p { color: var(--g100); max-width: 130mm; margin-top: 10pt; }
+
 </style>
 </head>
 <body>
 
-<!-- ===================== COVER ===================== -->
+<!-- COVER -->
 <section class="page cover">
-  <div class="cover-en">MySupplier · Build for less</div>
-  <div class="cover-title">خطة الانطلاق والتسويق</div>
-  <div class="cover-sub">أول ستة أشهر: التشغيل، اكتساب الموردين والمشترين، مؤشرات الأداء وبوابات القرار</div>
-  <p>منصة سعودية لأسعار مواد البناء: مقارنة الأسعار بين الموردين، طلبات التسعير والمزايدة، تحليل جداول الكميات، والمتجر الإلكتروني لمواد البناء فقط.</p>
-  <table>
-    <tr><td>الجمهور</td><td>المؤسس، الشريك التجاري، وفريق الانطلاق</td></tr>
-    <tr><td>النطاق الجغرافي</td><td>مدينة الرياض فقط خلال الأشهر الستة الأولى</td></tr>
-    <tr><td>التاريخ</td><td><span class="num">19 / 09 / 2026</span></td></tr>
-    <tr><td>المرجع التقني</td><td><span class="num">docs/DEVELOPER-HANDOVER.pdf</span> ، <span class="num">deploy/GO-LIVE.md</span></td></tr>
-  </table>
+  <div>
+    <div class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="logo" aria-hidden="true">
+  <rect width="512" height="512" rx="112" fill="#0B6E4F"/>
+  <g fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M136 400V182"/><path d="M136 182h236"/><path d="M136 182l70-52"/><path d="M336 182v70"/><path d="M318 252h36"/>
+  </g>
+  <circle cx="372" cy="182" r="20" fill="#F2A900"/>
+  <path d="M96 400V284l88-58 88 58v116" fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M64 400h384" stroke="#fff" stroke-width="22" stroke-linecap="round"/>
+  <path d="M292 400V300l40 52 40-52v100" fill="none" stroke="#F2A900" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+</svg><div class="wordmark">My<span>Supplier</span></div></div>
+    <div class="slogan">Build for less.</div>
+    <div class="slogan-ar">ابنِ بأقل. أسعار مواد البناء الحقيقية من كل الموردين في مكان واحد.</div>
+  </div>
+  <div>
+    <div class="cover-title">خطة الانطلاق والتسويق</div>
+    <div class="cover-sub">أول ستة أشهر: التشغيل، اكتساب الموردين والمشترين، مؤشرات الأداء وبوابات القرار</div>
+    <dl class="cover-meta">
+      <dt>الجمهور</dt><dd>المؤسس، الشريك التجاري، وفريق الانطلاق</dd>
+      <dt>النطاق</dt><dd>مدينة الرياض خلال الأشهر الستة الأولى</dd>
+      <dt>التاريخ</dt><dd><span class="num">19 / 09 / 2026</span></dd>
+      <dt>المرجع التقني</dt><dd><span class="num">docs/DEVELOPER-HANDOVER.pdf</span> ، <span class="num">deploy/GO-LIVE.md</span></dd>
+    </dl>
+  </div>
+  <div class="cover-foot"><span>منصة سعودية لأسعار مواد البناء، طلبات التسعير، تحليل جداول الكميات والمتجر الإلكتروني</span><span class="num">mysupplier.sa</span></div>
 </section>
+<div class="doc">
 
-<!-- ===================== 0. SUMMARY ===================== -->
+<!-- 0. SUMMARY -->
 <h1>الملخص التنفيذي</h1>
 <p>المنتج مكتمل تقنيًا. لذلك لا تُنفق الأشهر الستة الأولى على التطوير، بل على ثلاثة أشياء فقط: <b>أسعار حقيقية ومحدثة من الموردين</b>، <b>مشترون يعودون للشراء</b>، و<b>أرقام تثبت أن المنصة تدور بدون تدخلك اليدوي</b>. كل قرار في هذه الخطة يخدم هدفًا من هذه الثلاثة.</p>
 <div class="grid">
@@ -86,20 +129,10 @@ td.c, th.c { text-align: center; }
 </div>
 
 <h2>محتويات الخطة</h2>
-<ol class="toc">
-  <li>الأسبوعان قبل الانطلاق (الشهر صفر)</li>
-  <li>الجمهور المستهدف والعرض القيمي</li>
-  <li>خطة الأشهر الستة شهرًا بشهر</li>
-  <li>خطة التسويق والقنوات</li>
-  <li>مؤشرات الأداء والأهداف الشهرية</li>
-  <li>بوابات القرار: الشهر الثالث والشهر السادس</li>
-  <li>الفريق والميزانية</li>
-  <li>المخاطر وكيف نتعامل معها</li>
-  <li>قواعد لا تُكسر وروتين المتابعة</li>
-</ol>
+<ol class="toc"><li><span class="badge">1</span>الأسبوعان قبل الانطلاق (الشهر صفر)</li><li><span class="badge">2</span>الجمهور المستهدف والعرض القيمي</li><li><span class="badge">3</span>خطة الأشهر الستة شهرًا بشهر</li><li><span class="badge">4</span>خطة التسويق والقنوات</li><li><span class="badge">5</span>مؤشرات الأداء والأهداف الشهرية</li><li><span class="badge">6</span>بوابات القرار: الشهر الثالث والشهر السادس</li><li><span class="badge">7</span>الفريق والميزانية</li><li><span class="badge">8</span>المخاطر وكيف نتعامل معها</li><li><span class="badge">9</span>قواعد لا تُكسر وروتين المتابعة</li></ol>
 
 <!-- ===================== 1. MONTH ZERO ===================== -->
-<h1 style="margin-top:14pt">1. الأسبوعان قبل الانطلاق (الشهر صفر)</h1>
+<h1>1. الأسبوعان قبل الانطلاق (الشهر صفر)</h1>
 <h3>أ. التشغيل التقني (يقوم به المطور)</h3>
 <ul>
   <li>السيرفر والدومين وشهادة HTTPS، ثم النشر الأول وفق ملف تسليم المطور.</li>
@@ -124,7 +157,7 @@ td.c, th.c { text-align: center; }
 </ul>
 
 <!-- ===================== 2. AUDIENCE ===================== -->
-<h1 style="margin-top:14pt">2. الجمهور المستهدف والعرض القيمي</h1>
+<h1>2. الجمهور المستهدف والعرض القيمي</h1>
 <table>
   <thead><tr><th style="width:22%">الشريحة</th><th style="width:30%">وجعها اليوم</th><th style="width:30%">ما تقدمه المنصة</th><th style="width:18%">الأولوية</th></tr></thead>
   <tbody>
@@ -138,7 +171,7 @@ td.c, th.c { text-align: center; }
 <div class="box"><b>لماذا المورد المتوسط أولًا؟</b> لأنه جائع للطلبات، يرد خلال ساعة، ويقبل التحديث الأسبوعي. المورد الكبير يأتي وحده حين يرى طلبات المقاولين تذهب لغيره على المنصة.</div>
 
 <!-- ===================== 3. MONTH BY MONTH ===================== -->
-<h1 style="margin-top:14pt">3. خطة الأشهر الستة شهرًا بشهر</h1>
+<h1>3. خطة الأشهر الستة شهرًا بشهر</h1>
 
 <div class="month">
 <h3>الشهر الأول: البيانات قبل التسويق <span class="tag">الهدف: 30 موردًا بأسعار حقيقية</span></h3>
@@ -205,7 +238,7 @@ td.c, th.c { text-align: center; }
 </div>
 
 <!-- ===================== 4. MARKETING ===================== -->
-<h1 style="margin-top:14pt">4. خطة التسويق والقنوات</h1>
+<h1>4. خطة التسويق والقنوات</h1>
 <h3>أ. اكتساب الموردين (ميداني بالدرجة الأولى)</h3>
 <table>
   <thead><tr><th style="width:24%">القناة</th><th style="width:46%">كيف</th><th style="width:15%">التكلفة</th><th style="width:15%">الأشهر</th></tr></thead>
@@ -234,7 +267,7 @@ td.c, th.c { text-align: center; }
 <div class="box"><b>الرسالة الواحدة التي تتكرر في كل قناة:</b> «ابنِ بأقل» (Build for less). كل محتوى يجب أن يُظهر رقمًا حقيقيًا: فرق سعر، نسبة توفير، أو زمن اختُصر.</div>
 
 <!-- ===================== 5. KPIs ===================== -->
-<h1 style="margin-top:14pt">5. مؤشرات الأداء والأهداف الشهرية</h1>
+<h1>5. مؤشرات الأداء والأهداف الشهرية</h1>
 <p>تُقاس أسبوعيًا في جدول واحد يراه الفريق كله. لوحة الإدارة والمالية في المنصة تعطي معظم هذه الأرقام مباشرة.</p>
 <table>
   <thead><tr><th style="width:40%">المؤشر</th><th class="c" style="white-space:nowrap">الشهر 1</th><th class="c" style="white-space:nowrap">الشهر 2</th><th class="c" style="white-space:nowrap">الشهر 3</th><th class="c" style="white-space:nowrap">الشهر 4</th><th class="c" style="white-space:nowrap">الشهر 5</th><th class="c" style="white-space:nowrap">الشهر 6</th></tr></thead>
@@ -270,7 +303,7 @@ td.c, th.c { text-align: center; }
 </ol>
 
 <!-- ===================== 6. GATES ===================== -->
-<h1 style="margin-top:14pt">6. بوابات القرار</h1>
+<h1>6. بوابات القرار</h1>
 <h3>بوابة الشهر الثالث: استمر أو صحّح</h3>
 <table>
   <thead><tr><th style="width:26%">النتيجة</th><th style="width:38%">الأرقام</th><th style="width:36%">القرار</th></tr></thead>
@@ -292,7 +325,7 @@ td.c, th.c { text-align: center; }
 </table>
 
 <!-- ===================== 7. TEAM & BUDGET ===================== -->
-<h1 style="margin-top:14pt">7. الفريق والميزانية</h1>
+<h1>7. الفريق والميزانية</h1>
 <h3>الفريق الأدنى</h3>
 <table>
   <thead><tr><th style="width:24%">الدور</th><th style="width:50%">المسؤولية</th><th style="width:26%">الالتزام</th></tr></thead>
@@ -321,7 +354,7 @@ td.c, th.c { text-align: center; }
 <p class="muted">أكثر من ثلثي الميزانية يذهب للناس والسوق لا للتقنية، وهذا هو التوزيع الصحيح لمنصة في مرحلتها الأولى. الإيراد المتوقع في الأشهر الستة (نحو 250 ألف ريال تراكميًا إن تحققت الأهداف) يغطي جزءًا معتبرًا من الميزانية بنهاية الفترة.</p>
 
 <!-- ===================== 8. RISKS ===================== -->
-<h1 style="margin-top:14pt">8. المخاطر وكيف نتعامل معها</h1>
+<h1>8. المخاطر وكيف نتعامل معها</h1>
 <table>
   <thead><tr><th style="width:26%">الخطر</th><th style="width:37%">المؤشر المبكر</th><th style="width:37%">الاستجابة</th></tr></thead>
   <tbody>
@@ -335,7 +368,7 @@ td.c, th.c { text-align: center; }
 </table>
 
 <!-- ===================== 9. RULES ===================== -->
-<h1 style="margin-top:14pt">9. قواعد لا تُكسر وروتين المتابعة</h1>
+<h1>9. قواعد لا تُكسر وروتين المتابعة</h1>
 <div class="box warn">
 <ol style="margin:0">
   <li>لا تفتح مدينة ثانية قبل أن تحقق الرياض أرقام بوابة الشهر السادس.</li>
@@ -355,7 +388,23 @@ td.c, th.c { text-align: center; }
     <tr><td>الشهر 3 و6</td><td>بوابة القرار: جلسة مع الشريك أو مستشار موثوق، بالأرقام فقط، وقرار مكتوب</td></tr>
   </tbody>
 </table>
-<div class="box ok"><b>الخلاصة:</b> المنتج جاهز، والسوق موجود، والمعركة الحقيقية هي عادة الموردين في تحديث أسعارهم. ستة أشهر من العمل الميداني المنضبط بالأرقام أعلاه تكفي لتعرف بيقين إن كانت هذه المنصة تستحق سنوات من حياتك أم لا.</div>
+</div>
+<section class="back">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="logo" aria-hidden="true">
+  <rect width="512" height="512" rx="112" fill="#0B6E4F"/>
+  <g fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M136 400V182"/><path d="M136 182h236"/><path d="M136 182l70-52"/><path d="M336 182v70"/><path d="M318 252h36"/>
+  </g>
+  <circle cx="372" cy="182" r="20" fill="#F2A900"/>
+  <path d="M96 400V284l88-58 88 58v116" fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M64 400h384" stroke="#fff" stroke-width="22" stroke-linecap="round"/>
+  <path d="M292 400V300l40 52 40-52v100" fill="none" stroke="#F2A900" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+  <div class="wordmark">My<span>Supplier</span></div>
+  <div class="slogan">Build for less.</div>
+  <p>المنتج جاهز، والسوق موجود. ستة أشهر من العمل الميداني المنضبط بالأرقام تكفي لتعرف بيقين إن كانت هذه المنصة تستحق سنوات من حياتك.</p>
+  <p class="num" style="color:#F2A900;font-family:Cairo,CairoL,sans-serif;font-weight:700">mysupplier.sa</p>
+</section>
 
 </body>
 </html>
