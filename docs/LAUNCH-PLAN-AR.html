@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>MySupplier – خطة الانطلاق والتسويق لأول ستة أشهر</title>
+<style>
+@font-face { font-family: "Cairo"; font-weight: 400; src: url("https://fonts.gstatic.com/s/cairo-arabic-400-normal.woff2") format("woff2"), local("Cairo") format("woff2"); }
+@font-face { font-family: "Cairo"; font-weight: 700; src: url("https://fonts.gstatic.com/s/cairo-arabic-700-normal.woff2") format("woff2"), local("Cairo") format("woff2"); }
+@font-face { font-family: "CairoL"; font-weight: 400; src: url("https://fonts.gstatic.com/s/cairo-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "CairoL"; font-weight: 700; src: url("https://fonts.gstatic.com/s/cairo-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Naskh"; font-weight: 400; src: url("https://fonts.gstatic.com/s/noto-naskh-arabic-arabic-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Naskh"; font-weight: 700; src: url("https://fonts.gstatic.com/s/noto-naskh-arabic-arabic-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "NaskhL"; font-weight: 400; src: url("https://fonts.gstatic.com/s/noto-naskh-arabic-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "NaskhL"; font-weight: 700; src: url("https://fonts.gstatic.com/s/noto-naskh-arabic-latin-700-normal.woff2") format("woff2"); }
+
+:root { --navy:#0f2a44; --teal:#0e7c7b; --grey:#5f6b7a; --light:#eef3f8; --line:#c9d3de; --green:#1e7f4f; --amber:#b26a00; --red:#b3261e; }
+@page { size: A4; margin: 16mm 16mm 18mm 16mm; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: "Naskh", "NaskhL", "Cairo", "DejaVu Sans", sans-serif; font-size: 11pt; line-height: 1.75; color: #1b2430; direction: rtl; text-align: right; }
+h1, h2, h3, .cover-title, .cover-sub, th, .kpi-num, .tag { font-family: "Cairo", "CairoL", "DejaVu Sans", sans-serif; }
+h1 { font-size: 19pt; color: var(--navy); margin: 0 0 8pt; line-height: 1.4; break-after: avoid; }
+h2 { font-size: 14pt; color: var(--teal); margin: 16pt 0 5pt; line-height: 1.4; break-after: avoid; }
+h3 { font-size: 12pt; color: var(--navy); margin: 12pt 0 3pt; line-height: 1.4; break-after: avoid; }
+p { margin: 0 0 7pt; }
+ul, ol { margin: 0 0 8pt; padding-right: 20pt; padding-left: 0; }
+li { margin-bottom: 3pt; }
+b { font-weight: 700; }
+.muted { color: var(--grey); font-size: 9.5pt; }
+.num { font-family: "CairoL", "Cairo", sans-serif; direction: ltr; unicode-bidi: isolate; }
+table { width: 100%; border-collapse: collapse; margin: 6pt 0 12pt; font-size: 9.8pt; line-height: 1.5; break-inside: auto; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th { background: var(--light); color: var(--navy); border-bottom: 1.5pt solid var(--navy); padding: 5pt 6pt; text-align: right; font-weight: 700; font-size: 9.8pt; }
+td { border: 0.4pt solid var(--line); padding: 4.5pt 6pt; vertical-align: top; }
+td.c, th.c { text-align: center; }
+.box { background: var(--light); border-right: 3pt solid var(--teal); padding: 8pt 12pt; margin: 8pt 0 12pt; break-inside: avoid; }
+.warn { border-right-color: var(--red); }
+.ok { border-right-color: var(--green); }
+.tag { display: inline-block; font-size: 8.5pt; font-weight: 700; padding: 0 6pt; border-radius: 3pt; color: #fff; background: var(--teal); margin-left: 4pt; vertical-align: middle; }
+.tag.red { background: var(--red); } .tag.amber { background: var(--amber); } .tag.green { background: var(--green); }
+.page { break-after: page; }
+.cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
+.cover-title { font-size: 34pt; font-weight: 700; color: var(--navy); line-height: 1.3; margin: 0; }
+.cover-sub { font-size: 16pt; color: var(--grey); margin: 6pt 0 18pt; }
+.cover-en { font-family: "CairoL", "Cairo", sans-serif; direction: ltr; text-align: left; color: var(--teal); font-weight: 700; font-size: 13pt; letter-spacing: .5pt; }
+.cover table { width: auto; min-width: 120mm; font-size: 10.5pt; margin-top: 18pt; }
+.cover td { border: 0; border-bottom: 0.4pt solid var(--line); padding: 5pt 8pt; }
+.cover td:first-child { font-weight: 700; color: var(--navy); white-space: nowrap; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt 14pt; margin-bottom: 10pt; }
+.kpi { border: 0.5pt solid var(--line); border-radius: 4pt; padding: 6pt 10pt; break-inside: avoid; }
+.kpi-num { font-size: 18pt; font-weight: 700; color: var(--navy); line-height: 1.2; }
+.kpi-lbl { font-size: 9.5pt; color: var(--grey); }
+.month { border-right: 3pt solid var(--navy); padding-right: 10pt; margin: 10pt 0 12pt; break-inside: avoid; }
+.month h3 { margin-top: 0; }
+.toc li { margin-bottom: 2pt; }
+</style>
+</head>
+<body>
+
+<!-- ===================== COVER ===================== -->
+<section class="page cover">
+  <div class="cover-en">MySupplier · Build for less</div>
+  <div class="cover-title">خطة الانطلاق والتسويق</div>
+  <div class="cover-sub">أول ستة أشهر: التشغيل، اكتساب الموردين والمشترين، مؤشرات الأداء وبوابات القرار</div>
+  <p>منصة سعودية لأسعار مواد البناء: مقارنة الأسعار بين الموردين، طلبات التسعير والمزايدة، تحليل جداول الكميات، والمتجر الإلكتروني لمواد البناء فقط.</p>
+  <table>
+    <tr><td>الجمهور</td><td>المؤسس، الشريك التجاري، وفريق الانطلاق</td></tr>
+    <tr><td>النطاق الجغرافي</td><td>مدينة الرياض فقط خلال الأشهر الستة الأولى</td></tr>
+    <tr><td>التاريخ</td><td><span class="num">19 / 09 / 2026</span></td></tr>
+    <tr><td>المرجع التقني</td><td><span class="num">docs/DEVELOPER-HANDOVER.pdf</span> ، <span class="num">deploy/GO-LIVE.md</span></td></tr>
+  </table>
+</section>
+
+<!-- ===================== 0. SUMMARY ===================== -->
+<h1>الملخص التنفيذي</h1>
+<p>المنتج مكتمل تقنيًا. لذلك لا تُنفق الأشهر الستة الأولى على التطوير، بل على ثلاثة أشياء فقط: <b>أسعار حقيقية ومحدثة من الموردين</b>، <b>مشترون يعودون للشراء</b>، و<b>أرقام تثبت أن المنصة تدور بدون تدخلك اليدوي</b>. كل قرار في هذه الخطة يخدم هدفًا من هذه الثلاثة.</p>
+<div class="grid">
+  <div class="kpi"><div class="kpi-num num">120</div><div class="kpi-lbl">مورد بأسعار محدثة خلال 14 يومًا بنهاية الشهر السادس</div></div>
+  <div class="kpi"><div class="kpi-num num">3,000,000</div><div class="kpi-lbl">ريال مبيعات شهرية مستهدفة بنهاية الشهر السادس</div></div>
+  <div class="kpi"><div class="kpi-num num">85%</div><div class="kpi-lbl">من طلبات التسعير تحصل على عرض خلال 24 ساعة</div></div>
+  <div class="kpi"><div class="kpi-num num">150–180</div><div class="kpi-lbl">ألف ريال إجمالي الميزانية للأشهر الستة</div></div>
+</div>
+<div class="box">
+<b>المبدأ الحاكم:</b> مدينة واحدة، خمس فئات، ثلاثة أرقام تُقاس أسبوعيًا، وبوابتا قرار في الشهر الثالث والسادس. لا نفتح مدينة ثانية ولا نطوّر ميزة جديدة قبل تحقيق الأرقام.
+</div>
+
+<h2>محتويات الخطة</h2>
+<ol class="toc">
+  <li>الأسبوعان قبل الانطلاق (الشهر صفر)</li>
+  <li>الجمهور المستهدف والعرض القيمي</li>
+  <li>خطة الأشهر الستة شهرًا بشهر</li>
+  <li>خطة التسويق والقنوات</li>
+  <li>مؤشرات الأداء والأهداف الشهرية</li>
+  <li>بوابات القرار: الشهر الثالث والشهر السادس</li>
+  <li>الفريق والميزانية</li>
+  <li>المخاطر وكيف نتعامل معها</li>
+  <li>قواعد لا تُكسر وروتين المتابعة</li>
+</ol>
+
+<!-- ===================== 1. MONTH ZERO ===================== -->
+<h1 style="margin-top:14pt">1. الأسبوعان قبل الانطلاق (الشهر صفر)</h1>
+<h3>أ. التشغيل التقني (يقوم به المطور)</h3>
+<ul>
+  <li>السيرفر والدومين وشهادة HTTPS، ثم النشر الأول وفق ملف تسليم المطور.</li>
+  <li>مفتاح Anthropic جديد بعد إلغاء القديم، إعداد البريد (SMTP) وسجلات SPF وDKIM، ومراقبة الأخطاء (Sentry) ومراقبة التوفر.</li>
+  <li>تقديم طلب حساب تاجر في Moyasar فورًا (الموافقة تأخذ من أسبوع إلى أسبوعين). الدفع عند الاستلام والتحويل البنكي يكفيان للشهر الأول.</li>
+  <li>طلب معرف المرسل «MySupplier» في Unifonic لرسائل رمز الدخول.</li>
+  <li>حذف الحسابات التجريبية من قاعدة البيانات، وإنشاء حساب المدير الحقيقي.</li>
+</ul>
+<h3>ب. النطاق والتموضع (يقوم به المؤسس)</h3>
+<ul>
+  <li><b>مدينة واحدة:</b> الرياض. لا استثناءات قبل الشهر الخامس.</li>
+  <li><b>خمس فئات فقط:</b> حديد التسليح والأسمنت والبلوك (تجلب الزيارات لأن الناس يبحثون عن أسعارها يوميًا)، ثم السيراميك والبورسلان، الدهانات، السباكة، والكهرباء (فيها التفاوت السعري الكبير والهامش الأفضل).</li>
+  <li><b>العرض للمورد في جملة:</b> «نجلب لك طلبات تسعير جاهزة من مقاولين مجانًا لثلاثة أشهر، ونحدّث أسعارك بأنفسنا من قائمتك على واتساب.»</li>
+  <li><b>العرض للمشتري في جملة:</b> «الصق جدول كمياتك واحصل على أسعار كل الموردين في الرياض خلال دقيقة، بدون اتصالات ولا مشاوير.»</li>
+</ul>
+<h3>ج. الهوية والقنوات والنظامي</h3>
+<ul>
+  <li>حسابات موحدة الاسم على X وسناب شات ولينكدإن وتيك توك، ورقم واتساب أعمال برد آلي.</li>
+  <li>صفحة «مؤشر أسعار مواد البناء في الرياض» جاهزة للنشر الأسبوعي، ونموذج منشور ثابت.</li>
+  <li>التسجيل في منصة معروف، مراجعة محامٍ للشروط وسياسة الخصوصية والاسترجاع، وسجل تجاري بنشاط التجارة الإلكترونية.</li>
+  <li>تجهيز 10 مشترين تجريبيين من المعارف لاختبار الدورة الكاملة (طلب تسعير، عرض، أمر شراء، توصيل، فاتورة) قبل أي إعلان.</li>
+</ul>
+
+<!-- ===================== 2. AUDIENCE ===================== -->
+<h1 style="margin-top:14pt">2. الجمهور المستهدف والعرض القيمي</h1>
+<table>
+  <thead><tr><th style="width:22%">الشريحة</th><th style="width:30%">وجعها اليوم</th><th style="width:30%">ما تقدمه المنصة</th><th style="width:18%">الأولوية</th></tr></thead>
+  <tbody>
+    <tr><td>المقاول الصغير والمتوسط (فلل، عمائر، ترميم)</td><td>أيام من الاتصالات والجولات لتسعير كل مشروع، وشك دائم في أنه يدفع أكثر من غيره</td><td>تحليل جدول الكميات في دقيقة، مقارنة الموردين، طلب تسعير واحد يصل للجميع</td><td><span class="tag red">الأولى</span> المشتري الأساسي</td></tr>
+    <tr><td>مكاتب حساب الكميات والمهندسون المشرفون</td><td>يحتاجون أسعارًا مرجعية محدثة لتقدير التكاليف ولا يجدون مصدرًا موثوقًا</td><td>مؤشر أسعار أسبوعي، تحليل BOQ، تصدير الأسعار</td><td><span class="tag amber">الثانية</span> مضاعف نفوذ</td></tr>
+    <tr><td>الأفراد الذين يبنون منازلهم</td><td>لا يعرفون السعر العادل ويعتمدون على المقاول</td><td>أسعار شفافة وشراء مباشر بالتوصيل</td><td><span class="tag">الثالثة</span> عبر المحتوى</td></tr>
+    <tr><td>المورد المتوسط (معرض أو مستودع محلي)</td><td>يعتمد على العلاقات والمرور، ولا يصله طلب من مقاول لا يعرفه</td><td>طلبات تسعير جاهزة، متجر رقمي بلا تكلفة، لوحة مبيعات ومخزون</td><td><span class="tag red">الأولى</span> المورد الأساسي</td></tr>
+    <tr><td>المورد الكبير والمصنع</td><td>لديه قنواته ولا يحتاجنا في البداية</td><td>حجم طلبات موثق وبيانات سوق</td><td><span class="tag">لاحقًا</span> بعد إثبات الحجم</td></tr>
+  </tbody>
+</table>
+<div class="box"><b>لماذا المورد المتوسط أولًا؟</b> لأنه جائع للطلبات، يرد خلال ساعة، ويقبل التحديث الأسبوعي. المورد الكبير يأتي وحده حين يرى طلبات المقاولين تذهب لغيره على المنصة.</div>
+
+<!-- ===================== 3. MONTH BY MONTH ===================== -->
+<h1 style="margin-top:14pt">3. خطة الأشهر الستة شهرًا بشهر</h1>
+
+<div class="month">
+<h3>الشهر الأول: البيانات قبل التسويق <span class="tag">الهدف: 30 موردًا بأسعار حقيقية</span></h3>
+<ul>
+  <li>عمل ميداني يومي في مناطق الموردين: السلي، العزيزية، طريق الخرج، الشفا، ومعارض التشطيب على طريق الملك فهد وطريق العروبة.</li>
+  <li>العرض بسيط: «أرسل لنا قائمة أسعارك بأي صيغة على واتساب وسنرفعها لك.» ترفعها أنت بأداة الاستيراد بالذكاء الاصطناعي، ثم يصل المورد رابط التحديث السحري ليراجع ويؤكد بضغطة.</li>
+  <li>إضافة صفحة كل مورد مع الموقع وساعات العمل ورقم التواصل، وربط مواقع الموردين التي تعرض أسعارًا كتغذية آلية.</li>
+  <li>10 مشترين تجريبيين يضعون طلبات تسعير حقيقية لاختبار سرعة رد الموردين وإصلاح أي احتكاك في الدورة.</li>
+  <li><b>لا إعلانات مدفوعة.</b> منشور يومي واحد على X بسعر اليوم للحديد والأسمنت لبناء عادة المتابعة.</li>
+</ul>
+</div>
+
+<div class="month">
+<h3>الشهر الثاني: أول 100 مشترٍ نشط <span class="tag">تفعيل الدفع بالبطاقة</span></h3>
+<ul>
+  <li>الدخول إلى قروبات واتساب وتيليجرام للمقاولين والمهندسين بقيمة لا بإعلان: نشر المؤشر الأسبوعي والإجابة عن أسئلة الأسعار.</li>
+  <li>فيديوهات قصيرة (30 ثانية) على تيك توك وسناب وX: «الصق جدول كمياتك واحصل على الأسعار في دقيقة»، وفيديو «فرق السعر بين 5 موردين لنفس السيراميك».</li>
+  <li>بدء إعلانات جوجل بميزانية صغيرة على كلمات النية العالية: «سعر حديد التسليح اليوم الرياض»، «سعر متر البورسلان»، «سعر كيس الأسمنت».</li>
+  <li>تفعيل الدفع بالبطاقة ومدى وApple Pay فور موافقة Moyasar، وتشغيل رمز الدخول بالجوال.</li>
+  <li>الاتصال شخصيًا بكل مشترٍ سجّل ولم يضع طلبًا خلال 3 أيام لفهم السبب.</li>
+</ul>
+</div>
+
+<div class="month">
+<h3>الشهر الثالث: تحويل الاهتمام إلى أوامر شراء <span class="tag red">بوابة القرار الأولى</span></h3>
+<ul>
+  <li>التركيز على ميزة تحليل جدول الكميات: عرض على 20 مكتب حساب كميات ومقاولًا تسعير جداولهم مجانًا مقابل ملاحظاتهم واستخدامهم المتكرر.</li>
+  <li>برنامج إحالة: المقاول الذي يجلب مقاولًا يحصل على توصيل مجاني لأول طلب، والمورد الذي يجلب موردًا يحصل على شهر إضافي مجاني.</li>
+  <li>مراجعة كل طلب تسعير لم يصله عرض خلال 24 ساعة والاتصال بالمورد شخصيًا؛ استبدال الموردين الذين لا يردون مرتين.</li>
+  <li>أول دراسة حالة منشورة: «كيف وفّر مقاول 11% على مشروع فيلا بمقارنة الموردين على المنصة» (بأرقام حقيقية وإذن العميل).</li>
+  <li>قياس بوابة القرار الأولى (القسم 6) واتخاذ قرار الاستمرار أو التصحيح.</li>
+</ul>
+</div>
+
+<div class="month">
+<h3>الشهر الرابع: التوسع الرأسي داخل الرياض <span class="tag green">بدء الإيراد</span></h3>
+<ul>
+  <li>إضافة فئتين بناءً على عمليات البحث التي لم تجد نتائج في لوحة الإدارة (المرشحان: العوازل والأدوات الصحية).</li>
+  <li>بدء تحصيل الاشتراك من الموردين الذين انتهت فترتهم المجانية: باقة شهرية ثابتة أو عمولة على الطلبات المؤكدة، ويختار المورد.</li>
+  <li>توقيع عقد مع ناقل واحد للشحن الثقيل (شاحنات وطبليات) وربطه بالمنصة.</li>
+  <li>إطلاق تطبيقي iOS وأندرويد في المتاجر، وحملة «حمّل التطبيق» للمشترين الحاليين.</li>
+  <li>تفعيل التنبيهات الآلية: تنبيه المشتري حين ينخفض سعر مادة يتابعها، وتنبيه المورد حين تصبح أسعاره أقدم من 14 يومًا.</li>
+</ul>
+</div>
+
+<div class="month">
+<h3>الشهر الخامس: العلامة كمرجع سعري <span class="tag">شراكات</span></h3>
+<ul>
+  <li>تحويل المؤشر الأسبوعي إلى تقرير شهري بتصميم احترافي يُرسل للصحف الاقتصادية وحسابات العقار والمقاولات المؤثرة.</li>
+  <li>التواصل مع الهيئة السعودية للمقاولين وغرفة الرياض لعرض المنصة على أعضائهم، وحضور معرض بناء أو ما يعادله بجناح صغير أو بشراكة.</li>
+  <li>شراكة مع مكتبين استشاريين يوجهان عملاءهم لتسعير جداول الكميات عبر المنصة مقابل عمولة أو خدمة مميزة.</li>
+  <li>اختبار جدة بالموردين فقط (بدون تسويق للمشترين) لقياس تكلفة فتح مدينة جديدة.</li>
+</ul>
+</div>
+
+<div class="month">
+<h3>الشهر السادس: التثبيت وملف الأرقام <span class="tag red">بوابة القرار الثانية</span></h3>
+<ul>
+  <li>إغلاق الفئات الضعيفة التي لم تتجاوز 3 عروض لكل مادة، وتثبيت تسعير الموردين.</li>
+  <li>أتمتة ما كان يدويًا: رسائل المتابعة، تقارير الموردين الأسبوعية، تجديد الأسعار.</li>
+  <li>تجهيز ملف الأرقام (6 أشهر من المؤشرات) للمستثمرين أو لقرار التفرغ الكامل.</li>
+  <li>قياس بوابة القرار الثانية (القسم 6).</li>
+</ul>
+</div>
+
+<!-- ===================== 4. MARKETING ===================== -->
+<h1 style="margin-top:14pt">4. خطة التسويق والقنوات</h1>
+<h3>أ. اكتساب الموردين (ميداني بالدرجة الأولى)</h3>
+<table>
+  <thead><tr><th style="width:24%">القناة</th><th style="width:46%">كيف</th><th style="width:15%">التكلفة</th><th style="width:15%">الأشهر</th></tr></thead>
+  <tbody>
+    <tr><td>الزيارات الميدانية</td><td>مندوب + المؤسس، 8 زيارات يوميًا، عرض ورقي من صفحة واحدة ورمز QR للتسجيل</td><td>راتب المندوب</td><td class="c num">1–6</td></tr>
+    <tr><td>واتساب</td><td>استقبال قوائم الأسعار بأي صيغة، رفعها للمورد، رابط تأكيد سحري</td><td>مجاني</td><td class="c num">1–6</td></tr>
+    <tr><td>الرسائل الآلية للتحديث</td><td>ميزة التواصل الآلي في المنصة تذكّر المورد حين تقدم أسعاره</td><td>رسائل SMS</td><td class="c num">2–6</td></tr>
+    <tr><td>إحالة مورد لمورد</td><td>شهر إضافي مجاني لكل مورد يجلب موردًا نشطًا</td><td>إيراد مؤجل</td><td class="c num">3–6</td></tr>
+    <tr><td>الجمعيات وتجمعات التجار</td><td>لجان مواد البناء في غرفة الرياض، تجمعات تجار السلي</td><td>وقت</td><td class="c num">4–6</td></tr>
+  </tbody>
+</table>
+<h3>ب. اكتساب المشترين (محتوى ونية بحث)</h3>
+<table>
+  <thead><tr><th style="width:24%">القناة</th><th style="width:46%">كيف</th><th style="width:15%">التكلفة الشهرية</th><th style="width:15%">الأشهر</th></tr></thead>
+  <tbody>
+    <tr><td>مؤشر الأسعار الأسبوعي</td><td>منشور ثابت كل أحد: أسعار 10 مواد أساسية وتغيرها، يُنشر على X وواتساب ولينكدإن والموقع</td><td>محتوى</td><td class="c num">1–6</td></tr>
+    <tr><td>قروبات واتساب وتيليجرام</td><td>الانضمام إلى 30 قروبًا للمقاولين والمهندسين، المشاركة بقيمة، لا رسائل إعلانية</td><td>وقت</td><td class="c num">2–6</td></tr>
+    <tr><td>الفيديو القصير</td><td>3 فيديوهات أسبوعيًا على تيك توك وسناب وX: مقارنات أسعار، تحليل BOQ مباشر، «سعر اليوم»</td><td class="num">3,000</td><td class="c num">2–6</td></tr>
+    <tr><td>إعلانات جوجل</td><td>كلمات نية شراء عالية في الرياض فقط، صفحات هبوط لكل مادة تعرض السعر مباشرة</td><td class="num">5,000–10,000</td><td class="c num">2–6</td></tr>
+    <tr><td>تحسين محركات البحث</td><td>صفحة لكل مادة بعنوان «سعر … اليوم في الرياض» تتحدث تلقائيًا من المنصة</td><td>مطور جزئي</td><td class="c num">1–6</td></tr>
+    <tr><td>الإحالة</td><td>توصيل مجاني لأول طلب لكل مقاول محال، ورصيد للمُحيل</td><td class="num">2,000</td><td class="c num">3–6</td></tr>
+    <tr><td>المكاتب الهندسية</td><td>عرض مباشر على 20 مكتبًا: تسعير BOQ مجاني للعملاء + تقرير شهري</td><td>وقت</td><td class="c num">3–6</td></tr>
+    <tr><td>علاقات عامة</td><td>التقرير الشهري للصحف الاقتصادية، مقابلات في بودكاست المقاولات والعقار</td><td>وقت</td><td class="c num">5–6</td></tr>
+  </tbody>
+</table>
+<div class="box"><b>الرسالة الواحدة التي تتكرر في كل قناة:</b> «ابنِ بأقل» (Build for less). كل محتوى يجب أن يُظهر رقمًا حقيقيًا: فرق سعر، نسبة توفير، أو زمن اختُصر.</div>
+
+<!-- ===================== 5. KPIs ===================== -->
+<h1 style="margin-top:14pt">5. مؤشرات الأداء والأهداف الشهرية</h1>
+<p>تُقاس أسبوعيًا في جدول واحد يراه الفريق كله. لوحة الإدارة والمالية في المنصة تعطي معظم هذه الأرقام مباشرة.</p>
+<table>
+  <thead><tr><th style="width:40%">المؤشر</th><th class="c" style="white-space:nowrap">الشهر 1</th><th class="c" style="white-space:nowrap">الشهر 2</th><th class="c" style="white-space:nowrap">الشهر 3</th><th class="c" style="white-space:nowrap">الشهر 4</th><th class="c" style="white-space:nowrap">الشهر 5</th><th class="c" style="white-space:nowrap">الشهر 6</th></tr></thead>
+  <tbody>
+    <tr><td colspan="7" style="background:#f7f9fb;font-weight:700;color:var(--teal)">جانب العرض (الموردون والبيانات)</td></tr>
+    <tr><td>موردون بأسعار محدثة خلال 14 يومًا</td><td class="c num">30</td><td class="c num">45</td><td class="c num">60</td><td class="c num">80</td><td class="c num">100</td><td class="c num">120</td></tr>
+    <tr><td>نسبة الموردين الذين يحدّثون بأنفسهم بدون تدخل</td><td class="c num">20%</td><td class="c num">35%</td><td class="c num">50%</td><td class="c num">60%</td><td class="c num">65%</td><td class="c num">70%</td></tr>
+    <tr><td>مواد لها 3 عروض سعرية فأكثر</td><td class="c num">150</td><td class="c num">280</td><td class="c num">400</td><td class="c num">550</td><td class="c num">680</td><td class="c num">800</td></tr>
+    <tr><td>متوسط عمر السعر (أيام)</td><td class="c num">7</td><td class="c num">7</td><td class="c num">6</td><td class="c num">5</td><td class="c num">5</td><td class="c num">4</td></tr>
+    <tr><td colspan="7" style="background:#f7f9fb;font-weight:700;color:var(--teal)">جانب الطلب (المشترون)</td></tr>
+    <tr><td>مشترون مسجلون (تراكمي)</td><td class="c num">30</td><td class="c num">120</td><td class="c num">300</td><td class="c num">550</td><td class="c num">850</td><td class="c num">1,200</td></tr>
+    <tr><td>زيارات شهرية للموقع والتطبيق</td><td class="c num">2,000</td><td class="c num">7,000</td><td class="c num">15,000</td><td class="c num">25,000</td><td class="c num">37,000</td><td class="c num">50,000</td></tr>
+    <tr><td>جداول كميات مُحلَّلة شهريًا</td><td class="c num">20</td><td class="c num">70</td><td class="c num">150</td><td class="c num">250</td><td class="c num">370</td><td class="c num">500</td></tr>
+    <tr><td>طلبات تسعير شهريًا</td><td class="c num">30</td><td class="c num">100</td><td class="c num">200</td><td class="c num">330</td><td class="c num">450</td><td class="c num">600</td></tr>
+    <tr><td>طلبات حصلت على عرض خلال 24 ساعة</td><td class="c num">50%</td><td class="c num">60%</td><td class="c num">70%</td><td class="c num">75%</td><td class="c num">80%</td><td class="c num">85%</td></tr>
+    <tr><td colspan="7" style="background:#f7f9fb;font-weight:700;color:var(--teal)">المعاملات والإيراد</td></tr>
+    <tr><td>أوامر شراء مؤكدة شهريًا</td><td class="c num">5</td><td class="c num">25</td><td class="c num">60</td><td class="c num">120</td><td class="c num">200</td><td class="c num">300</td></tr>
+    <tr><td>قيمة المبيعات الشهرية (ريال)</td><td class="c num">50,000</td><td class="c num">250,000</td><td class="c num">600,000</td><td class="c num">1,200,000</td><td class="c num">2,000,000</td><td class="c num">3,000,000</td></tr>
+    <tr><td>متوسط قيمة أمر الشراء (ريال)</td><td class="c num">10,000</td><td class="c num">10,000</td><td class="c num">10,000</td><td class="c num">10,000</td><td class="c num">10,000</td><td class="c num">10,000</td></tr>
+    <tr><td>إيراد المنصة الشهري: عمولة واشتراكات (ريال)</td><td class="c num">0</td><td class="c num">0</td><td class="c num">15,000</td><td class="c num">40,000</td><td class="c num">75,000</td><td class="c num">120,000</td></tr>
+    <tr><td colspan="7" style="background:#f7f9fb;font-weight:700;color:var(--teal)">الجودة والاحتفاظ</td></tr>
+    <tr><td>مقاولون عادوا للشراء مرة ثانية خلال 60 يومًا</td><td class="c">–</td><td class="c">–</td><td class="c num">30%</td><td class="c num">35%</td><td class="c num">40%</td><td class="c num">45%</td></tr>
+    <tr><td>تقييم الطلبات (من 5)</td><td class="c num">4.0</td><td class="c num">4.1</td><td class="c num">4.3</td><td class="c num">4.3</td><td class="c num">4.4</td><td class="c num">4.5</td></tr>
+    <tr><td>نسبة الطلبات المسلّمة في الموعد</td><td class="c num">80%</td><td class="c num">85%</td><td class="c num">88%</td><td class="c num">90%</td><td class="c num">92%</td><td class="c num">93%</td></tr>
+    <tr><td>تكلفة اكتساب المشتري النشط (ريال)</td><td class="c">–</td><td class="c num">150</td><td class="c num">120</td><td class="c num">100</td><td class="c num">90</td><td class="c num">80</td></tr>
+  </tbody>
+</table>
+<h3>الأرقام الثلاثة التي تُراجع كل أحد صباحًا</h3>
+<ol>
+  <li><b>عدد الموردين الذين حدّثوا أسعارهم خلال 14 يومًا.</b> هذا هو المنتج. إذا هبط، توقف كل شيء آخر.</li>
+  <li><b>نسبة طلبات التسعير التي وصلها عرض خلال 24 ساعة.</b> هذا هو الوعد للمشتري.</li>
+  <li><b>عدد أوامر الشراء المؤكدة.</b> هذا هو الدليل على الثقة والإيراد.</li>
+</ol>
+
+<!-- ===================== 6. GATES ===================== -->
+<h1 style="margin-top:14pt">6. بوابات القرار</h1>
+<h3>بوابة الشهر الثالث: استمر أو صحّح</h3>
+<table>
+  <thead><tr><th style="width:26%">النتيجة</th><th style="width:38%">الأرقام</th><th style="width:36%">القرار</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag green">استمر بثقة</span></td><td>50 موردًا نشطًا فأكثر، و60% فأكثر من طلبات التسعير تحصل على عروض، و30 أمر شراء مؤكدًا في الشهر</td><td>ارفع ميزانية الإعلانات، ابدأ الاشتراكات في الشهر الرابع كما هو مخطط</td></tr>
+    <tr><td><span class="tag amber">صحّح: مشكلة طلب</span></td><td>الأسعار تتحدث والموردون يردون، لكن أوامر الشراء أقل من 15</td><td>المشكلة ثقة أو توصيل أو دفع. ركّز على ضمان التوصيل، الدفع الآمن، ودراسات الحالة قبل أي إنفاق إعلاني إضافي</td></tr>
+    <tr><td><span class="tag amber">صحّح: مشكلة عرض</span></td><td>المشترون يطلبون لكن أقل من 40% من الطلبات تحصل على عرض</td><td>الخطأ في اختيار الموردين. استبدل الكبار المتباطئين بموردين متوسطين، وقلّص الفئات إلى ثلاث</td></tr>
+    <tr><td><span class="tag red">توقف وأعد التفكير</span></td><td>أقل من 25 موردًا يحدّثون أسعارهم رغم الجهد الميداني الكامل</td><td>الفرضية الأساسية لم تثبت. ادرس تحويل المنتج إلى أداة تسعير BOQ مدفوعة للمكاتب الهندسية بأسعار تجمعها أنت</td></tr>
+  </tbody>
+</table>
+<h3>بوابة الشهر السادس: تفرغ واستثمر أو لا</h3>
+<table>
+  <thead><tr><th style="width:26%">النتيجة</th><th style="width:38%">الأرقام</th><th style="width:36%">القرار</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag green">تفرغ وابحث عن تمويل</span></td><td>مبيعات شهرية فوق 2,000,000 ريال، إيراد منصة فوق 80,000 ريال، عودة فوق 40%، و70% من الموردين يحدّثون بأنفسهم</td><td>المنصة تدور بدونك، وهذا ما يشتريه المستثمر. جهّز جولة تمويل وافتح جدة والدمام</td></tr>
+    <tr><td><span class="tag amber">استمر بدوام جزئي</span></td><td>تحقق نصف الأرقام أعلاه تقريبًا</td><td>سنة إضافية بنفس النطاق مع خفض التكاليف وتركيز على الفئات الرابحة</td></tr>
+    <tr><td><span class="tag red">أغلق أو حوّل</span></td><td>أقل من ثلث الأرقام</td><td>حوّل المنتج إلى أداة BOQ مدفوعة أو بِع التقنية لموزع كبير يريد قناة رقمية</td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== 7. TEAM & BUDGET ===================== -->
+<h1 style="margin-top:14pt">7. الفريق والميزانية</h1>
+<h3>الفريق الأدنى</h3>
+<table>
+  <thead><tr><th style="width:24%">الدور</th><th style="width:50%">المسؤولية</th><th style="width:26%">الالتزام</th></tr></thead>
+  <tbody>
+    <tr><td>المؤسس</td><td>الموردون الكبار، الشراكات، المحتوى الأسبوعي، متابعة الأرقام، قرارات البوابات</td><td>20 ساعة أسبوعيًا على الأقل، وتفرغ بعد بوابة الشهر السادس إن تحققت</td></tr>
+    <tr><td>مندوب ميداني</td><td>زيارات الموردين، جمع قوائم الأسعار، متابعة الردود على طلبات التسعير</td><td>دوام كامل، أساسي + عمولة على كل مورد نشط</td></tr>
+    <tr><td>مطور بدوام جزئي</td><td>التشغيل، النسخ الاحتياطي، التكاملات، صفحات SEO، إصلاح الأعطال</td><td>يومان أسبوعيًا</td></tr>
+    <tr><td>صانع محتوى بالقطعة</td><td>الفيديوهات القصيرة، تصميم المؤشر، المنشورات</td><td>حسب القطعة</td></tr>
+    <tr><td>شريك من القطاع (موصى به)</td><td>فتح أبواب الموردين والمقاولين والمكاتب الهندسية</td><td>حصة مقابل الشبكة والوقت</td></tr>
+  </tbody>
+</table>
+<h3>الميزانية التقديرية</h3>
+<table>
+  <thead><tr><th style="width:46%">البند</th><th class="c" style="width:22%">شهريًا (ريال)</th><th class="c" style="width:32%">6 أشهر (ريال)</th></tr></thead>
+  <tbody>
+    <tr><td>مندوب ميداني (أساسي + عمولة)</td><td class="c num">6,000</td><td class="c num">36,000</td></tr>
+    <tr><td>مطور بدوام جزئي</td><td class="c num">8,000</td><td class="c num">48,000</td></tr>
+    <tr><td>محتوى وتصميم وفيديو</td><td class="c num">3,000</td><td class="c num">18,000</td></tr>
+    <tr><td>إعلانات (من الشهر الثاني)</td><td class="c num">5,000–10,000</td><td class="c num">25,000–50,000</td></tr>
+    <tr><td>سيرفر، رسائل OTP، ذكاء اصطناعي، أدوات</td><td class="c num">1,500</td><td class="c num">9,000</td></tr>
+    <tr><td>حوافز الإحالة والتوصيل المجاني</td><td class="c num">3,000</td><td class="c num">18,000</td></tr>
+    <tr><td>نظامي: سجل، معروف، محامٍ، حسابات المتاجر</td><td class="c">مرة واحدة</td><td class="c num">8,000</td></tr>
+    <tr><td><b>الإجمالي</b></td><td class="c"></td><td class="c num"><b>162,000 – 187,000</b></td></tr>
+  </tbody>
+</table>
+<p class="muted">أكثر من ثلثي الميزانية يذهب للناس والسوق لا للتقنية، وهذا هو التوزيع الصحيح لمنصة في مرحلتها الأولى. الإيراد المتوقع في الأشهر الستة (نحو 250 ألف ريال تراكميًا إن تحققت الأهداف) يغطي جزءًا معتبرًا من الميزانية بنهاية الفترة.</p>
+
+<!-- ===================== 8. RISKS ===================== -->
+<h1 style="margin-top:14pt">8. المخاطر وكيف نتعامل معها</h1>
+<table>
+  <thead><tr><th style="width:26%">الخطر</th><th style="width:37%">المؤشر المبكر</th><th style="width:37%">الاستجابة</th></tr></thead>
+  <tbody>
+    <tr><td>الموردون يسجلون ثم لا يحدّثون</td><td>متوسط عمر السعر يتجاوز 10 أيام</td><td>الرسائل الآلية، التحديث نيابة عنهم من واتساب، وإخفاء الأسعار الأقدم من 21 يومًا مع إشعار المورد أنه اختفى من المقارنة</td></tr>
+    <tr><td>المشتري يقارن على المنصة ثم يشتري مباشرة من المورد</td><td>طلبات تسعير كثيرة وأوامر شراء قليلة</td><td>قيمة لا تُنسخ: ضمان التوصيل، الدفع الآمن، الفاتورة الإلكترونية، سجل المشروع. والعمولة على المورد لا على المشتري</td></tr>
+    <tr><td>مورد كبير يضغط على الصغار للانسحاب</td><td>انسحاب متزامن لعدة موردين في فئة</td><td>تنويع: لا مورد يزيد عن 20% من عروض أي فئة. والتركيز على المتوسطين الذين لا يعتمدون عليه</td></tr>
+    <tr><td>حرب أسعار تضر بجودة الموردين</td><td>شكاوى جودة وتأخير تتجاوز 10%</td><td>التقييمات ظاهرة، شارة «مورد موثق»، وإيقاف من ينخفض تقييمه عن 3.8</td></tr>
+    <tr><td>حرق الميزانية على إعلانات قبل جاهزية البيانات</td><td>معدل ارتداد عالٍ وصفحات بلا أسعار</td><td>لا إعلان لأي فئة قبل 3 عروض لكل مادة فيها</td></tr>
+    <tr><td>الاعتماد على المؤسس في كل شيء</td><td>الأرقام تهبط في أسبوع غيابه</td><td>أتمتة الرسائل من الشهر الثاني، والمندوب يملك علاقة الموردين لا المؤسس وحده</td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== 9. RULES ===================== -->
+<h1 style="margin-top:14pt">9. قواعد لا تُكسر وروتين المتابعة</h1>
+<div class="box warn">
+<ol style="margin:0">
+  <li>لا تفتح مدينة ثانية قبل أن تحقق الرياض أرقام بوابة الشهر السادس.</li>
+  <li>لا تطوّر ميزة جديدة قبل أن يطلبها 10 مستخدمين مدفوعين أو نشطين.</li>
+  <li>لا تعتمد على مورد واحد لأكثر من 20% من عروض أي فئة.</li>
+  <li>لا تعلن عن فئة قبل أن يكون لكل مادة فيها 3 عروض على الأقل.</li>
+  <li>المشتري يرى الأسعار مجانًا دائمًا. الإيراد من المورد ومن الخدمات المضافة.</li>
+</ol>
+</div>
+<h3>روتين المتابعة</h3>
+<table>
+  <thead><tr><th style="width:22%">التكرار</th><th style="width:78%">ماذا يحدث</th></tr></thead>
+  <tbody>
+    <tr><td>يوميًا</td><td>منشور سعر اليوم، مراجعة طلبات التسعير بلا عروض، الاتصال بالمشترين الجدد غير النشطين</td></tr>
+    <tr><td>كل أحد</td><td>نشر المؤشر الأسبوعي، تحديث جدول المؤشرات الثلاثة، اجتماع 30 دقيقة للفريق: ما الذي منع الرقم من الارتفاع؟</td></tr>
+    <tr><td>شهريًا</td><td>مراجعة الجدول الكامل للمؤشرات مقابل الأهداف، قرار الميزانية الإعلانية للشهر التالي، التقرير الشهري للأسعار</td></tr>
+    <tr><td>الشهر 3 و6</td><td>بوابة القرار: جلسة مع الشريك أو مستشار موثوق، بالأرقام فقط، وقرار مكتوب</td></tr>
+  </tbody>
+</table>
+<div class="box ok"><b>الخلاصة:</b> المنتج جاهز، والسوق موجود، والمعركة الحقيقية هي عادة الموردين في تحديث أسعارهم. ستة أشهر من العمل الميداني المنضبط بالأرقام أعلاه تكفي لتعرف بيقين إن كانت هذه المنصة تستحق سنوات من حياتك أم لا.</div>
+
+</body>
+</html>
