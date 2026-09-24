@@ -24,7 +24,7 @@ class MockProvider:
     """Dev/test gateway: a hosted-looking page on our own API that confirms or fails the payment."""
     name = "mock"
 
-    def create_checkout(self, payment: Payment, order: Order) -> str:
+    def create_checkout(self, payment: Payment, order: Order, amount: float | None = None) -> str:
         return f"{config.PUBLIC_BASE_URL}/api/v1/payments/mock/checkout/{payment.id}"
 
     def fetch_status(self, payment: Payment) -> str:
@@ -43,10 +43,10 @@ class MoyasarProvider:
             raise HTTPException(500, "MOYASAR_SECRET_KEY is not configured")
         return (config.MOYASAR_SECRET_KEY, "")
 
-    def create_checkout(self, payment: Payment, order: Order) -> str:
+    def create_checkout(self, payment: Payment, order: Order, amount: float | None = None) -> str:
         r = httpx.post(f"{config.MOYASAR_API_BASE}/invoices", auth=self._auth(), timeout=30, json={
-            "amount": int(round(payment.amount * 100)), "currency": payment.currency,
-            "description": f"{config.PLATFORM_NAME} order #{order.id}",
+            "amount": int(round((amount or payment.amount) * 100)), "currency": payment.currency,
+            "description": f"{config.PLATFORM_NAME} order #{order.id}" + (f" (+{payment.group_ref})" if payment.group_ref else ""),
             "callback_url": f"{config.WEB_BASE_URL}/buyer/orders?paid={payment.id}",
             "expired_at": (utcnow() + timedelta(hours=24)).isoformat() + "Z",
             "metadata": {"payment_id": str(payment.id), "order_id": str(order.id)},
@@ -151,7 +151,18 @@ def start_checkout(db: Session, order: Order, buyer: User, method: str = "card")
     return p
 
 
+def group_members(db: Session, payment: Payment) -> list[Payment]:
+    if not payment.group_ref:
+        return [payment]
+    return db.query(Payment).filter(Payment.group_ref == payment.group_ref).all()
+
+
 def mark_paid(db: Session, payment: Payment, provider_ref: str | None = None, reference: str = "") -> Payment:
+    if payment.group_ref and not getattr(payment, "_in_group", False):
+        for m in group_members(db, payment):
+            m._in_group = True
+            mark_paid(db, m, provider_ref, reference)
+        return payment
     if payment.status in ("paid", "released"):
         return payment
     payment.status, payment.paid_at = "paid", utcnow()
@@ -161,6 +172,8 @@ def mark_paid(db: Session, payment: Payment, provider_ref: str | None = None, re
         payment.transfer_reference = reference
     order = db.get(Order, payment.order_id)
     order.payment_status = "paid"
+    from .orders import add_event
+    add_event(db, order, "paid", f"تم استلام الدفع ({payment.method}) — {payment.amount:,.2f} ر.س", order.buyer_id)
     # cancel other open attempts for this order
     for other in db.query(Payment).filter(Payment.order_id == order.id, Payment.id != payment.id, Payment.status.in_(["initiated", "pending_transfer"])).all():
         other.status, other.failure_reason = "failed", "superseded"
@@ -175,14 +188,49 @@ def mark_paid(db: Session, payment: Payment, provider_ref: str | None = None, re
 
 
 def mark_failed(db: Session, payment: Payment, reason: str = "") -> Payment:
-    if payment.status in ("paid", "released", "refunded"):
-        return payment
-    payment.status, payment.failure_reason = "failed", reason[:300]
-    order = db.get(Order, payment.order_id)
-    if order.payment_status == "pending":
-        order.payment_status = "unpaid"
+    for m in group_members(db, payment):
+        if m.status in ("paid", "released", "refunded"):
+            continue
+        m.status, m.failure_reason = "failed", reason[:300]
+        order = db.get(Order, m.order_id)
+        if order.payment_status == "pending":
+            order.payment_status = "unpaid"
     db.commit()
     return payment
+
+
+def start_group_checkout(db: Session, orders: list[Order], buyer: User, method: str = "card") -> list[Payment]:
+    """One hosted checkout (or one bank transfer) covering several orders of the same buyer (multi-supplier cart)."""
+    import secrets as _secrets
+    from . import settings as _settings
+    for o in orders:
+        if o.buyer_id != buyer.id and buyer.role != "admin":
+            raise HTTPException(403, "Not your order")
+        if o.status == "cancelled" or o.payment_status in ("paid", "released"):
+            raise HTTPException(400, f"Order #{o.id} cannot be paid")
+    pct = _settings.get(db, "platform_fee_pct")
+    group_ref = "grp-" + _secrets.token_hex(6)
+    pays = []
+    for o in orders:
+        for other in db.query(Payment).filter(Payment.order_id == o.id, Payment.status.in_(["initiated", "pending_transfer"])).all():
+            other.status, other.failure_reason = "failed", "superseded"
+        fee, net = fee_split(o.total, pct)
+        p = Payment(order_id=o.id, buyer_id=o.buyer_id, supplier_id=o.supplier_id, amount=round(o.total, 2), platform_fee=fee, supplier_net=net,
+                    method=method, group_ref=group_ref, provider="bank_transfer" if method == "bank_transfer" else provider().name,
+                    status="pending_transfer" if method == "bank_transfer" else "initiated")
+        db.add(p)
+        o.payment_status = "pending"
+        pays.append(p)
+    db.flush()
+    if method != "bank_transfer":
+        total = round(sum(p.amount for p in pays), 2)
+        url = provider().create_checkout(pays[0], orders[0], amount=total)
+        for p in pays:
+            p.checkout_url, p.provider_ref = url, pays[0].provider_ref
+    db.commit()
+    for p in pays:
+        db.refresh(p)
+    return pays
 
 
 def release_escrow(db: Session, order: Order) -> Payout | None:

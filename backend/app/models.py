@@ -58,6 +58,9 @@ class Supplier(Base):
     plan: Mapped[str] = mapped_column(String(20), default="free")  # free | pro | enterprise
     iban: Mapped[str] = mapped_column(String(40), default="")
     bank_name: Mapped[str] = mapped_column(String(120), default="")
+    delivery_fee: Mapped[float] = mapped_column(Float, default=0)          # flat fee per order
+    free_delivery_over: Mapped[float | None] = mapped_column(Float, nullable=True)
+    min_order_amount: Mapped[float] = mapped_column(Float, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     owner: Mapped["User | None"] = relationship(back_populates="supplier")
@@ -88,6 +91,10 @@ class Product(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     image_url: Mapped[str] = mapped_column(String(400), default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    views: Mapped[int] = mapped_column(Integer, default=0)
+    sold_qty: Mapped[float] = mapped_column(Float, default=0)
+    rating: Mapped[float] = mapped_column(Float, default=0)
+    rating_count: Mapped[int] = mapped_column(Integer, default=0)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -111,6 +118,9 @@ class Offer(Base):
     delivery_included: Mapped[bool] = mapped_column(Boolean, default=False)
     stock_status: Mapped[str] = mapped_column(String(20), default="in_stock")  # in_stock | limited | out_of_stock
     rental_period: Mapped[str] = mapped_column(String(10), default="", index=True)  # '' = sale | day | week | month (equipment rental)
+    available_qty: Mapped[float | None] = mapped_column(Float, nullable=True)  # None = not tracked
+    low_stock_threshold: Mapped[float] = mapped_column(Float, default=0)
+    image_url: Mapped[str] = mapped_column(String(400), default="")  # supplier's own photo of the item
     valid_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     source: Mapped[str] = mapped_column(String(20), default="supplier")  # supplier | import | external
     source_name: Mapped[str] = mapped_column(String(160), default="")
@@ -270,6 +280,7 @@ class OrderItem(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
     product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"), nullable=True)
+    offer_id: Mapped[int | None] = mapped_column(ForeignKey("offers.id"), nullable=True)
     description: Mapped[str] = mapped_column(String(300))
     quantity: Mapped[float] = mapped_column(Float)
     unit: Mapped[str] = mapped_column(String(32), default="")
@@ -343,6 +354,7 @@ class Payment(Base):
     supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), index=True)
     provider: Mapped[str] = mapped_column(String(20), default="mock")  # mock | moyasar | bank_transfer
     provider_ref: Mapped[str] = mapped_column(String(120), default="", index=True)
+    group_ref: Mapped[str] = mapped_column(String(40), default="", index=True)  # one hosted checkout for a multi-supplier cart
     method: Mapped[str] = mapped_column(String(20), default="card")  # card | mada | applepay | stcpay | bank_transfer
     amount: Mapped[float] = mapped_column(Float)          # order total incl. VAT, SAR
     currency: Mapped[str] = mapped_column(String(3), default="SAR")
@@ -475,6 +487,7 @@ class Dispute(Base):
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
     opened_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     role: Mapped[str] = mapped_column(String(10), default="buyer")  # buyer | supplier
+    kind: Mapped[str] = mapped_column(String(10), default="dispute")  # dispute | return
     reason: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="open", index=True)  # open | resolved | rejected
     resolution: Mapped[str] = mapped_column(Text, default="")
@@ -504,4 +517,73 @@ class Coupon(Base):
     audience: Mapped[str] = mapped_column(String(10), default="all")  # all | new (first order only)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Shopping: addresses, cart, favorites, product reviews, order timeline
+# ---------------------------------------------------------------------------
+class Address(Base):
+    __tablename__ = "addresses"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    label: Mapped[str] = mapped_column(String(60), default="")  # site / office / warehouse
+    recipient: Mapped[str] = mapped_column(String(120), default="")
+    phone: Mapped[str] = mapped_column(String(32), default="")
+    city: Mapped[str] = mapped_column(String(80))
+    district: Mapped[str] = mapped_column(String(120), default="")
+    street: Mapped[str] = mapped_column(String(200), default="")
+    building: Mapped[str] = mapped_column(String(80), default="")
+    notes: Mapped[str] = mapped_column(String(300), default="")
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    def as_text(self) -> str:
+        parts = [self.label, self.district, self.street, self.building, self.city]
+        return "، ".join(p for p in parts if p)
+
+
+class CartItem(Base):
+    __tablename__ = "cart_items"
+    __table_args__ = (UniqueConstraint("user_id", "offer_id", name="uq_cart_user_offer"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    offer_id: Mapped[int] = mapped_column(ForeignKey("offers.id"))
+    quantity: Mapped[float] = mapped_column(Float, default=1)
+    added_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    offer: Mapped["Offer"] = relationship()
+
+
+class Favorite(Base):
+    __tablename__ = "favorites"
+    __table_args__ = (UniqueConstraint("user_id", "product_id", name="uq_fav_user_product"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ProductReview(Base):
+    __tablename__ = "product_reviews"
+    __table_args__ = (UniqueConstraint("user_id", "product_id", name="uq_review_user_product"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    rating: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(160), default="")
+    comment: Mapped[str] = mapped_column(Text, default="")
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)  # bought it on the platform
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class OrderEvent(Base):
+    __tablename__ = "order_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    status: Mapped[str] = mapped_column(String(20))
+    note: Mapped[str] = mapped_column(String(300), default="")
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

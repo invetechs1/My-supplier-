@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Bid, Offer, Order, Product, Supplier, SupplierDocument, User, utcnow
-from ..schemas import ImportResult, OfferIn, OfferOut, OfferUpdateIn, SupplierDocumentOut, SupplierOut, SupplierUpdateIn
+from ..schemas import ImportResult, OfferIn, OfferOut, OfferUpdateIn, SupplierDocumentOut, SupplierOut, SupplierProductIn, SupplierUpdateIn
 from ..security import get_my_supplier, require_supplier
 from ..services import ingestion, pricing, storage
 from .catalog import offer_out
@@ -110,13 +110,75 @@ def upsert_offer(body: OfferIn, supplier: Supplier = Depends(get_my_supplier), d
     return offer_out(offer, with_product=True)
 
 
+@router.get("/me/products", response_model=list[OfferOut])
+def my_products(q: str = "", supplier: Supplier = Depends(get_my_supplier), db: Session = Depends(get_db)):
+    """The supplier's storefront: every item they list, with image, price, available quantity and stock state."""
+    rows = db.query(Offer).filter(Offer.supplier_id == supplier.id).order_by(Offer.updated_at.desc()).all()
+    if q:
+        ql = q.lower()
+        rows = [o for o in rows if ql in o.product.name_ar.lower() or ql in o.product.name_en.lower() or ql in o.product.sku.lower()]
+    return [offer_out(o, with_product=True) for o in rows]
+
+
+@router.post("/me/products", response_model=OfferOut, status_code=201)
+def create_my_product(body: SupplierProductIn, supplier: Supplier = Depends(get_my_supplier), user: User = Depends(require_supplier),
+                      db: Session = Depends(get_db)):
+    """Create a brand-new catalog item (not in the catalog yet) together with this supplier's price and stock."""
+    from datetime import datetime as _dt
+    if not db.get(__import__("app.models", fromlist=["Category"]).Category, body.category_id):
+        raise HTTPException(400, "Unknown category")
+    existing = db.query(Product).filter((Product.name_ar == body.name_ar.strip()) | (Product.name_en == body.name_en.strip())).first()
+    product = existing or Product(category_id=body.category_id, sku=f"S{supplier.id}-{int(_dt.now().timestamp())}", name_ar=body.name_ar.strip(),
+                                  name_en=body.name_en.strip(), brand=body.brand, unit=body.unit, description=body.description, spec=body.spec, created_by=user.id)
+    if not existing:
+        db.add(product)
+        db.flush()
+    city = body.city or supplier.city
+    offer = db.query(Offer).filter(Offer.supplier_id == supplier.id, Offer.product_id == product.id, Offer.city == city, Offer.rental_period == body.rental_period).first()
+    if not offer:
+        offer = Offer(supplier_id=supplier.id, product_id=product.id, source="supplier")
+        db.add(offer)
+    offer.price, offer.city, offer.unit, offer.min_qty = body.price, city, body.unit or product.unit, body.min_qty
+    offer.available_qty, offer.rental_period, offer.includes_vat, offer.delivery_included = body.available_qty, body.rental_period, body.includes_vat, body.delivery_included
+    offer.stock_status = "out_of_stock" if (body.available_qty is not None and body.available_qty <= 0) else "in_stock"
+    offer.updated_at = utcnow()
+    db.flush()
+    pricing.record_history(db, offer)
+    db.commit()
+    db.refresh(offer)
+    return offer_out(offer, with_product=True)
+
+
+@router.post("/me/offers/{offer_id}/image", response_model=OfferOut)
+async def upload_offer_image(offer_id: int, file: UploadFile = File(...), supplier: Supplier = Depends(get_my_supplier), db: Session = Depends(get_db)):
+    offer = db.get(Offer, offer_id)
+    if not offer or offer.supplier_id != supplier.id:
+        raise HTTPException(404, "Offer not found")
+    data, ext, mime = await storage.read_upload(file, ("png", "jpg", "webp"))
+    offer.image_url = storage.save(data, ext, mime, f"offers/{supplier.id}")
+    if not offer.product.image_url:  # first photo also becomes the catalog image
+        offer.product.image_url = offer.image_url
+    db.commit()
+    db.refresh(offer)
+    return offer_out(offer, with_product=True)
+
+
 @router.patch("/me/offers/{offer_id}", response_model=OfferOut)
 def update_offer(offer_id: int, body: OfferUpdateIn, supplier: Supplier = Depends(get_my_supplier), db: Session = Depends(get_db)):
     offer = db.get(Offer, offer_id)
     if not offer or offer.supplier_id != supplier.id:
         raise HTTPException(404, "Offer not found")
-    for k, v in body.model_dump(exclude_none=True).items():
+    data = body.model_dump(exclude_none=True)
+    clear = data.pop("clear_qty", False)
+    for k, v in data.items():
         setattr(offer, k, v)
+    if clear:
+        offer.available_qty = None
+    if "available_qty" in data or clear:
+        if offer.available_qty is not None and offer.available_qty <= 0:
+            offer.stock_status = "out_of_stock"
+        elif "stock_status" not in data and offer.stock_status == "out_of_stock":
+            offer.stock_status = "in_stock"
     offer.updated_at = utcnow()
     pricing.record_history(db, offer)
     db.commit()

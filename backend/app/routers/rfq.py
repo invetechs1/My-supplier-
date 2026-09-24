@@ -12,6 +12,7 @@ from ..schemas import BidIn, BidItemOut, BidOut, BOQItemOut, RFQDetailOut, RFQIn
 from ..security import get_current_user, get_my_supplier, require_buyer
 from ..services import boq, matching, pricing
 from ..services.notify import notify
+from ..services.orders import add_event
 from .catalog import product_out
 
 router = APIRouter(prefix="/rfq", tags=["rfq"])
@@ -285,6 +286,7 @@ def award(rfq_id: int, bid_id: int, user: User = Depends(require_buyer), db: Ses
         ri = items_by_id[bi.rfq_item_id]
         db.add(OrderItem(order_id=order.id, product_id=ri.product_id, description=ri.description, quantity=bi.quantity,
                          unit=ri.unit, unit_price=bi.unit_price, line_total=round(bi.unit_price * bi.quantity, 2)))
+    add_event(db, order, "pending", f"ترسية طلب التسعير #{r.id}", user.id)
     for b in r.bids:
         if b.id == winner.id:
             b.status = "awarded"

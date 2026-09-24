@@ -460,6 +460,28 @@ def _demo_equipment(db: Session, cats: dict[str, Category], products: dict[str, 
     db.commit()
 
 
+def _demo_stock(db: Session) -> None:
+    """Give demo offers a tracked stock quantity so the storefront shows availability (only where not set)."""
+    rnd = random.Random(2028)
+    changed = 0
+    for o in db.query(Offer).filter(Offer.available_qty.is_(None), Offer.rental_period == "").all():
+        if o.supplier and o.supplier.is_external:
+            continue
+        unit = (o.unit or "").lower()
+        base = {"ton": 120, "bag": 3000, "piece": 20000, "m2": 1500, "m3": 400, "load": 30, "roll": 200, "sheet": 400, "pail": 250, "set": 40,
+                "unit": 3, "box": 300, "pair": 500, "drum": 60, "kg": 5000, "lm": 300, "trip": 20}.get(unit, 200)
+        qty = rnd.randint(max(1, base // 4), base)
+        # keep enough stock for a realistic first order (blocks/bricks are sold by the thousand)
+        o.available_qty = float(max(qty, (o.min_qty or 1) * 25))
+        o.low_stock_threshold = float(max(1, base // 20))
+        changed += 1
+    for o in db.query(Offer).filter(Offer.available_qty.is_(None), Offer.rental_period != "").all():
+        o.available_qty = float(rnd.randint(1, 6))
+        o.low_stock_threshold = 1.0
+    if changed:
+        db.commit()
+
+
 def seed(db: Session) -> None:
     _ensure_admin(db)
     cats = _ensure_categories(db)
@@ -467,3 +489,4 @@ def seed(db: Session) -> None:
     if SEED_DEMO_DATA:
         _demo_data(db, cats, products)
         _demo_equipment(db, cats, products)
+        _demo_stock(db)

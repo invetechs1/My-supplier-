@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from . import config
 from .config import CORS_ORIGINS, PLATFORM_NAME, PLATFORM_NAME_AR
 from .db import Base, SessionLocal, engine, get_db
-from .routers import admin, auth, catalog, market, notifications, orders, payments, rfq, suppliers
+from .routers import account, admin, auth, cart, catalog, market, notifications, orders, payments, rfq, suppliers
 from .seed import seed
 from .services import jobs
 
@@ -42,7 +42,7 @@ app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials
                    allow_methods=["*"], allow_headers=["*"])
 
 API_PREFIX = "/api/v1"
-for r in (auth, catalog, market, suppliers, rfq, orders, payments, notifications, admin):
+for r in (auth, catalog, market, suppliers, rfq, orders, cart, account, payments, notifications, admin):
     app.include_router(r.router, prefix=API_PREFIX)
 
 

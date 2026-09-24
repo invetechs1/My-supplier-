@@ -1,14 +1,16 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import Response
+from html import escape
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Category, Offer, PriceAlert, Product, User
-from ..schemas import (CategoryOut, HistoryPoint, OfferOut, PagedProducts, PriceAlertIn, PriceAlertOut, PriceSummary, ProductDetailOut,
+from ..models import Category, Favorite, Offer, Order, OrderItem, PriceAlert, Product, ProductReview, User
+from ..schemas import (CategoryOut, HistoryPoint, OfferOut, ProductReviewIn, ProductReviewOut, PagedProducts, PriceAlertIn, PriceAlertOut, PriceSummary, ProductDetailOut,
                        ProductIn, ProductOut)
-from ..security import get_current_user, require_roles
+from ..security import get_current_user, get_current_user_optional, require_roles
 from ..services import pricing, storage
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -20,7 +22,18 @@ def product_out(p: Product, summary: dict | None = None) -> ProductOut:
         out.category_name_ar, out.category_name_en = p.category.name_ar, p.category.name_en
     if summary is not None:
         out.summary = PriceSummary(**summary)
+    if not out.image_url:  # fall back to a supplier photo, else a generated placeholder
+        photo = next((o.image_url for o in p.offers if o.image_url), "")
+        out.image_url = photo or f"/api/v1/catalog/products/{p.id}/image.svg"
     return out
+
+
+def mark_favorites(db: Session, user: User | None, items: list[ProductOut]) -> None:
+    if not user or not items:
+        return
+    ids = {f.product_id for f in db.query(Favorite).filter(Favorite.user_id == user.id, Favorite.product_id.in_([i.id for i in items])).all()}
+    for i in items:
+        i.is_favorite = i.id in ids
 
 
 def offer_out(o: Offer, with_product: bool = False) -> OfferOut:
@@ -46,11 +59,39 @@ def categories(db: Session = Depends(get_db)):
 
 @router.get("/products", response_model=PagedProducts)
 def products(q: str = "", category_id: int | None = None, city: str | None = None, brand: str | None = None,
-             sort: str = Query("relevance", pattern="^(relevance|price_asc|price_desc|offers)$"),
+             sort: str = Query("relevance", pattern="^(relevance|price_asc|price_desc|offers|rating|newest|popular)$"),
              page: int = Query(1, ge=1), size: int = Query(24, ge=1, le=100), only_with_offers: bool = False,
-             db: Session = Depends(get_db)):
-    items, total, summaries = pricing.search_products(db, q, category_id, city, brand, sort, page, size, only_with_offers)
-    return PagedProducts(items=[product_out(p, summaries[p.id]) for p in items], total=total, page=page, size=size)
+             price_min: float | None = None, price_max: float | None = None, basis: str | None = Query(None, pattern="^(sale|rent)$"),
+             in_stock: bool = False, user: User | None = Depends(get_current_user_optional), db: Session = Depends(get_db)):
+    items, total, summaries = pricing.search_products(db, q, category_id, city, brand, sort, page, size, only_with_offers,
+                                                      price_min=price_min, price_max=price_max, basis=basis, in_stock=in_stock)
+    out = [product_out(p, summaries[p.id]) for p in items]
+    mark_favorites(db, user, out)
+    return PagedProducts(items=out, total=total, page=page, size=size)
+
+
+@router.get("/suggest")
+def suggest(q: str = Query(..., min_length=1), db: Session = Depends(get_db)):
+    """Search-as-you-type: products, categories and brands."""
+    like = f"%{q.strip()}%"
+    prods = db.query(Product).filter(Product.is_active.is_(True)).filter(
+        (Product.name_ar.ilike(like)) | (Product.name_en.ilike(like)) | (Product.sku.ilike(like)) | (Product.brand.ilike(like))).limit(8).all()
+    cats = db.query(Category).filter((Category.name_ar.ilike(like)) | (Category.name_en.ilike(like))).limit(5).all()
+    brands = [b for (b,) in db.query(Product.brand).filter(Product.brand.ilike(like), Product.brand != "").distinct().limit(5).all()]
+    return {"products": [{"id": p.id, "name_ar": p.name_ar, "name_en": p.name_en, "brand": p.brand, "image_url": product_out(p).image_url} for p in prods],
+            "categories": [{"id": c.id, "name_ar": c.name_ar, "name_en": c.name_en, "icon": c.icon} for c in cats], "brands": brands}
+
+
+@router.get("/products/{product_id}/image.svg", include_in_schema=False)
+def placeholder_image(product_id: int, db: Session = Depends(get_db)):
+    p = db.get(Product, product_id)
+    icon = (p.category.icon if p and p.category else "") or "📦"
+    name = escape(p.name_ar if p else "")
+    svg = f"""<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300' width='400' height='300'>
+<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#EDF5EF'/><stop offset='1' stop-color='#C6E5D1'/></linearGradient></defs>
+<rect width='400' height='300' fill='url(#g)'/><text x='200' y='150' font-size='110' text-anchor='middle' dominant-baseline='middle'>{icon}</text>
+<text x='200' y='262' font-family='Noto Kufi Arabic, sans-serif' font-size='18' fill='#124A2C' text-anchor='middle' direction='rtl'>{name[:40]}</text></svg>"""
+    return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/brands", response_model=list[str])
@@ -64,10 +105,12 @@ def cities(db: Session = Depends(get_db)):
 
 
 @router.get("/products/{product_id}", response_model=ProductDetailOut)
-def product_detail(product_id: int, city: str | None = None, db: Session = Depends(get_db)):
+def product_detail(product_id: int, city: str | None = None, user: User | None = Depends(get_current_user_optional), db: Session = Depends(get_db)):
     p = db.get(Product, product_id)
     if not p or not p.is_active:
         raise HTTPException(404, "Product not found")
+    p.views = (p.views or 0) + 1
+    db.commit()
     offers = pricing.active_offers_query(db, product_id, city).all()
     offers.sort(key=lambda o: (o.rental_period != '', o.rental_period, pricing.offer_prices(o)[0], not o.supplier.verified))
     related = db.query(Product).filter(Product.category_id == p.category_id, Product.id != p.id, Product.is_active.is_(True)).limit(6).all()
@@ -76,14 +119,50 @@ def product_detail(product_id: int, city: str | None = None, db: Session = Depen
     out.offers = [offer_out(o) for o in offers]
     out.history = [HistoryPoint(**h) for h in pricing.history_series(db, product_id, 90, city)]
     out.related = [product_out(r, rel_summaries[r.id]) for r in related]
+    mark_favorites(db, user, [out, *out.related])
     return out
+
+
+# ---- product reviews ----
+def _review_out(r: ProductReview, db: Session) -> ProductReviewOut:
+    o = ProductReviewOut.model_validate(r)
+    u = db.get(User, r.user_id)
+    o.author = (u.company_name or u.full_name) if u else ""
+    p = db.get(Product, r.product_id)
+    if p:
+        o.product_name_ar, o.product_name_en = p.name_ar, p.name_en
+    return o
+
+
+@router.get("/products/{product_id}/reviews", response_model=list[ProductReviewOut])
+def product_reviews(product_id: int, db: Session = Depends(get_db)):
+    rows = db.query(ProductReview).filter(ProductReview.product_id == product_id).order_by(ProductReview.id.desc()).limit(100).all()
+    return [_review_out(r, db) for r in rows]
+
+
+@router.post("/products/{product_id}/reviews", response_model=ProductReviewOut, status_code=201)
+def add_product_review(product_id: int, body: ProductReviewIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    p = db.get(Product, product_id)
+    if not p:
+        raise HTTPException(404, "Product not found")
+    if db.query(ProductReview).filter(ProductReview.product_id == product_id, ProductReview.user_id == user.id).first():
+        raise HTTPException(409, "You already reviewed this product")
+    bought = (db.query(OrderItem).join(Order, Order.id == OrderItem.order_id)
+              .filter(Order.buyer_id == user.id, Order.status == "delivered", OrderItem.product_id == product_id).first() is not None)
+    r = ProductReview(product_id=product_id, user_id=user.id, rating=body.rating, title=body.title, comment=body.comment, verified=bought)
+    db.add(r)
+    p.rating = round(((p.rating or 0) * (p.rating_count or 0) + body.rating) / ((p.rating_count or 0) + 1), 2)
+    p.rating_count = (p.rating_count or 0) + 1
+    db.commit()
+    db.refresh(r)
+    return _review_out(r, db)
 
 
 @router.get("/compare", response_model=list[ProductDetailOut])
 def compare(ids: str = Query(..., description="comma separated product ids"), city: str | None = None,
             db: Session = Depends(get_db)):
     pids = [int(x) for x in ids.split(",") if x.strip().isdigit()][:10]
-    return [product_detail(pid, city, db) for pid in pids if db.get(Product, pid)]
+    return [product_detail(pid, city, None, db) for pid in pids if db.get(Product, pid)]
 
 
 @router.post("/products", response_model=ProductOut, status_code=201)

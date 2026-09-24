@@ -160,9 +160,14 @@ class ProductOut(ORM):
     description: str
     image_url: str
     is_active: bool
+    views: int = 0
+    sold_qty: float = 0
+    rating: float = 0
+    rating_count: int = 0
     category_name_ar: str = ""
     category_name_en: str = ""
     summary: Optional[PriceSummary] = None
+    is_favorite: bool = False
 
 
 class SupplierBrief(ORM):
@@ -192,6 +197,9 @@ class OfferOut(ORM):
     delivery_included: bool
     stock_status: str
     rental_period: str = ""
+    available_qty: Optional[float] = None
+    low_stock_threshold: float = 0
+    image_url: str = ""
     valid_until: Optional[datetime]
     source: str
     source_name: str
@@ -238,11 +246,17 @@ class SupplierOut(SupplierBrief):
     offer_count: int = 0
     iban_masked: str = ""
     bank_name: str = ""
+    delivery_fee: float = 0
+    free_delivery_over: Optional[float] = None
+    min_order_amount: float = 0
 
 
 class SupplierUpdateIn(BaseModel):
     iban: Optional[str] = None
     bank_name: Optional[str] = None
+    delivery_fee: Optional[float] = None
+    free_delivery_over: Optional[float] = None
+    min_order_amount: Optional[float] = None
     name: Optional[str] = None
     cr_number: Optional[str] = None
     vat_number: Optional[str] = None
@@ -267,6 +281,8 @@ class OfferIn(BaseModel):
     delivery_included: bool = False
     stock_status: str = Field(default="in_stock", pattern="^(in_stock|limited|out_of_stock)$")
     rental_period: str = Field(default="", pattern="^(|day|week|month)$")
+    available_qty: Optional[float] = None
+    low_stock_threshold: float = 0
     valid_until: Optional[datetime] = None
     notes: str = ""
 
@@ -279,6 +295,9 @@ class OfferUpdateIn(BaseModel):
     delivery_included: Optional[bool] = None
     stock_status: Optional[str] = Field(default=None, pattern="^(in_stock|limited|out_of_stock)$")
     rental_period: Optional[str] = Field(default=None, pattern="^(|day|week|month)$")
+    available_qty: Optional[float] = None
+    clear_qty: bool = False  # set available_qty back to "not tracked"
+    low_stock_threshold: Optional[float] = None
     valid_until: Optional[datetime] = None
     notes: Optional[str] = None
 
@@ -410,9 +429,17 @@ class DirectOrderIn(BaseModel):
     coupon_code: str = ""
 
 
+class OrderEventOut(ORM):
+    id: int
+    status: str
+    note: str
+    created_at: datetime
+
+
 class OrderItemOut(ORM):
     id: int
     product_id: Optional[int]
+    offer_id: Optional[int] = None
     description: str
     quantity: float
     unit: str
@@ -444,6 +471,8 @@ class OrderOut(ORM):
     supplier: Optional[SupplierBrief] = None
     buyer_name: str = ""
     has_review: bool = False
+    events: list[OrderEventOut] = []
+    group_ref: str = ""
 
 
 class OrderStatusIn(BaseModel):
@@ -530,6 +559,7 @@ class PaymentOut(ORM):
     checkout_url: str
     failure_reason: str
     transfer_reference: str
+    group_ref: str = ""
     paid_at: Optional[datetime]
     released_at: Optional[datetime]
     refunded_at: Optional[datetime]
@@ -621,6 +651,7 @@ class BOQItemOut(BaseModel):
 
 class DisputeIn(BaseModel):
     reason: str = Field(min_length=5, max_length=2000)
+    kind: str = Field(default="dispute", pattern="^(dispute|return)$")
 
 
 class DisputeResolveIn(BaseModel):
@@ -634,6 +665,7 @@ class DisputeOut(ORM):
     order_id: int
     opened_by: int
     role: str
+    kind: str = "dispute"
     reason: str
     status: str
     resolution: str
@@ -698,3 +730,137 @@ class ReviewOut(ORM):
 class AdminOrderStatusIn(BaseModel):
     status: str = Field(pattern="^(pending|confirmed|in_delivery|delivered|cancelled)$")
     note: str = ""
+
+
+# ---------- v1.5: shopping ----------
+class AddressIn(BaseModel):
+    label: str = ""
+    recipient: str = ""
+    phone: str = ""
+    city: str = Field(min_length=2)
+    district: str = ""
+    street: str = ""
+    building: str = ""
+    notes: str = ""
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    is_default: bool = False
+
+
+class AddressOut(ORM):
+    id: int
+    label: str
+    recipient: str
+    phone: str
+    city: str
+    district: str
+    street: str
+    building: str
+    notes: str
+    lat: Optional[float]
+    lng: Optional[float]
+    is_default: bool
+    formatted: str = ""
+
+
+class CartAddIn(BaseModel):
+    offer_id: int
+    quantity: float = Field(default=1, gt=0)
+
+
+class CartQtyIn(BaseModel):
+    quantity: float = Field(gt=0)
+
+
+class CartSyncIn(BaseModel):
+    items: list[CartAddIn] = []
+
+
+class CartItemOut(BaseModel):
+    id: int
+    offer_id: int
+    quantity: float
+    offer: OfferOut
+    line_total: float
+
+
+class CartGroupOut(BaseModel):
+    supplier: SupplierBrief
+    items: list[CartItemOut]
+    subtotal: float
+    delivery_fee: float
+    free_delivery_over: Optional[float] = None
+    min_order_amount: float = 0
+    below_minimum: bool = False
+
+
+class CartOut(BaseModel):
+    groups: list[CartGroupOut]
+    item_count: int
+    subtotal: float
+    delivery_total: float
+    discount: float = 0
+    coupon_code: str = ""
+    coupon_error: str = ""
+    vat: float
+    total: float
+
+
+class CartCheckoutIn(BaseModel):
+    address_id: Optional[int] = None
+    delivery_address: str = ""
+    coupon_code: str = ""
+    notes: str = ""
+
+
+class GroupCheckoutIn(BaseModel):
+    order_ids: list[int] = Field(min_length=1)
+    method: str = Field(default="card", pattern="^(card|mada|applepay|stcpay|bank_transfer)$")
+
+
+class GroupCheckoutOut(BaseModel):
+    group_ref: str
+    checkout_url: str
+    total: float
+    method: str
+    status: str
+    bank_instructions: str = ""
+    payments: list[PaymentOut] = []
+
+
+class ProductReviewIn(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    title: str = ""
+    comment: str = ""
+
+
+class ProductReviewOut(ORM):
+    id: int
+    product_id: int
+    user_id: int
+    rating: int
+    title: str
+    comment: str
+    verified: bool
+    created_at: datetime
+    author: str = ""
+    product_name_ar: str = ""
+    product_name_en: str = ""
+
+
+class SupplierProductIn(BaseModel):
+    """Create a new catalog product and the supplier's own price for it in one step."""
+    category_id: int
+    name_ar: str = Field(min_length=2)
+    name_en: str = Field(min_length=2)
+    brand: str = ""
+    unit: str = "piece"
+    description: str = ""
+    spec: dict = {}
+    price: float = Field(gt=0)
+    city: str = ""
+    available_qty: Optional[float] = None
+    min_qty: float = 1
+    rental_period: str = Field(default="", pattern="^(|day|week|month)$")
+    includes_vat: bool = False
+    delivery_included: bool = False

@@ -140,7 +140,8 @@ def record_history(db: Session, offer: Offer) -> None:
 
 def search_products(db: Session, q: str = "", category_id: int | None = None, city: str | None = None,
                     brand: str | None = None, sort: str = "relevance", page: int = 1, size: int = 24,
-                    only_with_offers: bool = False):
+                    only_with_offers: bool = False, price_min: float | None = None, price_max: float | None = None,
+                    basis: str | None = None, in_stock: bool = False):
     query = db.query(Product).filter(Product.is_active.is_(True))
     if category_id:
         ids = [category_id] + [c.id for c in db.query(Category).filter(Category.parent_id == category_id).all()]
@@ -154,13 +155,29 @@ def search_products(db: Session, q: str = "", category_id: int | None = None, ci
     if only_with_offers or city:
         sub = active_offers_query(db, None, city).with_entities(Offer.product_id).distinct()
         query = query.filter(Product.id.in_(sub))
-    total = query.count()
     products = query.order_by(Product.name_en).all()
     summaries = bulk_summaries(db, [p.id for p in products], city)
+    if price_min is not None:
+        products = [p for p in products if (summaries[p.id].get("min_price") or 0) >= price_min]
+    if price_max is not None:
+        products = [p for p in products if summaries[p.id].get("min_price") is not None and summaries[p.id]["min_price"] <= price_max]
+    if basis == "rent":
+        products = [p for p in products if summaries[p.id].get("basis") or summaries[p.id].get("rental_min_price") is not None]
+    elif basis == "sale":
+        products = [p for p in products if summaries[p.id].get("offer_count", 0) and not summaries[p.id].get("basis")]
+    if in_stock:
+        products = [p for p in products if summaries[p.id].get("offer_count", 0) > 0]
+    total = len(products)
     if sort in ("price_asc", "price_desc"):
         products.sort(key=lambda p: summaries[p.id].get("min_price") or 1e12, reverse=(sort == "price_desc"))
     elif sort == "offers":
         products.sort(key=lambda p: summaries[p.id].get("offer_count", 0), reverse=True)
+    elif sort == "rating":
+        products.sort(key=lambda p: ((p.rating or 0), (p.rating_count or 0)), reverse=True)
+    elif sort == "newest":
+        products.sort(key=lambda p: p.id, reverse=True)
+    elif sort == "popular":
+        products.sort(key=lambda p: ((p.sold_qty or 0), (p.views or 0)), reverse=True)
     start = (page - 1) * size
     return products[start:start + size], total, summaries
 

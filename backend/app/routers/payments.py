@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from .. import config
 from ..db import get_db
 from ..models import Invoice, Order, Payment, Payout, Supplier, User
-from ..schemas import CheckoutIn, InvoiceOut, PaymentOut, PayoutOut
+from ..schemas import CheckoutIn, GroupCheckoutIn, GroupCheckoutOut, InvoiceOut, PaymentOut, PayoutOut
 from ..security import get_current_user, get_my_supplier, require_buyer
 from ..services import payments
 
@@ -39,6 +39,21 @@ def checkout(body: CheckoutIn, user: User = Depends(require_buyer), db: Session 
     if not order:
         raise HTTPException(404, "Order not found")
     return payment_out(payments.start_checkout(db, order, user, body.method))
+
+
+@router.post("/checkout-group", response_model=GroupCheckoutOut, status_code=201)
+def checkout_group(body: GroupCheckoutIn, user: User = Depends(require_buyer), db: Session = Depends(get_db)):
+    orders = [db.get(Order, oid) for oid in body.order_ids]
+    if any(o is None for o in orders):
+        raise HTTPException(404, "Order not found")
+    pays = payments.start_group_checkout(db, orders, user, body.method)
+    total = round(sum(p.amount for p in pays), 2)
+    instr = ""
+    if body.method == "bank_transfer":
+        from ..services import settings as _settings
+        instr = f"{_settings.get(db, 'bank_instructions')} — Reference: {pays[0].group_ref.upper()} — Amount: {total:,.2f} SAR"
+    return GroupCheckoutOut(group_ref=pays[0].group_ref, checkout_url=pays[0].checkout_url, total=total, method=body.method, status=pays[0].status,
+                            bank_instructions=instr, payments=[payment_out(p) for p in pays])
 
 
 @router.get("/mine", response_model=list[PaymentOut])
@@ -114,7 +129,7 @@ def mock_checkout(payment_id: int, db: Session = Depends(get_db)):
 <style>body{{font-family:sans-serif;background:#F5F8F6;display:grid;place-items:center;height:100vh;margin:0}}
 .c{{background:#fff;padding:28px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.1);max-width:380px;text-align:center}}
 button{{padding:10px 18px;border-radius:8px;border:0;font-size:15px;margin:6px;cursor:pointer}}.p{{background:#175934;color:#fff}}.f{{background:#eee}}</style></head>
-<body><div class="c"><h2>بوابة دفع تجريبية</h2><p>الطلب #{p.order_id} — <b>{p.amount:,.2f} ر.س</b> ({p.method})</p>
+<body><div class="c"><h2>بوابة دفع تجريبية</h2><p>{('طلبات ' + ', '.join('#' + str(m.order_id) for m in payments.group_members(db, p))) if p.group_ref else 'الطلب #' + str(p.order_id)} — <b>{sum(m.amount for m in payments.group_members(db, p)):,.2f} ر.س</b> ({p.method})</p>
 <p style="color:#888;font-size:13px">هذه صفحة محاكاة. في الإنتاج يُستبدل بها صفحة Moyasar (مدى، فيزا، Apple Pay، STC Pay).</p>
 <form method="post" action="/api/v1/payments/mock/confirm/{p.id}"><button class="p" name="result" value="paid">ادفع الآن ✓</button>
 <button class="f" name="result" value="failed">فشل الدفع ✕</button></form></div></body></html>"""

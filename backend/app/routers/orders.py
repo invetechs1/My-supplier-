@@ -6,8 +6,9 @@ from ..db import get_db
 from ..models import ORDER_TRANSITIONS, Offer, Order, OrderItem, Review, Supplier, User, utcnow
 from ..schemas import DirectOrderIn, DisputeIn, DisputeOut, OrderOut, OrderStatusIn, ReviewIn
 from ..security import get_current_user, get_my_supplier, require_buyer
-from ..models import Dispute, Payment
-from ..services import coupons, payments, pricing, settings as platform_settings
+from ..models import Dispute, OrderEvent, Payment
+from ..services import coupons, inventory, payments, pricing, settings as platform_settings
+from ..services.orders import add_event, count_sales
 from ..services.notify import notify
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -18,6 +19,10 @@ def order_out(o: Order, db: Session) -> OrderOut:
     out.supplier = o.supplier
     out.buyer_name = (o.buyer.company_name or o.buyer.full_name) if o.buyer else ""
     out.has_review = db.query(Review).filter(Review.order_id == o.id).first() is not None
+    out.events = db.query(OrderEvent).filter(OrderEvent.order_id == o.id).order_by(OrderEvent.id).all()
+    import re as _re
+    m = _re.search(r"\[(cart-[0-9a-f]+)\]", o.notes or "")
+    out.group_ref = m.group(1) if m else ""
     return out
 
 
@@ -47,8 +52,10 @@ def direct_order(body: DirectOrderIn, user: User = Depends(require_buyer), db: S
     db.flush()
     if coupon:
         coupon.used += 1
-    db.add(OrderItem(order_id=order.id, product_id=offer.product_id, description=offer.product.name_ar, quantity=body.quantity,
+    inventory.reserve(db, offer, body.quantity)
+    db.add(OrderItem(order_id=order.id, product_id=offer.product_id, offer_id=offer.id, description=offer.product.name_ar, quantity=body.quantity,
                      unit=offer.unit or offer.product.unit, unit_price=unit_price, line_total=subtotal))
+    add_event(db, order, "pending", "تم إنشاء الطلب", user.id)
     notify(db, offer.supplier.user_id, f"طلب شراء جديد #{order.id}", f"{offer.product.name_ar} × {body.quantity:g}", "order", "order", order.id)
     db.commit()
     db.refresh(order)
@@ -95,9 +102,16 @@ def update_status(order_id: int, body: OrderStatusIn, user: User = Depends(get_c
     if body.notes:
         o.notes = (o.notes + "\n" + body.notes).strip()
     o.updated_at = utcnow()
+    add_event(db, o, body.status, body.notes, user.id)
     if body.status == "delivered":
         payments.release_escrow(db, o)
+        count_sales(db, o)
     elif body.status == "cancelled":
+        for it in o.items:
+            if it.offer_id:
+                off = db.get(Offer, it.offer_id)
+                if off:
+                    inventory.restore(db, off, it.quantity)
         paid = db.query(Payment).filter(Payment.order_id == o.id, Payment.status == "paid").first()
         if paid:
             payments.refund(db, paid, user)
@@ -136,11 +150,11 @@ def open_dispute(order_id: int, body: DisputeIn, user: User = Depends(get_curren
         raise HTTPException(403, "Not your order")
     if db.query(Dispute).filter(Dispute.order_id == o.id, Dispute.status == "open").first():
         raise HTTPException(409, "A dispute is already open for this order")
-    d = Dispute(order_id=o.id, opened_by=user.id, role="buyer" if is_buyer else "supplier", reason=body.reason)
+    d = Dispute(order_id=o.id, opened_by=user.id, role="buyer" if is_buyer else "supplier", kind=body.kind, reason=body.reason)
     db.add(d)
     target = o.supplier.user_id if is_buyer else o.buyer_id
     if target:
-        notify(db, target, f"تم فتح نزاع على الطلب #{o.id}", body.reason[:200], "dispute", "order", o.id)
+        notify(db, target, f"{'طلب إرجاع' if body.kind == 'return' else 'تم فتح نزاع'} على الطلب #{o.id}", body.reason[:200], "dispute", "order", o.id)
     for admin in db.query(User).filter(User.role == "admin").all():
         notify(db, admin.id, f"نزاع جديد على الطلب #{o.id}", body.reason[:200], "dispute", "order", o.id)
     db.commit()

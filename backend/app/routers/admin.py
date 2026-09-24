@@ -710,3 +710,28 @@ def analytics(db: Session = Depends(get_db)):
     return {"top_suppliers": top_suppliers, "top_demand": top_demand, "funnel": funnel,
             "gmv_by_city": sorted(({"city": k, "gmv": round(v, 2)} for k, v in cities.items()), key=lambda r: -r["gmv"]),
             "avg_order_value": round(sum(o.total for o in orders) / len(orders), 2) if orders else 0}
+
+
+# ---- product reviews ----
+@router.get("/product-reviews")
+def product_reviews_admin(limit: int = 300, db: Session = Depends(get_db)):
+    from ..models import ProductReview
+    from .catalog import _review_out
+    return [_review_out(r, db).model_dump() for r in db.query(ProductReview).order_by(ProductReview.id.desc()).limit(limit).all()]
+
+
+@router.delete("/product-reviews/{review_id}", status_code=204)
+def delete_product_review(review_id: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    from ..models import ProductReview
+    r = db.get(ProductReview, review_id)
+    if not r:
+        raise HTTPException(404, "Review not found")
+    p = db.get(Product, r.product_id)
+    if p and p.rating_count > 1:
+        p.rating = round((p.rating * p.rating_count - r.rating) / (p.rating_count - 1), 2)
+        p.rating_count -= 1
+    elif p:
+        p.rating, p.rating_count = 0.0, 0
+    db.delete(r)
+    db.add(AuditLog(actor_id=user.id, action="product_review.delete", entity="product_review", entity_id=review_id))
+    db.commit()
