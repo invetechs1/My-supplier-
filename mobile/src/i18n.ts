@@ -24,6 +24,7 @@ const d: Record<string, [string, string]> = {
   escrow_note: ['يُحفظ المبلغ لدى المنصة ويُحوَّل للمورّد بعد التسليم', 'Held by the platform, released to the supplier after delivery'], payouts: ['التحويلات', 'Payouts'], in_escrow: ['محجوز لدى المنصة', 'In escrow'], payouts_pending: ['قيد التحويل', 'Payouts pending'],
   otp_send: ['أرسل رمز التحقق', 'Send code'], otp_code: ['رمز التحقق', 'Code'], otp_verify: ['تحقق', 'Verify'], otp_sent: ['أُرسل الرمز إلى', 'Code sent to'], phone: ['الجوال', 'Phone'], invoice: ['الفاتورة', 'Invoice'],
   push_enabled: ['إشعارات التطبيق مفعّلة', 'Push notifications enabled'], login_otp: ['دخول برمز الجوال', 'Log in with phone code'],
+  rent: ['إيجار', 'Rent'], per_day: ['/ يوم', '/ day'], per_week: ['/ أسبوع', '/ week'], per_month: ['/ شهر', '/ month'], rent_from: ['إيجار من', 'Rent from'],
   demo: ['حسابات تجريبية: buyer@demo.sa · supplier1@demo.sa / Demo@2026', 'Demo: buyer@demo.sa · supplier1@demo.sa / Demo@2026'], next: ['التالي', 'Next'],
 };
 export const t = (k: string) => (d[k] ? d[k][lang === 'ar' ? 0 : 1] : k);

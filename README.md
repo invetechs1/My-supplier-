@@ -18,6 +18,7 @@ Building-materials price comparison, RFQ (request-for-quotation) and supplier-bi
 ## What it does
 
 **For anyone in construction (buyers)**
+- **Everything the construction industry buys or rents**: 31 top-level categories / 71 in total and a 217-item seed catalog — building materials plus heavy equipment (excavators, loaders, cranes, trucks, forklifts), generators and compressors, concrete and rebar equipment, scaffolding and formwork, lifting, safety and PPE, fire systems, surveying instruments, site facilities (cabins, containers, tanks), HVAC, glass and aluminium, roads and asphalt, landscaping, steel structures and prefab, finishes, construction chemicals, spare parts and consumables. Equipment offers can be **sale or rental (per day / week / month)** and are compared per basis.
 - Search any construction item and see **every supplier's price side by side** (registered suppliers + external reference sources), with best / average / median price, 90-day price history and 30-day change.
 - Filter by city, brand, category; compare products; **price-drop alerts** (watchlist).
 - **Buy directly** from a registered supplier's offer, or collect items into a **quote list → RFQ** with quantities.
@@ -52,7 +53,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 - API: http://localhost:8000/api/v1 · interactive docs: http://localhost:8000/docs
-- First start creates the SQLite DB in `backend/data/`, the category tree, ~58 products, and (when `SEED_DEMO_DATA=1`, the default) 7 demo suppliers with prices and 90 days of history.
+- First start creates the SQLite DB in `backend/data/`, the category tree (71 categories), 217 products, and (when `SEED_DEMO_DATA=1`, the default) 11 demo suppliers (materials, equipment rental, safety/tools, prefab) with sale and rental prices and price history. Seeding is incremental: new catalog entries are added to an existing database on the next start.
 
 **Demo accounts** (password `Demo@2026` unless noted)
 
@@ -60,7 +61,7 @@ uvicorn app.main:app --reload --port 8000
 |---|---|
 | Admin | `admin@mysupplier.sa` / `Admin@2026` |
 | Buyer | `buyer@demo.sa` |
-| Suppliers | `supplier1@demo.sa` … `supplier7@demo.sa` |
+| Suppliers | `supplier1@demo.sa` … `supplier7@demo.sa` (materials) · `rental1@demo.sa`, `rental2@demo.sa` (equipment rental) · `safety1@demo.sa` · `build1@demo.sa` |
 
 ### 2. Website + dashboards
 ```bash
@@ -80,7 +81,7 @@ Store builds: `eas build -p ios|android --profile production` (set `apiBase` in 
 
 ### 4. Tests
 ```bash
-cd backend && python -m pytest -q      # 17 end-to-end scenarios (auth, catalog, import, RFQ→bid→award→order→review, admin, payments, OTP, notifications, jobs)
+cd backend && python -m pytest -q      # 20 end-to-end scenarios (auth, catalog, import, RFQ→bid→award→order→review, admin, payments, OTP, notifications, jobs)
 cd web && npm run typecheck
 cd mobile && npm run typecheck
 ```

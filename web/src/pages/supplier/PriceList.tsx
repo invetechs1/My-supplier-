@@ -8,7 +8,7 @@ export default function PriceList() {
   const res = useLoad(() => api.get<Offer[]>('/suppliers/me/offers'))
   const [modal, setModal] = useState(false)
   const [q, setQ] = useState(''); const [hits, setHits] = useState<Product[]>([]); const [picked, setPicked] = useState<Product | null>(null)
-  const [f, setF] = useState({ price: '', city: '', min_qty: 1, includes_vat: false, delivery_included: false, stock_status: 'in_stock', notes: '' })
+  const [f, setF] = useState({ price: '', city: '', min_qty: 1, includes_vat: false, delivery_included: false, stock_status: 'in_stock', notes: '', rental_period: '' })
   const [msg, setMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -27,7 +27,7 @@ export default function PriceList() {
     <div className="stack">
       <div className="row between"><h1>{t('price_list')}</h1>
         <div className="row"><input type="file" accept=".csv,.json" ref={fileRef} style={{ display: 'none' }} onChange={e => e.target.files?.[0] && upload(e.target.files[0])} />
-          <button className="btn secondary" onClick={() => fileRef.current?.click()}>⬆ {t('import_csv')}</button><a className="btn ghost" href={`data:text/csv;charset=utf-8,${encodeURIComponent('sku,product_name,category,unit,price,city,min_qty,includes_vat,stock_status\nCEM-YAM-50,,cement,bag,14.5,الرياض,1,false,in_stock\n,منتج جديد,paint,pail,120,جدة,1,false,in_stock\n')}`} download="price-list-template.csv">CSV ⬇</a>
+          <button className="btn secondary" onClick={() => fileRef.current?.click()}>⬆ {t('import_csv')}</button><a className="btn ghost" href={`data:text/csv;charset=utf-8,${encodeURIComponent('sku,product_name,category,unit,price,city,min_qty,includes_vat,stock_status,rental_period\nCEM-YAM-50,,cement,bag,14.5,الرياض,1,false,in_stock,\nEXC-20T,,excavation,unit,1800,الرياض,1,false,in_stock,day\n,منتج جديد,paint,pail,120,جدة,1,false,in_stock,\n')}`} download="price-list-template.csv">CSV ⬇</a>
           <button className="btn" onClick={() => setModal(true)}>➕ {t('add_price')}</button></div></div>
       {msg && <Alert kind={msg.kind}>{msg.text}</Alert>}
       {result && <Alert kind={result.errors.length && !result.created_offers && !result.updated_offers ? 'error' : 'ok'}>
@@ -36,10 +36,11 @@ export default function PriceList() {
       <input placeholder={t('search')} value={filter} onChange={e => setFilter(e.target.value)} style={{ maxWidth: 360 }} />
       {res.loading ? <Spinner /> : !rows.length ? <Empty>{t('no_results')}</Empty> : (
         <div className="card pad-0"><div className="t-wrap"><table>
-          <thead><tr><th>{t('products')}</th><th>{t('city')}</th><th>{t('price')} ({t('ex_vat')})</th><th>{t('min_qty')}</th><th>{t('stock')}</th><th>{t('updated')}</th><th></th></tr></thead>
+          <thead><tr><th>{t('products')}</th><th>{t('city')}</th><th>{t('price_basis')}</th><th>{t('price')} ({t('ex_vat')})</th><th>{t('min_qty')}</th><th>{t('stock')}</th><th>{t('updated')}</th><th></th></tr></thead>
           <tbody>{rows.map(o => <tr key={o.id}>
             <td>{name(o.product!)}<div className="small muted">{o.product?.brand} · <span className="ltr">{o.product?.sku}</span> · {o.unit}</div></td>
             <td>{o.city}</td>
+            <td>{o.rental_period ? <span className="badge warn">{t('basis_' + o.rental_period)}</span> : <span className="badge">{t('sale')}</span>}</td>
             <td><input type="number" step="0.01" defaultValue={o.price_ex_vat} style={{ width: 110 }} onBlur={e => Number(e.target.value) !== o.price_ex_vat && Number(e.target.value) > 0 && quick(o, { price: Number(e.target.value), includes_vat: false })} /></td>
             <td className="num">{o.min_qty}</td>
             <td><select value={o.stock_status} style={{ width: 'auto' }} onChange={e => quick(o, { stock_status: e.target.value })}>{['in_stock', 'limited', 'out_of_stock'].map(s => <option key={s} value={s}>{t(s)}</option>)}</select></td>
@@ -60,6 +61,7 @@ export default function PriceList() {
             <div className="field"><label>{t('city')}</label><input value={f.city} onChange={e => setF({ ...f, city: e.target.value })} placeholder={lang === 'ar' ? 'افتراضي: مدينتك' : 'default: your city'} /></div>
             <div className="field"><label>{t('min_qty')}</label><input type="number" min="1" value={f.min_qty} onChange={e => setF({ ...f, min_qty: Number(e.target.value) })} /></div>
             <div className="field"><label>{t('stock')}</label><select value={f.stock_status} onChange={e => setF({ ...f, stock_status: e.target.value })}>{['in_stock', 'limited', 'out_of_stock'].map(s => <option key={s} value={s}>{t(s)}</option>)}</select></div>
+            <div className="field"><label>{t('price_basis')}</label><select value={f.rental_period} onChange={e => setF({ ...f, rental_period: e.target.value })}><option value="">{t('basis_sale')}</option><option value="day">{t('basis_day')}</option><option value="week">{t('basis_week')}</option><option value="month">{t('basis_month')}</option></select></div>
           </div>
           <div className="row" style={{ marginBottom: 12 }}><label className="row" style={{ width: 'auto' }}><input type="checkbox" style={{ width: 'auto' }} checked={f.includes_vat} onChange={e => setF({ ...f, includes_vat: e.target.checked })} /> {t('inc_vat')}</label><label className="row" style={{ width: 'auto' }}><input type="checkbox" style={{ width: 'auto' }} checked={f.delivery_included} onChange={e => setF({ ...f, delivery_included: e.target.checked })} /> {t('delivery')}</label></div>
           <button className="btn" disabled={!picked}>{t('save')}</button>

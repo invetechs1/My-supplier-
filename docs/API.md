@@ -14,7 +14,7 @@ Base URL: `/api/v1`. Auth: `Authorization: Bearer <token>` from `/auth/login` or
 | Method | Path | Notes |
 |---|---|---|
 | GET | /catalog/categories | tree with product counts |
-| GET | /catalog/products | `q, category_id, city, brand, sort=relevance|price_asc|price_desc|offers, page, size, only_with_offers` → items with `summary` |
+| GET | /catalog/products | `q, category_id, city, brand, sort=relevance|price_asc|price_desc|offers, page, size, only_with_offers` → items with `summary` (`basis` = '' for sale prices or day/week/month for rental-only items; `rental_min_price`/`rental_basis` when both exist) |
 | GET | /catalog/products/{id} | offers sorted by ex-VAT price, 90-day history, related |
 | GET | /catalog/compare?ids=1,2,3 | side-by-side |
 | GET | /catalog/brands · /catalog/cities | filter values |
@@ -28,7 +28,7 @@ Base URL: `/api/v1`. Auth: `Authorization: Bearer <token>` from `/auth/login` or
 | GET | /suppliers · /suppliers/{id} · /suppliers/{id}/offers | public |
 | GET/PUT | /suppliers/me | supplier |
 | GET | /suppliers/me/dashboard | supplier KPIs |
-| GET/POST | /suppliers/me/offers | list / upsert (product_id + city unique) |
+| GET/POST | /suppliers/me/offers | list / upsert (product_id + city + `rental_period` unique; `rental_period` '' = sale, day/week/month = rental) |
 | PATCH/DELETE | /suppliers/me/offers/{id} | |
 | POST | /suppliers/me/offers/import | multipart CSV/JSON — columns: `sku, product_name, name_ar, category, unit, price, city, min_qty, includes_vat, stock_status, notes` |
 

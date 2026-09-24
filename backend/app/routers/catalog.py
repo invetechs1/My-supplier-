@@ -69,7 +69,7 @@ def product_detail(product_id: int, city: str | None = None, db: Session = Depen
     if not p or not p.is_active:
         raise HTTPException(404, "Product not found")
     offers = pricing.active_offers_query(db, product_id, city).all()
-    offers.sort(key=lambda o: (pricing.offer_prices(o)[0], not o.supplier.verified))
+    offers.sort(key=lambda o: (o.rental_period != '', o.rental_period, pricing.offer_prices(o)[0], not o.supplier.verified))
     related = db.query(Product).filter(Product.category_id == p.category_id, Product.id != p.id, Product.is_active.is_(True)).limit(6).all()
     rel_summaries = pricing.bulk_summaries(db, [r.id for r in related], city)
     out = ProductDetailOut(**product_out(p, pricing.summarize(db, product_id, city)).model_dump())

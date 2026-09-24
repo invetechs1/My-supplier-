@@ -16,7 +16,7 @@ export function ProductRow({ p, onPress }: { p: Product; onPress: () => void }) 
       <Text style={S.muted}>{p.brand || p.sku} · {p.unit} · {nm({ name_ar: p.category_name_ar, name_en: p.category_name_en })}</Text>
       {s && s.offer_count > 0 ? (
         <View style={[S.row, S.between, { marginTop: 6 }]}>
-          <View><Text style={S.price}>{money(s.min_price)}</Text><Text style={S.muted}>{t('avg')} {money(s.avg_price)} · {s.offer_count} {t('offers')}</Text></View>
+          <View><Text style={S.price}>{money(s.min_price)}{s.basis ? ' ' + t('per_' + s.basis) : ''}</Text><Text style={S.muted}>{s.basis ? t('rent') : `${t('avg')} ${money(s.avg_price)}`}{!s.basis && s.rental_min_price != null ? ` · ${t('rent_from')} ${money(s.rental_min_price)} ${t('per_' + (s.rental_basis || 'day'))}` : ''} · {s.offer_count} {t('offers')}</Text></View>
           {(!user || user.role === 'buyer') && <TouchableOpacity style={S.btnGhost} onPress={() => addQuote(p)}><Text style={S.btnGhostText}>{added ? t('added') : '+ ' + t('add_to_rfq')}</Text></TouchableOpacity>}
         </View>
       ) : <Text style={S.muted}>{t('no_data')}</Text>}

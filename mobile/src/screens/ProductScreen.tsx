@@ -45,7 +45,7 @@ export default function ProductScreen({ route, navigation }: any) {
           </View>
           <Text style={S.muted}>{o.city} · {t('min_qty')} {o.min_qty} · <Status s={o.stock_status} /></Text>
           <View style={[S.row, S.between, { marginTop: 6 }]}>
-            <View><Text style={S.price}>{money(o.price_ex_vat)} <Text style={S.muted}>/ {o.unit || p.unit}</Text></Text><Text style={S.muted}>{t('inc_vat')}: {money(o.price_inc_vat)}</Text></View>
+            <View><Text style={S.price}>{money(o.price_ex_vat)} <Text style={S.muted}>{o.rental_period ? t('per_' + o.rental_period) : `/ ${o.unit || p.unit}`}</Text></Text>{!!o.rental_period && <Text style={[S.badge, { alignSelf: 'flex-start' }]}>{t('rent')}</Text>}<Text style={S.muted}>{t('inc_vat')}: {money(o.price_inc_vat)}</Text></View>
             {o.supplier?.is_external ? (o.supplier && (o as any).source_url ? <Btn ghost title="↗" onPress={() => Linking.openURL((o as any).source_url)} /> : null)
               : (!user || user.role === 'buyer') ? <Btn title={t('confirm')} onPress={() => { setOrder(o); setQty(String(o.min_qty)); }} /> : null}
           </View>

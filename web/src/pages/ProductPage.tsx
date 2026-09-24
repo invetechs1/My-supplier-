@@ -45,7 +45,7 @@ export default function ProductPage() {
         <div>
           <h1>{name(p)}</h1>
           <div className="muted">{p.brand && <span>{p.brand} · </span>}<span className="ltr">{p.sku}</span> · {t('unit')}: {p.unit}</div>
-          {Object.keys(p.spec).filter(k => k !== 'base_price').length > 0 && <div className="row small" style={{ marginTop: 6 }}>{Object.entries(p.spec).filter(([k]) => k !== 'base_price').map(([k, v]) => <Badge key={k} kind="neutral">{k}: {String(v)}</Badge>)}</div>}
+          {Object.keys(p.spec).filter(k => !k.startsWith('base_')).length > 0 && <div className="row small" style={{ marginTop: 6 }}>{Object.entries(p.spec).filter(([k]) => !k.startsWith('base_')).map(([k, v]) => <Badge key={k} kind="neutral">{k}: {String(v)}</Badge>)}</div>}
         </div>
         <div className="row">
           <select style={{ width: 'auto' }} value={city} onChange={e => { const n = new URLSearchParams(sp); e.target.value ? n.set('city', e.target.value) : n.delete('city'); setSp(n) }}>
@@ -57,7 +57,8 @@ export default function ProductPage() {
       </div>
       {msg && <Alert kind={msg.kind}>{msg.text}</Alert>}
       <div className="kpi-grid" style={{ margin: '16px 0' }}>
-        <div className="stat"><div className="v">{s.min_price?.toLocaleString('en-US', { minimumFractionDigits: 2 }) ?? '—'}</div><div className="l">{t('best_price')} ({t('sar')}, {t('ex_vat')})</div></div>
+        <div className="stat"><div className="v">{s.min_price?.toLocaleString('en-US', { minimumFractionDigits: 2 }) ?? '—'}</div><div className="l">{s.basis ? `${t('best_price')} — ${t('basis_' + s.basis)}` : `${t('best_price')} (${t('sar')}, ${t('ex_vat')})`}</div></div>
+        {!s.basis && s.rental_min_price != null && <div className="stat"><div className="v">{s.rental_min_price.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div><div className="l">{t('rent_from')} {t('per_' + (s.rental_basis || 'day'))}</div></div>}
         <div className="stat"><div className="v">{s.avg_price?.toLocaleString('en-US', { minimumFractionDigits: 2 }) ?? '—'}</div><div className="l">{t('avg_price')}</div></div>
         <div className="stat"><div className="v">{s.max_price?.toLocaleString('en-US', { minimumFractionDigits: 2 }) ?? '—'}</div><div className="l">{lang === 'ar' ? 'أعلى سعر' : 'Highest'}</div></div>
         <div className="stat"><div className="v">{s.offer_count}</div><div className="l">{t('offers')} · {s.supplier_count} {t('suppliers')}</div></div>
@@ -66,7 +67,7 @@ export default function ProductPage() {
 
       <div className="card pad-0">
         <div className="t-wrap"><table>
-          <thead><tr><th>#</th><th>{t('supplier')}</th><th>{t('city')}</th><th>{t('price')} ({t('ex_vat')})</th><th>{t('inc_vat')}</th><th>{t('min_qty')}</th><th>{t('stock')}</th><th>{t('updated')}</th><th></th></tr></thead>
+          <thead><tr><th>#</th><th>{t('supplier')}</th><th>{t('city')}</th><th>{t('price_basis')}</th><th>{t('price')} ({t('ex_vat')})</th><th>{t('inc_vat')}</th><th>{t('min_qty')}</th><th>{t('stock')}</th><th>{t('updated')}</th><th></th></tr></thead>
           <tbody>
             {p.offers.map((o, i) => (
               <tr key={o.id} className={i === 0 ? 'hl' : ''}>
@@ -79,7 +80,8 @@ export default function ProductPage() {
                   {o.delivery_included && <span> <Badge kind="info">{t('delivery')}</Badge></span>}
                 </td>
                 <td>{o.city}</td>
-                <td className="bold"><Money v={o.price_ex_vat} /> <span className="muted small">/ {o.unit || p.unit}</span></td>
+                <td>{o.rental_period ? <span className="badge warn">{t('basis_' + o.rental_period)}</span> : <span className="badge">{t('sale')}</span>}</td>
+                <td className="bold"><Money v={o.price_ex_vat} /> <span className="muted small">{o.rental_period ? t('per_' + o.rental_period) : `/ ${o.unit || p.unit}`}</span></td>
                 <td className="muted"><Money v={o.price_inc_vat} /></td>
                 <td className="num">{o.min_qty}</td>
                 <td><Status s={o.stock_status} /></td>
@@ -88,7 +90,7 @@ export default function ProductPage() {
                   : (!user || user.role === 'buyer') ? <button className="btn sm" onClick={() => { setOrder(o); setQty(o.min_qty) }}>{t('buy_now')}</button> : null}</td>
               </tr>
             ))}
-            {p.offers.length === 0 && <tr><td colSpan={9} className="muted" style={{ textAlign: 'center' }}>{t('no_results')}</td></tr>}
+            {p.offers.length === 0 && <tr><td colSpan={10} className="muted" style={{ textAlign: 'center' }}>{t('no_results')}</td></tr>}
           </tbody>
         </table></div>
       </div>
@@ -100,7 +102,7 @@ export default function ProductPage() {
 
       {order && (
         <Modal title={`${t('buy_now')} — ${order.supplier?.name}`} onClose={() => setOrder(null)}>
-          <div className="field"><label>{t('quantity')} ({order.unit || p.unit}, {t('min_qty')} {order.min_qty})</label><input type="number" min={order.min_qty} value={qty} onChange={e => setQty(Number(e.target.value))} /></div>
+          <div className="field"><label>{order.rental_period ? `${t('quantity')} (${t('basis_' + order.rental_period)})` : `${t('quantity')} (${order.unit || p.unit}, ${t('min_qty')} ${order.min_qty})`}</label><input type="number" min={order.min_qty} value={qty} onChange={e => setQty(Number(e.target.value))} /></div>
           <div className="field"><label>{t('delivery_address')}</label><input value={addr} onChange={e => setAddr(e.target.value)} /></div>
           <div className="stack small" style={{ marginBottom: 12 }}>
             <div className="row between"><span>{t('subtotal')}</span><Money v={order.price_ex_vat * qty} /></div>

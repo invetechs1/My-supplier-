@@ -16,8 +16,8 @@ export function ProductCard({ p }: { p: Product }) {
       <div className="muted small">{p.brand || p.sku} · {p.unit}</div>
       {s && s.offer_count > 0 ? (
         <>
-          <div className="p">{s.min_price?.toLocaleString('en-US', { minimumFractionDigits: 2 })} <span style={{ fontSize: '.8rem' }}>{t('sar')}</span></div>
-          <div className="muted small">{t('avg_price')}: <Money v={s.avg_price} /> · {s.offer_count} {t('offers')} · {s.supplier_count} {t('suppliers')}</div>
+          <div className="p">{s.min_price?.toLocaleString('en-US', { minimumFractionDigits: 2 })} <span style={{ fontSize: '.8rem' }}>{t('sar')}{s.basis ? ' ' + t('per_' + s.basis) : ''}</span></div>
+          <div className="muted small">{s.basis ? <span className="badge warn">{t('rent')}</span> : <>{t('avg_price')}: <Money v={s.avg_price} /></>}{!s.basis && s.rental_min_price != null && <> · <span className="badge warn">{t('rent_from')} {s.rental_min_price.toLocaleString('en-US')} {t('per_' + (s.rental_basis || 'day'))}</span></>} · {s.offer_count} {t('offers')} · {s.supplier_count} {t('suppliers')}</div>
         </>
       ) : <div className="muted small">{t('no_results')}</div>}
       {(!user || user.role === 'buyer') && (

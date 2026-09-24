@@ -143,6 +143,9 @@ class PriceSummary(BaseModel):
     last_updated: Optional[datetime] = None
     change_30d_pct: Optional[float] = None
     cities: list[str] = []
+    basis: str = ""  # '' = sale price per unit | day | week | month = rental price
+    rental_min_price: Optional[float] = None
+    rental_basis: str = ""
 
 
 class ProductOut(ORM):
@@ -188,6 +191,7 @@ class OfferOut(ORM):
     includes_vat: bool
     delivery_included: bool
     stock_status: str
+    rental_period: str = ""
     valid_until: Optional[datetime]
     source: str
     source_name: str
@@ -262,6 +266,7 @@ class OfferIn(BaseModel):
     includes_vat: bool = False
     delivery_included: bool = False
     stock_status: str = Field(default="in_stock", pattern="^(in_stock|limited|out_of_stock)$")
+    rental_period: str = Field(default="", pattern="^(|day|week|month)$")
     valid_until: Optional[datetime] = None
     notes: str = ""
 
@@ -273,6 +278,7 @@ class OfferUpdateIn(BaseModel):
     includes_vat: Optional[bool] = None
     delivery_included: Optional[bool] = None
     stock_status: Optional[str] = Field(default=None, pattern="^(in_stock|limited|out_of_stock)$")
+    rental_period: Optional[str] = Field(default=None, pattern="^(|day|week|month)$")
     valid_until: Optional[datetime] = None
     notes: Optional[str] = None
 

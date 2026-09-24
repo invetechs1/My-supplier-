@@ -31,10 +31,28 @@ def active_offers_query(db: Session, product_id: int | None = None, city: str | 
     return q
 
 
+def split_basis(offers: list[Offer]) -> tuple[list[Offer], str, dict]:
+    """Sale offers are compared with sale offers; if a product is only rented, compare per the most common rental basis.
+    Returns (offers used for the main stats, basis, extra rental info)."""
+    sale = [o for o in offers if not o.rental_period]
+    rent = [o for o in offers if o.rental_period]
+    extra = {}
+    if rent:
+        _pref = {"day": 3, "week": 2, "month": 1}
+        basis = max({o.rental_period for o in rent}, key=lambda b: (sum(1 for o in rent if o.rental_period == b), _pref.get(b, 0)))
+        same = [o for o in rent if o.rental_period == basis]
+        extra = {"rental_min_price": round(min(offer_prices(o)[0] for o in same), 2), "rental_basis": basis}
+    if sale:
+        return sale, "", extra
+    return [o for o in rent if o.rental_period == extra["rental_basis"]], extra["rental_basis"], extra
+
+
 def summarize(db: Session, product_id: int, city: str | None = None) -> dict:
     offers = active_offers_query(db, product_id, city).all()
     if not offers:
         return {"offer_count": 0, "supplier_count": 0, "registered_supplier_count": 0, "cities": []}
+    all_offers = offers
+    offers, basis, extra = split_basis(offers)
     prices = [offer_prices(o)[0] for o in offers]
     suppliers = {o.supplier_id for o in offers}
     registered = {o.supplier_id for o in offers if o.supplier and not o.supplier.is_external}
@@ -49,12 +67,14 @@ def summarize(db: Session, product_id: int, city: str | None = None) -> dict:
         "max_price": round(max(prices), 2),
         "avg_price": round(avg_now, 2),
         "median_price": round(median(prices), 2),
-        "offer_count": len(offers),
-        "supplier_count": len(suppliers),
-        "registered_supplier_count": len(registered),
-        "last_updated": max(o.updated_at for o in offers),
+        "offer_count": len(all_offers),
+        "supplier_count": len({o.supplier_id for o in all_offers}),
+        "registered_supplier_count": len({o.supplier_id for o in all_offers if o.supplier and not o.supplier.is_external}),
+        "last_updated": max(o.updated_at for o in all_offers),
         "change_30d_pct": change,
-        "cities": cities,
+        "cities": sorted({o.city for o in all_offers if o.city}),
+        "basis": basis,
+        **extra,
     }
 
 
@@ -75,21 +95,24 @@ def bulk_summaries(db: Session, product_ids: list[int], city: str | None = None)
     past = dict(hist_q.group_by(PriceHistory.product_id).all())
     out = {}
     for pid in product_ids:
-        offers = grouped.get(pid, [])
-        if not offers:
+        all_offers = grouped.get(pid, [])
+        if not all_offers:
             out[pid] = {"offer_count": 0, "supplier_count": 0, "registered_supplier_count": 0, "cities": []}
             continue
+        offers, basis, extra = split_basis(all_offers)
         prices = [offer_prices(o)[0] for o in offers]
         out[pid] = {
             "min_price": round(min(prices), 2),
             "max_price": round(max(prices), 2),
             "avg_price": round(sum(prices) / len(prices), 2),
             "median_price": round(median(prices), 2),
-            "offer_count": len(offers),
-            "supplier_count": len({o.supplier_id for o in offers}),
-            "registered_supplier_count": len({o.supplier_id for o in offers if o.supplier and not o.supplier.is_external}),
-            "last_updated": max(o.updated_at for o in offers),
-            "cities": sorted({o.city for o in offers if o.city}),
+            "offer_count": len(all_offers),
+            "supplier_count": len({o.supplier_id for o in all_offers}),
+            "registered_supplier_count": len({o.supplier_id for o in all_offers if o.supplier and not o.supplier.is_external}),
+            "last_updated": max(o.updated_at for o in all_offers),
+            "cities": sorted({o.city for o in all_offers if o.city}),
+            "basis": basis,
+            **extra,
         }
         avg_now = out[pid]["avg_price"]
         out[pid]["change_30d_pct"] = round((avg_now - past[pid]) / past[pid] * 100, 2) if past.get(pid) else None
@@ -109,6 +132,8 @@ def history_series(db: Session, product_id: int, days: int = 90, city: str | Non
 
 
 def record_history(db: Session, offer: Offer) -> None:
+    if offer.rental_period:
+        return
     ex, _ = offer_prices(offer)
     db.add(PriceHistory(product_id=offer.product_id, supplier_id=offer.supplier_id, city=offer.city, price=ex))
 

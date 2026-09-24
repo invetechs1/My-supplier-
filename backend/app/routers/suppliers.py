@@ -91,7 +91,8 @@ def upsert_offer(body: OfferIn, supplier: Supplier = Depends(get_my_supplier), d
     if not product:
         raise HTTPException(404, "Product not found")
     city = body.city or supplier.city
-    offer = db.query(Offer).filter(Offer.supplier_id == supplier.id, Offer.product_id == product.id, Offer.city == city).first()
+    offer = db.query(Offer).filter(Offer.supplier_id == supplier.id, Offer.product_id == product.id, Offer.city == city,
+                                   Offer.rental_period == body.rental_period).first()
     data = body.model_dump()
     data["city"] = city
     data["unit"] = data["unit"] or product.unit

@@ -98,7 +98,7 @@ class Product(Base):
 class Offer(Base):
     """A supplier's current price for a product in a given city."""
     __tablename__ = "offers"
-    __table_args__ = (UniqueConstraint("supplier_id", "product_id", "city", name="uq_offer_supplier_product_city"),)
+    __table_args__ = (UniqueConstraint("supplier_id", "product_id", "city", "rental_period", name="uq_offer_supplier_product_city_basis"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), index=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
@@ -110,6 +110,7 @@ class Offer(Base):
     includes_vat: Mapped[bool] = mapped_column(Boolean, default=False)
     delivery_included: Mapped[bool] = mapped_column(Boolean, default=False)
     stock_status: Mapped[str] = mapped_column(String(20), default="in_stock")  # in_stock | limited | out_of_stock
+    rental_period: Mapped[str] = mapped_column(String(10), default="", index=True)  # '' = sale | day | week | month (equipment rental)
     valid_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     source: Mapped[str] = mapped_column(String(20), default="supplier")  # supplier | import | external
     source_name: Mapped[str] = mapped_column(String(160), default="")

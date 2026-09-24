@@ -2,7 +2,7 @@
 
 Accepted columns (case-insensitive, extra columns ignored):
   sku | product_name | name_ar | name_en | brand | category | unit | price | city |
-  min_qty | includes_vat | stock_status | supplier | supplier_url | notes
+  min_qty | includes_vat | stock_status | rental_period (day|week|month, empty = sale) | supplier | supplier_url | notes
 Rows are matched to an existing product by sku, else by exact name (ar or en). Unknown
 products are created under the given category slug (or "other").
 """
@@ -119,12 +119,15 @@ def import_rows(db: Session, rows: list[dict], supplier: Supplier | None = None,
                 result["errors"].append(f"row {idx}: product or supplier could not be resolved")
                 continue
             city = str(row.get("city") or default_city or sup.city or "")
-            offer = db.query(Offer).filter(Offer.supplier_id == sup.id, Offer.product_id == product.id, Offer.city == city).first()
+            rp = str(row.get("rental_period") or "").lower()
+            rp = rp if rp in ("day", "week", "month") else ""
+            offer = db.query(Offer).filter(Offer.supplier_id == sup.id, Offer.product_id == product.id, Offer.city == city, Offer.rental_period == rp).first()
             payload = dict(
                 price=price, unit=str(row.get("unit") or product.unit), city=city,
                 min_qty=_to_float(row.get("min_qty")) or 1,
                 includes_vat=str(row.get("includes_vat", "")).lower() in _TRUE,
                 stock_status=str(row.get("stock_status") or "in_stock"),
+                rental_period=str(row.get("rental_period") or "").lower() if str(row.get("rental_period") or "").lower() in ("day", "week", "month") else "",
                 source=source if not sup.is_external else "external",
                 source_name=source_name or str(row.get("supplier") or ""),
                 source_url=str(row.get("supplier_url") or ""),

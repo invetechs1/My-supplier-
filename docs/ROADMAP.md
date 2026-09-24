@@ -17,6 +17,9 @@
 - Bill-of-quantities import (Excel/CSV) into an RFQ with automatic product matching; bid comparison export to Excel.
 - Order disputes (buyer or supplier) with admin resolution and optional refund; Sentry error monitoring hook.
 
+## Shipped in v1.3
+- Construction equipment catalog: 16 new top-level categories (heavy equipment, generators & compressors, concrete & rebar equipment, scaffolding & formwork, lifting, safety & PPE & fire, surveying, site facilities, HVAC, glass & aluminium, roads & asphalt, landscaping, steel structures & prefab, finishes, construction chemicals, spare parts & consumables) with 159 products; sale and rental (day/week/month) pricing on offers compared per basis; incremental seeding; demo equipment-rental, safety and prefab suppliers.
+
 ## Next (in priority order)
 1. **Production hardening**: Redis-backed rate limiting and job locks for multi-replica deployments; private bucket + signed URLs for supplier documents.
 2. **Payments phase 2**: ZATCA phase‑2 e-invoicing (XML, signing, clearance), Tabby/Tamara BNPL for buyers, automated payouts via bank API, HyperPay as a second gateway.
