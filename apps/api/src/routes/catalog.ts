@@ -202,7 +202,7 @@ router.get(
   "/suppliers/:id/reviews",
   asyncHandler(async (req, res) => {
     const { page, pageSize, skip, take } = paginate(req.query);
-    const where = { companyId: req.params.id };
+    const where = { companyId: req.params.id, hidden: false };
     const [total, items] = await Promise.all([
       prisma.review.count({ where }),
       prisma.review.findMany({ where, include: { buyer: { select: { id: true, name: true, company: { select: { id: true, name: true } } } } }, orderBy: { createdAt: "desc" }, skip, take }),
@@ -221,7 +221,7 @@ router.get(
       prisma.bid.count({ where: { companyId: company.id } }),
       prisma.bid.count({ where: { companyId: company.id, status: "ACCEPTED" } }),
       prisma.order.count({ where: { companyId: company.id, status: "DELIVERED" } }),
-      prisma.review.findMany({ where: { companyId: company.id }, include: { buyer: { select: { id: true, name: true, company: { select: { id: true, name: true } } } } }, orderBy: { createdAt: "desc" }, take: 10 }),
+      prisma.review.findMany({ where: { companyId: company.id, hidden: false }, include: { buyer: { select: { id: true, name: true, company: { select: { id: true, name: true } } } } }, orderBy: { createdAt: "desc" }, take: 10 }),
     ]);
     const { bankName: _b, iban: _i, beneficiary: _bn, verificationNotes: _vn, commissionPct: _c, ...publicCompany } = company;
     res.json(serialize({ ...publicCompany, listings, reviews, stats: { listings: listings.length, bids, wonBids, ordersDelivered, memberSince: company.createdAt } }));

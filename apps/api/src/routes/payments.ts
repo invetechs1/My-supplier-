@@ -9,6 +9,7 @@ import { asyncHandler } from "../middleware/errorHandler";
 import { userFromToken, requireAuth } from "../middleware/auth";
 import { badRequest, forbidden, notFound, unauthorized } from "../lib/errors";
 import { serialize } from "../lib/serialize";
+import { audit } from "../lib/audit";
 import { cardPaymentsEnabled, fetchMoyasarPayment, refundMoyasarPayment, toHalalas } from "../services/payments";
 import { requireCompanyRole } from "../services/portal";
 import { companyUserIds, notify } from "../services/notifications";
@@ -201,6 +202,7 @@ router.post(
     const updated = await prisma.order.update({ where: { id: order.id }, data: { paymentStatus: "REFUNDED", ...(order.status !== "DELIVERED" ? { status: "CANCELLED" } : {}) }, include: orderInclude });
     await recordOrderEvent(order.id, "PAYMENT", { message: `Refunded SAR ${refundAmount.toLocaleString("en-US")} – ${reason}`, userId: req.user!.id });
     await notify({ userIds: [order.buyerId], type: "ORDER_UPDATE", title: `Refund issued for ${order.reference}`, body: `SAR ${refundAmount.toLocaleString("en-US")} – ${reason}`, link: `/dashboard/orders/${order.id}` });
+    await audit(req, "payment.refund", "Order", order.id, { reference: order.reference, amount: refundAmount, reason, method: order.paymentMethod });
     res.json(serialize({ order: updated, payment, refundedAmount: refundAmount }));
   }),
 );

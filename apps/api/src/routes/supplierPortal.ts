@@ -8,6 +8,7 @@ import { asyncHandler } from "../middleware/errorHandler";
 import { requireAuth, requireCompany } from "../middleware/auth";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { serialize } from "../lib/serialize";
+import { audit } from "../lib/audit";
 import { paged, paginate } from "../lib/pagination";
 import { assertMagicBytes, privatePath, publicUrl, uploader } from "../lib/uploads";
 import { escapeHtml, layout, sendMail } from "../services/mailer";
@@ -501,7 +502,9 @@ router.patch(
   requireAuth("ADMIN"),
   asyncHandler(async (req, res) => {
     const patch = z.object({ commissionPct: z.coerce.number().min(0).max(50).optional(), payoutDayOfWeek: z.coerce.number().int().min(0).max(6).optional(), lowStockThresholdDefault: z.coerce.number().int().min(0).optional() }).parse(req.body);
-    res.json(await saveSettings(patch));
+    const saved = await saveSettings(patch);
+    await audit(req, "settings.update", "PlatformSetting", null, patch as Record<string, unknown>);
+    res.json(saved);
   }),
 );
 
@@ -548,6 +551,7 @@ router.patch(
       const users = await prisma.user.findMany({ where: { companyId: payout.companyId, active: true, OR: [{ companyRole: { in: ["OWNER", "MANAGER"] } }, { companyRole: null }] }, select: { id: true } });
       await notify({ userIds: users.map((u) => u.id), type: "SYSTEM", title: `Payout of SAR ${Number(payout.amount).toLocaleString("en-US")} sent`, body: `Reference ${reference ?? payout.id} for ${payout.orderCount} delivered order(s).`, link: "/supplier/finance" });
     }
+    await audit(req, status === "PAID" ? "payout.paid" : "payout.update", "Payout", payout.id, { companyId: payout.companyId, amount: Number(payout.amount), reference: reference ?? null });
     res.json(serialize(payout));
   }),
 );

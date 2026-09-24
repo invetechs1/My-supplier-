@@ -30,6 +30,7 @@ import opsRoutes from "./routes/ops";
 import otpRoutes from "./routes/otp";
 import shippingRoutes from "./routes/shipping";
 import einvoiceRoutes from "./routes/einvoice";
+import adminCommerceRoutes from "./routes/adminCommerce";
 
 export function createApp() {
   initSentry();
@@ -70,6 +71,7 @@ export function createApp() {
   api.use(orderRoutes);
   api.use(notificationRoutes);
   api.use(adminRoutes);
+  api.use(adminCommerceRoutes);
   app.use("/api/v1", api);
   app.use("/uploads", express.static(PUBLIC_DIR, { maxAge: "7d", immutable: true }));
 

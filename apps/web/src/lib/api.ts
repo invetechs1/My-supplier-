@@ -1,4 +1,16 @@
 import type {
+  AdminPaymentsResponse,
+  AdminReports,
+  AdminReview,
+  AdminReviewsResponse,
+  AnnouncementPayload,
+  AuditLogEntry,
+  ContactMessage,
+  ContactMessagesResponse,
+  ContactPayload,
+  ContactStatus,
+  Coupon,
+  CouponPayload,
   AiConfig,
   ApiError,
   AuthResponse,
@@ -273,6 +285,10 @@ export type SupplierDetail = Company & {
 };
 
 export type AdminStats = PlatformStats & {
+  supportOpen?: number;
+  activeCoupons?: number;
+  hiddenReviews?: number;
+  unpaidOrders?: number;
   rfqsByStatus: Record<string, number>;
   recentOrders: Order[];
   topCategories: PriceIndexEntry[];
@@ -578,7 +594,7 @@ export const api = {
   shopBrands: () => request<string[]>("/shop/brands"),
 
   // Cart & checkout (auth)
-  cart: (deliveryCity?: string | null) => request<CartWithQuotes>("/cart", { query: { deliveryCity: deliveryCity || undefined } }),
+  cart: (deliveryCity?: string | null, coupon?: string | null) => request<CartWithQuotes>("/cart", { query: { deliveryCity: deliveryCity || undefined, coupon: coupon || undefined } }),
   addCartItem: (listingId: string, quantity: number) =>
     request<Cart>("/cart/items", { method: "POST", body: { listingId, quantity } }),
   updateCartItem: (id: string, quantity: number) =>
@@ -649,6 +665,21 @@ export const api = {
 
   // Admin
   adminStats: () => request<AdminStats>("/admin/stats"),
+  adminCoupons: () => request<Coupon[]>("/admin/coupons"),
+  adminCreateCoupon: (body: CouponPayload) => request<Coupon>("/admin/coupons", { method: "POST", body }),
+  adminUpdateCoupon: (id: string, body: Partial<CouponPayload>) => request<Coupon>(`/admin/coupons/${encodeURIComponent(id)}`, { method: "PATCH", body }),
+  adminDeleteCoupon: (id: string) => request<{ ok: boolean }>(`/admin/coupons/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  adminReviews: (query: { rating?: number; hidden?: "true" | "false" | ""; q?: string; page?: number } = {}) => request<AdminReviewsResponse>("/admin/reviews", { query }),
+  adminUpdateReview: (id: string, body: { hidden?: boolean; reply?: string | null }) => request<AdminReview>(`/admin/reviews/${encodeURIComponent(id)}`, { method: "PATCH", body }),
+  adminDeleteReview: (id: string) => request<{ ok: boolean }>(`/admin/reviews/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  adminPayments: (query: { status?: string; provider?: string; q?: string; page?: number } = {}) => request<AdminPaymentsResponse>("/admin/payments", { query }),
+  adminReports: (days = 30) => request<AdminReports>("/admin/reports", { query: { days } }),
+  adminAudit: (query: { entity?: string; action?: string; q?: string; page?: number } = {}) => request<Paginated<AuditLogEntry>>("/admin/audit", { query }),
+  adminAnnouncements: (query: { page?: number } = {}) => request<Paginated<AuditLogEntry>>("/admin/announcements", { query }),
+  adminSendAnnouncement: (body: AnnouncementPayload) => request<{ ok: boolean; recipients: number }>("/admin/announcements", { method: "POST", body }),
+  adminContactMessages: (query: { status?: ContactStatus | ""; q?: string; page?: number } = {}) => request<ContactMessagesResponse>("/admin/contact", { query }),
+  adminUpdateContactMessage: (id: string, body: { status?: ContactStatus; notes?: string | null }) => request<ContactMessage>(`/admin/contact/${encodeURIComponent(id)}`, { method: "PATCH", body }),
+  contact: (body: ContactPayload) => request<{ ok: boolean; id: string }>("/contact", { method: "POST", body }),
   adminUsers: (query: { q?: string; role?: Role | ""; page?: number } = {}) =>
     request<Paginated<User>>("/admin/users", { query }),
   adminUpdateUser: (id: string, body: { role?: Role; active?: boolean }) =>

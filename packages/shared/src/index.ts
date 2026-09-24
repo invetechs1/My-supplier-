@@ -7,7 +7,7 @@ export type PriceSource = "SUPPLIER" | "MARKET" | "IMPORTED" | "QUOTATION";
 export type RfqStatus = "OPEN" | "CLOSED" | "AWARDED" | "CANCELLED";
 export type BidStatus = "SUBMITTED" | "WITHDRAWN" | "ACCEPTED" | "REJECTED";
 export type OrderStatus = "PENDING" | "CONFIRMED" | "IN_TRANSIT" | "DELIVERED" | "CANCELLED";
-export type NotificationType = "NEW_RFQ" | "NEW_BID" | "BID_ACCEPTED" | "BID_REJECTED" | "ORDER_UPDATE" | "SYSTEM";
+export type NotificationType = "NEW_RFQ" | "NEW_BID" | "BID_ACCEPTED" | "BID_REJECTED" | "ORDER_UPDATE" | "SYSTEM" | "ANNOUNCEMENT";
 
 export const CURRENCY = "SAR";
 
@@ -456,6 +456,20 @@ export interface Cart {
   currency: string;
   /** Cheapest (or chosen) delivery quote per supplier id; present when a delivery city is known. */
   quotes?: Record<string, DeliveryQuote | null>;
+  /** Coupon discount applied to the subtotal (VAT is charged on subtotal minus discount). */
+  discount?: number;
+  coupon?: CartCoupon | null;
+  /** Why the requested coupon code was not applied, if any. */
+  couponError?: string | null;
+}
+
+export interface CartCoupon {
+  code: string;
+  type: CouponType;
+  value: number;
+  description?: string | null;
+  maxDiscount?: number | null;
+  minOrder?: number | null;
 }
 
 export interface OrderItem {
@@ -484,6 +498,8 @@ export interface OrderExtended extends Order {
   deliveryAddress?: string | null;
   contactPhone?: string | null;
   notes?: string | null;
+  discount?: number;
+  couponCode?: string | null;
 }
 
 export interface CheckoutPayload {
@@ -494,6 +510,8 @@ export interface CheckoutPayload {
   notes?: string;
   /** Carrier chosen per supplier id (from /shipping/quote); defaults to the cheapest quote. */
   carrierBySupplier?: Record<string, CarrierCode>;
+  /** Promotion code validated by GET /cart?coupon=; split pro rata across the per-supplier orders. */
+  couponCode?: string;
 }
 
 export interface CheckoutResult {
@@ -843,6 +861,7 @@ export interface Review {
   comment?: string | null;
   reply?: string | null;
   repliedAt?: string | null;
+  hidden?: boolean;
   createdAt: string;
 }
 
@@ -1037,4 +1056,166 @@ export interface ClientErrorReport {
   url?: string;
   userAgent?: string;
   platform?: "web" | "ios" | "android";
+}
+
+// ---------------------------------------------------------------- admin commerce (coupons, moderation, ledger, reports, audit, support)
+export type CouponType = "PERCENT" | "FIXED";
+
+export interface Coupon {
+  id: string;
+  code: string;
+  type: CouponType;
+  value: number;
+  description?: string | null;
+  minOrder?: number | null;
+  maxDiscount?: number | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  usageLimit?: number | null;
+  usedCount: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  /** Admin listing only: orders that used the code and total discount given. */
+  orders?: number;
+  discountGiven?: number;
+}
+
+export interface CouponPayload {
+  code: string;
+  type: CouponType;
+  value: number;
+  description?: string | null;
+  minOrder?: number | null;
+  maxDiscount?: number | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  usageLimit?: number | null;
+  active?: boolean;
+}
+
+export interface AdminReview extends Review {
+  hidden: boolean;
+  buyer: Pick<User, "id" | "name"> & { email?: string; company?: Pick<Company, "id" | "name"> | null };
+  company?: Pick<Company, "id" | "name"> & { slug?: string };
+  order?: { id: string; reference: string };
+}
+
+export interface AdminReviewsResponse extends Paginated<AdminReview> {
+  summary: { average: number; total: number; hidden: number };
+}
+
+export interface AdminPaymentRow {
+  id: string;
+  orderId: string;
+  provider: PaymentProvider;
+  providerPaymentId?: string | null;
+  amount: number;
+  currency: string;
+  status: PaymentRecordStatus;
+  createdAt: string;
+  order: {
+    id: string;
+    reference: string;
+    paymentMethod?: PaymentMethod | null;
+    paymentStatus: PaymentStatus;
+    total: number;
+    buyer: Pick<User, "id" | "name" | "email">;
+    company: Pick<Company, "id" | "name">;
+  };
+}
+
+export interface AdminPaymentsResponse extends Paginated<AdminPaymentRow> {
+  summary: Record<string, { count: number; amount: number }>;
+  outstanding: { count: number; amount: number };
+}
+
+export interface ReportBucket {
+  id: string;
+  name: string;
+  orders: number;
+  revenue: number;
+  quantity: number;
+}
+
+export interface AdminReports {
+  days: number;
+  since: string;
+  totals: {
+    gmv: number;
+    gmvChangePct: number | null;
+    orders: number;
+    ordersChangePct: number | null;
+    aov: number;
+    discounts: number;
+    activeBuyers: number;
+    newUsers: number;
+    newUsersChangePct: number | null;
+    rfqs: number;
+    bids: number;
+    rfqConversionPct: number;
+    paidShare: number;
+    supportOpen: number;
+  };
+  daily: { date: string; gmv: number; orders: number }[];
+  topProducts: ReportBucket[];
+  topSuppliers: ReportBucket[];
+  byCategory: ReportBucket[];
+  byCity: ReportBucket[];
+  byPaymentMethod: ReportBucket[];
+  byStatus: ReportBucket[];
+}
+
+export interface AuditLogEntry {
+  id: string;
+  actorId?: string | null;
+  actor?: Pick<User, "id" | "name" | "email" | "role"> | null;
+  action: string;
+  entity: string;
+  entityId?: string | null;
+  meta?: Record<string, unknown> | null;
+  ip?: string | null;
+  createdAt: string;
+}
+
+export type ContactStatus = "NEW" | "IN_PROGRESS" | "RESOLVED";
+
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  subject: string;
+  message: string;
+  status: ContactStatus;
+  notes?: string | null;
+  assigneeId?: string | null;
+  userId?: string | null;
+  user?: Pick<User, "id" | "name" | "role"> | null;
+  resolvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContactMessagesResponse extends Paginated<ContactMessage> {
+  summary: Record<ContactStatus, number>;
+}
+
+export interface ContactPayload {
+  name: string;
+  email: string;
+  phone?: string | null;
+  subject: string;
+  message: string;
+  orderRef?: string | null;
+  /** Honeypot: must stay empty. */
+  website?: string;
+}
+
+export interface AnnouncementPayload {
+  title: string;
+  body: string;
+  audience: "ALL" | "BUYERS" | "SUPPLIERS";
+  link?: string | null;
+  email?: boolean;
 }

@@ -12,6 +12,7 @@ import { DELIVERY_FEE_SAME_CITY, VAT_RATE, deliveryFee, isPurchasable, toOffer }
 import { round2 } from "../services/pricing";
 import { applyStockMovement, recordOrderEvent } from "../services/portal";
 import { carrierName, quoteForSupplier } from "../services/shipping";
+import { publicCoupon, splitDiscount, validateCoupon } from "../services/coupons";
 import type { CarrierCode } from "@prisma/client";
 
 const router = Router();
@@ -43,7 +44,7 @@ async function quotesFor(cart: CartRow, deliveryCity?: string, carrierBySupplier
   return out;
 }
 
-async function shapeCart(cart: CartRow, deliveryCity?: string, carrierBySupplier: Record<string, CarrierCode> = {}) {
+async function shapeCart(cart: CartRow, deliveryCity?: string, carrierBySupplier: Record<string, CarrierCode> = {}, couponCode?: string) {
   const items = cart.items.map((ci) => {
     const offer = toOffer(ci.listing);
     return { id: ci.id, listingId: ci.listingId, quantity: ci.quantity, offer, material: ci.listing.material, lineTotal: round2(offer.price * ci.quantity) };
@@ -53,8 +54,14 @@ async function shapeCart(cart: CartRow, deliveryCity?: string, carrierBySupplier
   for (const i of items) if (i.offer.companyId) supplierCities.set(i.offer.companyId, i.offer.city);
   const quotes = await quotesFor(cart, deliveryCity, carrierBySupplier);
   const fee = [...supplierCities.entries()].reduce((s, [companyId, c]) => s + (quotes[companyId]?.price ?? (deliveryCity ? deliveryFee(c, deliveryCity) : DELIVERY_FEE_SAME_CITY)), 0);
-  const vat = round2(subtotal * VAT_RATE);
-  return { id: cart.id, items, subtotal, vat, deliveryFee: round2(fee), total: round2(subtotal + vat + fee), supplierCount: supplierCities.size, currency: "SAR", quotes };
+  const check = await validateCoupon(couponCode, subtotal);
+  const discount = check?.ok ? check.discount : 0;
+  const vat = round2((subtotal - discount) * VAT_RATE);
+  return {
+    id: cart.id, items, subtotal, discount, vat, deliveryFee: round2(fee), total: round2(subtotal - discount + vat + fee), supplierCount: supplierCities.size, currency: "SAR", quotes,
+    coupon: check?.ok ? publicCoupon(check.coupon) : null,
+    couponError: check && !check.ok ? check.reason : null,
+  };
 }
 
 async function validatedListing(listingId: string, quantity: number) {
@@ -69,7 +76,8 @@ async function validatedListing(listingId: string, quantity: number) {
 
 router.get("/cart", asyncHandler(async (req, res) => {
   const cart = await getOrCreateCart(req.user!.id);
-  res.json(serialize(await shapeCart(cart, typeof req.query.deliveryCity === "string" ? req.query.deliveryCity : undefined)));
+  const q = z.object({ deliveryCity: z.string().optional(), coupon: z.string().max(32).optional() }).parse(req.query);
+  res.json(serialize(await shapeCart(cart, q.deliveryCity || undefined, {}, q.coupon || undefined)));
 }));
 
 router.post("/cart/items", asyncHandler(async (req, res) => {
@@ -113,6 +121,7 @@ const checkoutSchema = z.object({
   paymentMethod: z.enum(["COD", "BANK_TRANSFER", "CARD"]),
   notes: z.string().optional(),
   carrierBySupplier: z.record(z.enum(["SUPPLIER", "TRUKKER", "TRELLA", "SMSA", "ARAMEX", "SPL", "OTHER"])).optional(),
+  couponCode: z.string().max(32).optional(),
 });
 
 const orderInclude = { company: true, items: { include: { material: true } } } satisfies Prisma.OrderInclude;
@@ -134,18 +143,27 @@ router.post("/checkout", asyncHandler(async (req, res) => {
   }
 
   const quotes = await quotesFor(cart, body.deliveryCity, body.carrierBySupplier ?? {});
+  // Coupon: validated against the whole cart, then split across the per-supplier orders pro rata.
+  const groups = [...bySupplier.entries()];
+  const groupSubtotals = groups.map(([, items]) => round2(items.reduce((s, i) => s + Number(i.listing.price) * i.quantity, 0)));
+  const cartSubtotal = round2(groupSubtotals.reduce((s, v) => s + v, 0));
+  const couponCheck = await validateCoupon(body.couponCode, cartSubtotal);
+  if (couponCheck && !couponCheck.ok) throw badRequest(couponCheck.reason);
+  const discounts = splitDiscount(couponCheck?.ok ? couponCheck.discount : 0, groupSubtotals);
+  const couponCode = couponCheck?.ok ? couponCheck.coupon.code : null;
   const orders = [];
-  for (const [companyId, items] of bySupplier) {
+  for (const [gi, [companyId, items]] of groups.entries()) {
     const reference = await nextReference("ORD");
-    const subtotal = round2(items.reduce((s, i) => s + Number(i.listing.price) * i.quantity, 0));
-    const vat = round2(subtotal * VAT_RATE);
+    const subtotal = groupSubtotals[gi];
+    const discount = discounts[gi];
+    const vat = round2((subtotal - discount) * VAT_RATE);
     const quote = quotes[companyId] ?? null;
     const fee = quote?.price ?? deliveryFee(items[0].listing.city, body.deliveryCity);
-    const total = round2(subtotal + vat + fee);
+    const total = round2(subtotal - discount + vat + fee);
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
         data: {
-          reference, type: "DIRECT", buyerId: userId, companyId, subtotal, vat, deliveryFee: fee, total,
+          reference, type: "DIRECT", buyerId: userId, companyId, subtotal, vat, deliveryFee: fee, total, discount, couponCode,
           paymentMethod: body.paymentMethod, deliveryCity: body.deliveryCity, deliveryAddress: body.deliveryAddress,
           contactPhone: body.contactPhone, notes: body.notes,
           items: {
@@ -175,6 +193,7 @@ router.post("/checkout", asyncHandler(async (req, res) => {
     });
   }
   await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+  if (couponCode) await prisma.coupon.update({ where: { code: couponCode }, data: { usedCount: { increment: 1 } } });
   await notify({
     userIds: [userId], type: "ORDER_UPDATE", title: `Order${orders.length > 1 ? "s" : ""} placed`,
     body: `${orders.length} order(s) sent to ${orders.length} supplier(s).`, link: `/dashboard/orders`,

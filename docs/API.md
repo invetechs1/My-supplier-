@@ -242,6 +242,19 @@ Verification documents are now served only through `GET /supplier/company/docume
 | DELETE | `/admin/materials/:id` | `{ ok: true }` |
 | POST | `/admin/prices/import` | `{ sourceName, items: Array<{ sku, price, city, minQty?, leadTimeDays? }> }` -> imports MARKET listings from external price sources |
 
+## Admin commerce back office (role ADMIN)
+| Method | Path | Notes |
+|---|---|---|
+| GET/POST | `/admin/coupons`, `PATCH`/`DELETE /admin/coupons/:id` | Coupons & promotions: `{ code, type: PERCENT|FIXED, value, minOrder?, maxDiscount?, startsAt?, endsAt?, usageLimit?, active }`; listing includes `orders` and `discountGiven` |
+| GET | `/cart?coupon=CODE` | Cart quote with `discount`, `coupon` and `couponError`; `POST /checkout` accepts `couponCode` (discount split pro rata per supplier order, VAT on the discounted subtotal, `usedCount` incremented) |
+| GET | `/admin/reviews?rating=&hidden=&q=&page=` | `Paginated<AdminReview>` + `summary { average, total, hidden }`; `PATCH /admin/reviews/:id { hidden?, reply? }`, `DELETE`. Hidden reviews are excluded from public supplier pages |
+| GET | `/admin/payments?status=&provider=&q=&page=` | Payments ledger with `summary` per status and `outstanding` unpaid orders; refunds via `POST /payments/:orderId/refund` |
+| GET | `/admin/reports?days=30` | `AdminReports`: totals (GMV and change vs previous period, orders, AOV, active buyers, new users, RFQ conversion, paid share, discounts, open support), daily series, top products/suppliers, by category/city/payment method/status |
+| GET | `/admin/audit?entity=&action=&q=&page=` | Append-only audit log of privileged actions (user role changes, verification, settings, payouts, refunds, coupons, moderation, announcements, support) |
+| GET/POST | `/admin/announcements` | `POST { title, body, audience: ALL|BUYERS|SUPPLIERS, link?, email? }` notifies every active user in the audience (in-app + push, optional email); `GET` lists past sends |
+| POST | `/contact` | Public, rate limited: `{ name, email, phone?, subject, message, orderRef? }` creates a support ticket and notifies admins |
+| GET | `/admin/contact?status=&q=&page=` | Support inbox with `summary` by status; `PATCH /admin/contact/:id { status, notes }` |
+
 ## Demo accounts (seed)
 | Role | Email | Password |
 |---|---|---|

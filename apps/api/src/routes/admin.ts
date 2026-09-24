@@ -7,6 +7,7 @@ import { requireAuth } from "../middleware/auth";
 import { serialize } from "../lib/serialize";
 import { paged, paginate } from "../lib/pagination";
 import { platformStats, priceIndex, snapshotHistory } from "../services/catalog";
+import { audit } from "../lib/audit";
 
 const router = Router();
 router.use("/admin", requireAuth("ADMIN"));
@@ -14,6 +15,12 @@ router.use("/admin", requireAuth("ADMIN"));
 router.get(
   "/admin/stats",
   asyncHandler(async (_req, res) => {
+    const [supportOpen, activeCoupons, hiddenReviews, unpaidOrders] = await Promise.all([
+      prisma.contactMessage.count({ where: { status: { not: "RESOLVED" } } }),
+      prisma.coupon.count({ where: { active: true } }),
+      prisma.review.count({ where: { hidden: true } }),
+      prisma.order.count({ where: { paymentStatus: "UNPAID", status: { notIn: ["CANCELLED", "DELIVERED"] } } }),
+    ]);
     const [stats, byStatus, recentOrders, topCategories] = await Promise.all([
       platformStats(),
       prisma.rfq.groupBy({ by: ["status"], _count: { _all: true } }),
@@ -22,7 +29,7 @@ router.get(
     ]);
     const rfqsByStatus: Record<string, number> = { OPEN: 0, CLOSED: 0, AWARDED: 0, CANCELLED: 0 };
     for (const row of byStatus) rfqsByStatus[row.status] = row._count._all;
-    res.json(serialize({ ...stats, rfqsByStatus, recentOrders, topCategories }));
+    res.json(serialize({ ...stats, rfqsByStatus, recentOrders, topCategories, supportOpen, activeCoupons, hiddenReviews, unpaidOrders }));
   }),
 );
 
@@ -48,6 +55,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const data = z.object({ role: z.enum(["BUYER", "SUPPLIER", "ADMIN"]).optional(), active: z.boolean().optional() }).parse(req.body);
     const user = await prisma.user.update({ where: { id: req.params.id }, data, include: { company: true } });
+    await audit(req, "user.update", "User", user.id, data);
     res.json(serialize(user));
   }),
 );
@@ -74,6 +82,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const { verified } = z.object({ verified: z.boolean() }).parse(req.body);
     const company = await prisma.company.update({ where: { id: req.params.id }, data: { verified } });
+    await audit(req, verified ? "company.verify" : "company.unverify", "Company", company.id, { name: company.name });
     res.json(serialize(company));
   }),
 );

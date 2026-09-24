@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { SAUDI_CITIES, type CarrierCode, type CartItem, type CheckoutResult, type DeliveryQuote, type OrderExtended, type PaymentIntent, type PaymentMethod } from "@mysupplier/shared";
-import { api, errorMessage } from "@/lib/api";
+import { api, errorMessage, type CartWithQuotes } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { supplierKey, useCart } from "@/lib/cart";
 import { SupplierDeliveryChooser } from "@/components/shop/DeliveryOptions";
@@ -137,6 +137,30 @@ export default function CheckoutPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [payingCard, setPayingCard] = useState(false);
+  // Promotion code: validated server-side via GET /cart?coupon=; the priced cart replaces the plain cart in the summary.
+  const [couponInput, setCouponInput] = useState("");
+  const [couponCart, setCouponCart] = useState<CartWithQuotes | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponBusy, setCouponBusy] = useState(false);
+  const applyCoupon = async (code = couponInput) => {
+    const trimmed = code.trim().toUpperCase();
+    if (!trimmed) { setCouponCart(null); setCouponError(null); return; }
+    setCouponBusy(true);
+    try {
+      const priced = await api.cart(cartCity || undefined, trimmed);
+      if (priced.couponError || !priced.coupon) { setCouponCart(null); setCouponError(priced.couponError ?? "Coupon not valid"); }
+      else { setCouponCart(priced); setCouponError(null); setCouponInput(priced.coupon.code); }
+    } catch (err) {
+      setCouponCart(null); setCouponError(errorMessage(err, "Could not check the coupon"));
+    } finally { setCouponBusy(false); }
+  };
+  const removeCoupon = () => { setCouponInput(""); setCouponCart(null); setCouponError(null); };
+  // Re-price when the cart contents or city change while a coupon is applied.
+  useEffect(() => {
+    if (couponCart?.coupon) void applyCoupon(couponCart.coupon.code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart?.subtotal, cart?.items.length, cartCity]);
+  const priced = couponCart?.coupon ? couponCart : cart;
   /** Buyer's carrier choice per supplier id; `undefined` = keep the cart's default (cheapest) quote, `null` = supplier's own delivery. */
   const [chosen, setChosen] = useState<Record<string, DeliveryQuote | null | undefined>>({});
 
@@ -185,8 +209,8 @@ export default function CheckoutPage() {
         return sum + (pick.price - base);
       }, 0)
     : 0;
-  const deliveryFee = (cart?.deliveryFee ?? 0) + deliveryAdjustment;
-  const grandTotal = (cart?.total ?? 0) + deliveryAdjustment;
+  const deliveryFee = (priced?.deliveryFee ?? 0) + deliveryAdjustment;
+  const grandTotal = (priced?.total ?? 0) + deliveryAdjustment;
   const carrierBySupplier = useMemo(() => {
     const out: Record<string, CarrierCode> = {};
     if (!quotesReady) return out;
@@ -287,6 +311,7 @@ export default function CheckoutPage() {
         paymentMethod: form.paymentMethod,
         notes: form.notes.trim() || undefined,
         carrierBySupplier: Object.keys(carrierBySupplier).length > 0 ? carrierBySupplier : undefined,
+        couponCode: couponCart?.coupon?.code,
       });
       setPayingCard(form.paymentMethod === "CARD" && cardEnabled && res.orders.length > 0);
       setResult(res);
@@ -427,11 +452,34 @@ export default function CheckoutPage() {
               <dl className="space-y-2 border-t border-slate-100 px-5 py-4 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Subtotal</dt>
-                  <dd className="tabular-nums">{formatSar(cart?.subtotal, lang)}</dd>
+                  <dd className="tabular-nums">{formatSar(priced?.subtotal, lang)}</dd>
                 </div>
+                <div>
+                  {couponCart?.coupon ? (
+                    <div className="flex items-center justify-between gap-2 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-800">
+                      <span>
+                        <span className="font-mono font-semibold" dir="ltr">{couponCart.coupon.code}</span>
+                        {couponCart.coupon.description ? <span className="ms-2 text-brand-700">{couponCart.coupon.description}</span> : null}
+                      </span>
+                      <button type="button" onClick={removeCoupon} className="font-medium underline">Remove</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input name="coupon" placeholder="Promo code" value={couponInput} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void applyCoupon(); } }} dir="ltr" className="font-mono uppercase" aria-label="Promo code" />
+                      <Button type="button" variant="outline" size="sm" onClick={() => void applyCoupon()} loading={couponBusy} disabled={!couponInput.trim()}>Apply</Button>
+                    </div>
+                  )}
+                  {couponError && <p className="mt-1 text-xs text-red-600">{couponError}</p>}
+                </div>
+                {couponCart?.coupon && (
+                  <div className="flex justify-between text-brand-700">
+                    <dt>Discount</dt>
+                    <dd className="tabular-nums">− {formatSar(couponCart.discount ?? 0, lang)}</dd>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <dt className="text-slate-500">VAT (15%)</dt>
-                  <dd className="tabular-nums">{formatSar(cart?.vat, lang)}</dd>
+                  <dd className="tabular-nums">{formatSar(priced?.vat, lang)}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-slate-500">

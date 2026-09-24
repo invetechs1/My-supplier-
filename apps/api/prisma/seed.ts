@@ -422,6 +422,9 @@ async function main() {
   await prisma.priceListing.deleteMany();
   await prisma.material.deleteMany();
   await prisma.category.deleteMany();
+  await prisma.auditLog.deleteMany();
+  await prisma.contactMessage.deleteMany();
+  await prisma.coupon.deleteMany();
   await prisma.user.deleteMany();
   await prisma.company.deleteMany();
   await prisma.counter.deleteMany();
@@ -625,6 +628,21 @@ async function main() {
 
   await prisma.counter.createMany({ data: [{ key: `RFQ-${new Date().getFullYear()}`, value: counters.RFQ }, { key: `ORD-${new Date().getFullYear()}`, value: counters.ORD }] });
 
+  // Promotions and a few support messages so the admin console has data to show.
+  await prisma.coupon.createMany({
+    data: [
+      { code: "WELCOME10", type: "PERCENT", value: 10, description: "10% off a first order, up to SAR 500", maxDiscount: 500, minOrder: 1000, usageLimit: 1000, active: true },
+      { code: "BULK500", type: "FIXED", value: 500, description: "SAR 500 off orders above SAR 10,000", minOrder: 10000, active: true },
+      { code: "RAMADAN15", type: "PERCENT", value: 15, description: "Seasonal promotion (ended)", maxDiscount: 1500, startsAt: new Date(now - 90 * 86400000), endsAt: new Date(now - 30 * 86400000), active: false },
+    ],
+  });
+  await prisma.contactMessage.createMany({
+    data: [
+      { name: "Mohammed Al-Harbi", email: "m.harbi@example.com", phone: "+966500000001", subject: "[ORD-2026-000003] Delivery date", message: "The supplier confirmed my order three days ago but I have not received a delivery date. Can you check?", status: "NEW" },
+      { name: "Nora Al-Zahrani", email: "nora.z@example.com", subject: "Becoming a supplier", message: "We distribute insulation and waterproofing materials in Jeddah and would like to list our prices. What documents do you need?", status: "IN_PROGRESS", notes: "Sent the supplier onboarding guide and invite link." },
+      { name: "Ali Contracting", email: "procurement@ali-contracting.example", subject: "VAT invoice missing QR", message: "The invoice PDF for our last order does not scan with the ZATCA app.", status: "RESOLVED", notes: "Invoice regenerated; QR verified.", resolvedAt: new Date(now - 2 * 86400000) },
+    ],
+  });
   console.log(`Seeded ${categories.length} categories, ${materials.length} materials, ${suppliers.length} suppliers, ${listings.length} price listings, ${history.length} history points.`);
 }
 

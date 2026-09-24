@@ -81,6 +81,18 @@ export default function AdminOverview() {
         <Link href="/admin/outreach" className="block rounded-xl transition hover:shadow-card-hover">
           <StatTile label="Supplier outreach" value="Update links" sub="Nudge suppliers with stale prices →" className="h-full" />
         </Link>
+        <Link href="/admin/support" className="block rounded-xl transition hover:shadow-card-hover">
+          <StatTile label="Open support tickets" value={formatNumber(s.supportOpen ?? 0, lang)} sub="Contact-form messages awaiting a reply →" tone={(s.supportOpen ?? 0) > 0 ? "amber" : "default"} className="h-full" />
+        </Link>
+        <Link href="/admin/payments" className="block rounded-xl transition hover:shadow-card-hover">
+          <StatTile label="Unpaid orders" value={formatNumber(s.unpaidOrders ?? 0, lang)} sub="Awaiting payment or bank transfer →" tone={(s.unpaidOrders ?? 0) > 0 ? "amber" : "default"} className="h-full" />
+        </Link>
+        <Link href="/admin/coupons" className="block rounded-xl transition hover:shadow-card-hover">
+          <StatTile label="Active coupons" value={formatNumber(s.activeCoupons ?? 0, lang)} sub="Promotions buyers can apply at checkout →" className="h-full" />
+        </Link>
+        <Link href="/admin/reports" className="block rounded-xl transition hover:shadow-card-hover">
+          <StatTile label="Reports" value="Analytics" sub="GMV, top products, suppliers, cities →" tone="brand" className="h-full" />
+        </Link>
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">

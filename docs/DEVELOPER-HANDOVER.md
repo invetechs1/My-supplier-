@@ -22,7 +22,7 @@ Read this document top to bottom once, then work through section 6 in the order 
 | E-commerce storefront, cart, checkout, orders | **DONE** | Multi-supplier cart, VAT 15 percent, delivery fees, COD, bank transfer, card |
 | Supplier portal (dashboard, orders, inventory, team, branches, finance) | **DONE** | Roles OWNER, MANAGER, SALES, WAREHOUSE; commission and payouts |
 | AI price collection (PDF, Excel, photo, quotations, web feeds, outreach links) | **CREDENTIALS** | Code done; needs a rotated Anthropic API key in production |
-| Admin console | **DONE** | Imports review, outreach, feeds, payouts, settings, shipping rates, verification |
+| Admin console (full e-commerce back office) | **DONE** | Reports and analytics, orders, payments ledger and refunds, coupons and promotions, review moderation, support inbox, catalogue, imports, outreach, feeds, users, companies and verification, payouts, shipping rates, announcements, audit log, settings |
 | Payments (Moyasar: Mada, Visa, Mastercard, Apple Pay), refunds, webhooks | **CREDENTIALS** | Code done; needs a Moyasar merchant account and keys |
 | Phone OTP login (Unifonic SMS) | **CREDENTIALS** | Code done; falls back to console logging without keys |
 | Delivery: zones, rate cards, quotes, shipments, tracking, carrier webhooks | **DEV WORK** | Rate-card quoting works today; live carrier booking needs contract-specific payload mapping |
@@ -162,7 +162,11 @@ Redeploying after a code change is the same deploy.sh command. Migrations run au
 
 ### Admin console
 
-- Company verification, import review across suppliers, outreach (magic price-update links sent to suppliers whose prices are stale), feeds (JSON, CSV or HTML pages polled on a schedule), payouts, platform settings (commission, VAT, delivery), shipping rate cards, order oversight.
+- **Overview and reports:** KPIs, GMV and order trends with period-over-period change, average order value, RFQ conversion, top products, suppliers, categories and cities, payment-method split, CSV export.
+- **Commerce:** order oversight, payments ledger with refunds and outstanding balances, coupons and promotions (percent or fixed, minimum order, cap, validity window, usage limit; applied at checkout and split across supplier orders), review moderation (hide, reply, delete), support inbox fed by the public contact form.
+- **Catalogue and pricing:** materials and categories, AI import review across suppliers, outreach (magic price-update links to suppliers with stale prices), feeds (JSON, CSV or HTML pages polled on a schedule).
+- **Users and partners:** users and roles, companies and document verification, payouts, shipping rate cards.
+- **System:** announcements to all buyers or suppliers (in-app, push, optional email), append-only audit log of every privileged action, platform settings (commission, VAT, delivery).
 
 
 ### Integrations already coded
