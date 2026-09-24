@@ -7,7 +7,7 @@ from ..models import ORDER_TRANSITIONS, Offer, Order, OrderItem, Review, Supplie
 from ..schemas import DirectOrderIn, DisputeIn, DisputeOut, OrderOut, OrderStatusIn, ReviewIn
 from ..security import get_current_user, get_my_supplier, require_buyer
 from ..models import Dispute, Payment
-from ..services import payments, pricing
+from ..services import coupons, payments, pricing, settings as platform_settings
 from ..services.notify import notify
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -32,11 +32,21 @@ def direct_order(body: DirectOrderIn, user: User = Depends(require_buyer), db: S
         raise HTTPException(400, f"Minimum quantity is {offer.min_qty}")
     unit_price, _ = pricing.offer_prices(offer)
     subtotal = round(unit_price * body.quantity, 2)
-    vat = round(subtotal * VAT_RATE, 2)
-    order = Order(buyer_id=user.id, supplier_id=offer.supplier_id, subtotal=subtotal, vat=vat, total=round(subtotal + vat, 2),
+    min_amount = platform_settings.get(db, "min_order_amount")
+    if subtotal < min_amount:
+        raise HTTPException(400, f"Minimum order amount is {min_amount:,.0f} SAR")
+    discount, coupon = 0.0, None
+    if body.coupon_code:
+        coupon, discount = coupons.validate(db, body.coupon_code, user.id, subtotal)
+    taxable = round(subtotal - discount, 2)
+    vat = round(taxable * VAT_RATE, 2)
+    order = Order(buyer_id=user.id, supplier_id=offer.supplier_id, subtotal=subtotal, discount=discount,
+                  coupon_code=coupon.code if coupon else "", vat=vat, total=round(taxable + vat, 2),
                   delivery_address=body.delivery_address, city=offer.city, notes=body.notes)
     db.add(order)
     db.flush()
+    if coupon:
+        coupon.used += 1
     db.add(OrderItem(order_id=order.id, product_id=offer.product_id, description=offer.product.name_ar, quantity=body.quantity,
                      unit=offer.unit or offer.product.unit, unit_price=unit_price, line_total=subtotal))
     notify(db, offer.supplier.user_id, f"طلب شراء جديد #{order.id}", f"{offer.product.name_ar} × {body.quantity:g}", "order", "order", order.id)

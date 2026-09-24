@@ -7,7 +7,7 @@ from .. import config
 from ..schemas import (LoginIn, NotificationPrefsIn, OTPRequestIn, OTPVerifyIn, PasswordChangeIn, PasswordResetIn, RegisterIn,
                        TokenOut, UserOut, UserUpdateIn)
 from ..security import create_token, get_current_user, hash_password, verify_password
-from ..services import otp
+from ..services import otp, settings as platform_settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -23,6 +23,10 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
     email = body.email.lower()
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(409, "Email already registered")
+    if body.role == "supplier" and not platform_settings.get(db, "supplier_registration_open"):
+        raise HTTPException(403, "Supplier registration is currently closed")
+    if body.role == "buyer" and not platform_settings.get(db, "buyer_registration_open"):
+        raise HTTPException(403, "Registration is currently closed")
     verified_dest = otp.check_token(body.otp_token, "register") if body.otp_token else ""
     if config.OTP_REQUIRED and not verified_dest:
         raise HTTPException(400, "Phone or email verification is required — request an OTP first")
@@ -38,7 +42,8 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
     db.flush()
     if body.role == "supplier":
         db.add(Supplier(user_id=user.id, name=body.company_name or body.full_name, cr_number=body.cr_number,
-                        city=body.city, phone=body.phone, category_ids=body.category_ids))
+                        city=body.city, phone=body.phone, category_ids=body.category_ids,
+                        verified=bool(platform_settings.get(db, "auto_verify_suppliers"))))
     db.add(AuditLog(actor_id=user.id, action="register", entity="user", entity_id=user.id, detail={"role": body.role}))
     db.commit()
     db.refresh(user)

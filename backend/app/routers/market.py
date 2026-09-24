@@ -5,14 +5,19 @@ from sqlalchemy.orm import Session
 from .. import config
 from ..db import get_db
 from ..models import Category, Product
-from ..services import pricing
+from ..services import pricing, settings as platform_settings
 
 router = APIRouter(prefix="/market", tags=["market"])
 
 
 @router.get("/stats")
 def stats(db: Session = Depends(get_db)):
-    return pricing.public_stats(db)
+    return {**pricing.public_stats(db), "settings": platform_settings.public(db)}
+
+
+@router.get("/settings")
+def public_settings(db: Session = Depends(get_db)):
+    return platform_settings.public(db)
 
 
 @router.get("/index")

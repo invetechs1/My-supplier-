@@ -407,6 +407,7 @@ class DirectOrderIn(BaseModel):
     quantity: float = Field(gt=0)
     delivery_address: str = ""
     notes: str = ""
+    coupon_code: str = ""
 
 
 class OrderItemOut(ORM):
@@ -428,6 +429,8 @@ class OrderOut(ORM):
     subtotal: float
     vat: float
     delivery_fee: float
+    discount: float = 0
+    coupon_code: str = ""
     total: float
     currency: str
     status: str
@@ -640,3 +643,58 @@ class DisputeOut(ORM):
     order_total: float = 0
     buyer_name: str = ""
     supplier_name: str = ""
+
+
+# ---------- v1.4: admin back office ----------
+class SettingsIn(BaseModel):
+    values: dict[str, str]
+
+
+class CouponIn(BaseModel):
+    code: str = Field(min_length=3, max_length=40)
+    kind: str = Field(default="percent", pattern="^(percent|fixed)$")
+    value: float = Field(gt=0)
+    min_order: float = 0
+    max_discount: Optional[float] = None
+    max_uses: Optional[int] = None
+    audience: str = Field(default="all", pattern="^(all|new)$")
+    is_active: bool = True
+    expires_at: Optional[datetime] = None
+
+
+class CouponOut(ORM):
+    id: int
+    code: str
+    kind: str
+    value: float
+    min_order: float
+    max_discount: Optional[float]
+    max_uses: Optional[int]
+    used: int
+    audience: str
+    is_active: bool
+    expires_at: Optional[datetime]
+    created_at: datetime
+
+
+class BroadcastIn(BaseModel):
+    title: str = Field(min_length=3, max_length=200)
+    body: str = ""
+    audience: str = Field(default="all", pattern="^(all|buyers|suppliers)$")
+
+
+class ReviewOut(ORM):
+    id: int
+    order_id: int
+    supplier_id: int
+    buyer_id: int
+    rating: int
+    comment: str
+    created_at: datetime
+    supplier_name: str = ""
+    buyer_name: str = ""
+
+
+class AdminOrderStatusIn(BaseModel):
+    status: str = Field(pattern="^(pending|confirmed|in_delivery|delivered|cancelled)$")
+    note: str = ""

@@ -410,3 +410,303 @@ def resolve_dispute(dispute_id: int, body: DisputeResolveIn, user: User = Depend
             notify(db, uid, f"قرار النزاع على الطلب #{o.id}: {body.status}", body.resolution, "dispute", "order", o.id)
     db.commit()
     return _dispute_out(d, db)
+
+
+# ======================================================================
+# v1.4 — e-commerce back office: orders, RFQs, catalog, settings, coupons, broadcast, reviews, exports
+# ======================================================================
+import csv
+import io
+
+from fastapi.responses import StreamingResponse
+
+from ..models import Coupon, Review, RFQ as _RFQ
+from ..schemas import AdminOrderStatusIn, BroadcastIn, CouponIn, CouponOut, OrderOut, ProductIn, ProductOut, ReviewOut, RFQOut, SettingsIn
+from ..services import settings as platform_settings
+from .catalog import product_out
+from .orders import order_out
+from .rfq import rfq_out
+
+
+# ---- orders ----
+@router.get("/orders", response_model=list[OrderOut])
+def admin_orders(status: str | None = None, payment_status: str | None = None, q: str = "", supplier_id: int | None = None,
+                 limit: int = 300, db: Session = Depends(get_db)):
+    query = db.query(Order)
+    if status:
+        query = query.filter(Order.status == status)
+    if payment_status:
+        query = query.filter(Order.payment_status == payment_status)
+    if supplier_id:
+        query = query.filter(Order.supplier_id == supplier_id)
+    rows = query.order_by(Order.id.desc()).limit(limit).all()
+    if q:
+        ql = q.lower()
+        rows = [o for o in rows if ql in (o.buyer.company_name or o.buyer.full_name or "").lower() or ql in (o.supplier.name or "").lower() or ql == str(o.id)]
+    return [order_out(o, db) for o in rows]
+
+
+@router.get("/orders/{order_id}", response_model=OrderOut)
+def admin_order(order_id: int, db: Session = Depends(get_db)):
+    o = db.get(Order, order_id)
+    if not o:
+        raise HTTPException(404, "Order not found")
+    return order_out(o, db)
+
+
+@router.patch("/orders/{order_id}/status", response_model=OrderOut)
+def admin_order_status(order_id: int, body: AdminOrderStatusIn, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Admin override of the order state machine (support cases). Delivered releases escrow; cancelled refunds."""
+    o = db.get(Order, order_id)
+    if not o:
+        raise HTTPException(404, "Order not found")
+    prev = o.status
+    o.status = body.status
+    if body.note:
+        o.notes = (o.notes + f"\n[admin] {body.note}").strip()
+    if body.status == "delivered" and prev != "delivered":
+        payments.release_escrow(db, o)
+    if body.status == "cancelled":
+        paid = db.query(Payment).filter(Payment.order_id == o.id, Payment.status == "paid").first()
+        if paid:
+            payments.refund(db, paid, user)
+    for uid in {o.buyer_id, o.supplier.user_id if o.supplier else None}:
+        if uid:
+            notify(db, uid, f"تحديث الطلب #{o.id} من إدارة المنصة: {body.status}", body.note, "order", "order", o.id)
+    db.add(AuditLog(actor_id=user.id, action="order.admin_status", entity="order", entity_id=o.id, detail={"from": prev, "to": body.status}))
+    db.commit()
+    db.refresh(o)
+    return order_out(o, db)
+
+
+# ---- RFQs ----
+@router.get("/rfqs", response_model=list[RFQOut])
+def admin_rfqs(status: str | None = None, limit: int = 300, db: Session = Depends(get_db)):
+    q = db.query(_RFQ)
+    if status:
+        q = q.filter(_RFQ.status == status)
+    return [rfq_out(r, db) for r in q.order_by(_RFQ.id.desc()).limit(limit).all()]
+
+
+@router.post("/rfqs/{rfq_id}/close", response_model=RFQOut)
+def admin_close_rfq(rfq_id: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    r = db.get(_RFQ, rfq_id)
+    if not r:
+        raise HTTPException(404, "RFQ not found")
+    r.status = "cancelled" if r.status == "draft" else "closed"
+    db.add(AuditLog(actor_id=user.id, action="rfq.admin_close", entity="rfq", entity_id=r.id))
+    db.commit()
+    return rfq_out(r, db)
+
+
+# ---- catalog management ----
+@router.get("/products", response_model=list[ProductOut])
+def admin_products(q: str = "", category_id: int | None = None, include_inactive: bool = True, limit: int = 500, db: Session = Depends(get_db)):
+    query = db.query(Product)
+    if not include_inactive:
+        query = query.filter(Product.is_active.is_(True))
+    if category_id:
+        query = query.filter(Product.category_id == category_id)
+    if q:
+        like = f"%{q}%"
+        query = query.filter((Product.name_ar.ilike(like)) | (Product.name_en.ilike(like)) | (Product.sku.ilike(like)) | (Product.brand.ilike(like)))
+    rows = query.order_by(Product.id.desc()).limit(limit).all()
+    summaries = pricing.bulk_summaries(db, [p.id for p in rows])
+    return [product_out(p, summaries.get(p.id)) for p in rows]
+
+
+@router.post("/products/{product_id}/activate", response_model=ProductOut)
+def activate_product(product_id: int, db: Session = Depends(get_db)):
+    p = db.get(Product, product_id)
+    if not p:
+        raise HTTPException(404, "Product not found")
+    p.is_active = True
+    db.commit()
+    return product_out(p)
+
+
+@router.put("/products/{product_id}", response_model=ProductOut)
+def admin_update_product(product_id: int, body: ProductIn, db: Session = Depends(get_db)):
+    p = db.get(Product, product_id)
+    if not p:
+        raise HTTPException(404, "Product not found")
+    if body.sku and body.sku != p.sku and db.query(Product).filter(Product.sku == body.sku).first():
+        raise HTTPException(409, "SKU already exists")
+    for k, v in body.model_dump().items():
+        if k == "sku" and not v:
+            continue
+        setattr(p, k, v)
+    db.commit()
+    db.refresh(p)
+    return product_out(p)
+
+
+@router.delete("/categories/{category_id}", status_code=204)
+def delete_category(category_id: int, db: Session = Depends(get_db)):
+    c = db.get(Category, category_id)
+    if not c:
+        raise HTTPException(404, "Category not found")
+    if db.query(Product).filter(Product.category_id == c.id).count() or db.query(Category).filter(Category.parent_id == c.id).count():
+        raise HTTPException(400, "Category still has products or sub-categories")
+    db.delete(c)
+    db.commit()
+
+
+# ---- settings ----
+@router.get("/settings")
+def get_settings(db: Session = Depends(get_db)):
+    return {"values": platform_settings.get_all(db),
+            "schema": [{"key": k, "type": t, "description": d, "default": dflt} for k, (dflt, t, d) in platform_settings.DEFAULTS.items()]}
+
+
+@router.put("/settings")
+def put_settings(body: SettingsIn, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    values = platform_settings.set_many(db, body.values)
+    db.add(AuditLog(actor_id=user.id, action="settings.update", entity="settings", detail={"keys": list(body.values.keys())}))
+    db.commit()
+    return {"values": values}
+
+
+# ---- coupons ----
+@router.get("/coupons", response_model=list[CouponOut])
+def coupons_list(db: Session = Depends(get_db)):
+    return db.query(Coupon).order_by(Coupon.id.desc()).all()
+
+
+@router.post("/coupons", response_model=CouponOut, status_code=201)
+def coupon_create(body: CouponIn, db: Session = Depends(get_db)):
+    code = body.code.strip().upper()
+    if db.query(Coupon).filter(Coupon.code == code).first():
+        raise HTTPException(409, "Coupon code exists")
+    c = Coupon(**{**body.model_dump(), "code": code})
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return c
+
+
+@router.put("/coupons/{coupon_id}", response_model=CouponOut)
+def coupon_update(coupon_id: int, body: CouponIn, db: Session = Depends(get_db)):
+    c = db.get(Coupon, coupon_id)
+    if not c:
+        raise HTTPException(404, "Coupon not found")
+    for k, v in body.model_dump().items():
+        setattr(c, k, v.strip().upper() if k == "code" else v)
+    db.commit()
+    return c
+
+
+@router.delete("/coupons/{coupon_id}", status_code=204)
+def coupon_delete(coupon_id: int, db: Session = Depends(get_db)):
+    c = db.get(Coupon, coupon_id)
+    if c:
+        db.delete(c)
+        db.commit()
+
+
+# ---- broadcast announcements ----
+@router.post("/broadcast")
+def broadcast(body: BroadcastIn, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    q = db.query(User).filter(User.is_active.is_(True))
+    if body.audience == "buyers":
+        q = q.filter(User.role == "buyer")
+    elif body.audience == "suppliers":
+        q = q.filter(User.role == "supplier")
+    n = 0
+    for u in q.all():
+        notify(db, u.id, body.title, body.body, "announcement")
+        n += 1
+    db.add(AuditLog(actor_id=user.id, action="broadcast", entity="notification", detail={"audience": body.audience, "recipients": n, "title": body.title}))
+    db.commit()
+    return {"recipients": n}
+
+
+# ---- reviews moderation ----
+@router.get("/reviews", response_model=list[ReviewOut])
+def reviews(limit: int = 300, db: Session = Depends(get_db)):
+    out = []
+    for r in db.query(Review).order_by(Review.id.desc()).limit(limit).all():
+        o = ReviewOut.model_validate(r)
+        s = db.get(Supplier, r.supplier_id)
+        b = db.get(User, r.buyer_id)
+        o.supplier_name = s.name if s else ""
+        o.buyer_name = (b.company_name or b.full_name) if b else ""
+        out.append(o)
+    return out
+
+
+@router.delete("/reviews/{review_id}", status_code=204)
+def delete_review(review_id: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    r = db.get(Review, review_id)
+    if not r:
+        raise HTTPException(404, "Review not found")
+    s = db.get(Supplier, r.supplier_id)
+    if s and s.rating_count > 1:
+        s.rating = round((s.rating * s.rating_count - r.rating) / (s.rating_count - 1), 2)
+        s.rating_count -= 1
+    elif s:
+        s.rating, s.rating_count = 0.0, 0
+    db.delete(r)
+    db.add(AuditLog(actor_id=user.id, action="review.delete", entity="review", entity_id=review_id))
+    db.commit()
+
+
+# ---- CSV exports ----
+_EXPORTS = {
+    "orders": (Order, ["id", "created_at", "status", "payment_status", "buyer_id", "supplier_id", "rfq_id", "subtotal", "discount", "vat", "delivery_fee", "total", "city", "coupon_code"]),
+    "payments": (Payment, ["id", "created_at", "order_id", "provider", "method", "amount", "platform_fee", "supplier_net", "status", "provider_ref", "paid_at", "released_at", "refunded_at"]),
+    "payouts": (Payout, ["id", "created_at", "supplier_id", "order_id", "amount", "status", "reference", "paid_at"]),
+    "users": (User, ["id", "created_at", "email", "phone", "full_name", "role", "company_name", "city", "is_active", "phone_verified", "last_login_at"]),
+    "suppliers": (Supplier, ["id", "created_at", "name", "city", "cr_number", "vat_number", "verified", "plan", "rating", "rating_count", "phone"]),
+    "products": (Product, ["id", "sku", "category_id", "name_ar", "name_en", "brand", "unit", "is_active"]),
+    "offers": (Offer, ["id", "supplier_id", "product_id", "city", "price", "includes_vat", "rental_period", "min_qty", "stock_status", "source", "updated_at"]),
+    "rfqs": (_RFQ, ["id", "created_at", "buyer_id", "title", "city", "status", "visibility", "closes_at"]),
+}
+
+
+@router.get("/export/{name}.csv")
+def export_csv(name: str, db: Session = Depends(get_db)):
+    if name not in _EXPORTS:
+        raise HTTPException(404, f"Unknown export — one of {', '.join(_EXPORTS)}")
+    model, cols = _EXPORTS[name]
+    buf = io.StringIO()
+    buf.write("﻿")  # BOM so Excel opens Arabic correctly
+    w = csv.writer(buf)
+    w.writerow(cols)
+    for row in db.query(model).order_by(model.id).all():
+        w.writerow([getattr(row, c) for c in cols])
+    return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",
+                             headers={"Content-Disposition": f'attachment; filename="{name}.csv"'})
+
+
+# ---- richer analytics for the dashboard ----
+@router.get("/analytics")
+def analytics(db: Session = Depends(get_db)):
+    orders = db.query(Order).filter(Order.status != "cancelled").all()
+    by_sup: dict[int, float] = {}
+    for o in orders:
+        by_sup[o.supplier_id] = by_sup.get(o.supplier_id, 0) + o.total
+    sup_names = {s.id: s.name for s in db.query(Supplier).filter(Supplier.id.in_(list(by_sup) or [0])).all()}
+    top_suppliers = sorted(({"supplier_id": k, "name": sup_names.get(k, ""), "gmv": round(v, 2)} for k, v in by_sup.items()), key=lambda r: -r["gmv"])[:8]
+    demand: dict[int, float] = {}
+    from ..models import RFQItem
+    for it in db.query(RFQItem).filter(RFQItem.product_id.isnot(None)).all():
+        demand[it.product_id] = demand.get(it.product_id, 0) + 1
+    prods = {p.id: p for p in db.query(Product).filter(Product.id.in_(list(demand) or [0])).all()}
+    top_demand = sorted(({"product_id": k, "name_ar": prods[k].name_ar, "name_en": prods[k].name_en, "rfq_lines": int(v)} for k, v in demand.items() if k in prods), key=lambda r: -r["rfq_lines"])[:8]
+    rfqs = db.query(_RFQ).all()
+    bids_total = db.query(func.count(Bid.id)).scalar() or 0
+    funnel = {
+        "rfqs": len(rfqs),
+        "rfqs_with_bids": sum(1 for r in rfqs if any(b.status != "withdrawn" for b in r.bids)),
+        "awarded": sum(1 for r in rfqs if r.status == "awarded"),
+        "avg_bids_per_rfq": round(bids_total / len(rfqs), 2) if rfqs else 0,
+        "orders_paid": sum(1 for o in orders if o.payment_status in ("paid", "released")),
+        "orders_delivered": sum(1 for o in orders if o.status == "delivered"),
+    }
+    cities = {}
+    for o in orders:
+        cities[o.city or "—"] = cities.get(o.city or "—", 0) + o.total
+    return {"top_suppliers": top_suppliers, "top_demand": top_demand, "funnel": funnel,
+            "gmv_by_city": sorted(({"city": k, "gmv": round(v, 2)} for k, v in cities.items()), key=lambda r: -r["gmv"]),
+            "avg_order_value": round(sum(o.total for o in orders) / len(orders), 2) if orders else 0}

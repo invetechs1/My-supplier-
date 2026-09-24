@@ -10,6 +10,7 @@ export default function Home() {
   const [q, setQ] = useState('')
   const [city, setCity] = useState('')
   const stats = useLoad(() => api.get<any>('/market/stats'))
+  const banner = stats.data?.settings?.home_banner_text
   const cats = useLoad(() => api.get<Category[]>('/catalog/categories'))
   const index = useLoad(() => api.get<any[]>('/market/index'))
   const trending = useLoad(() => api.get<any[]>('/market/trending', { limit: 6 }))
@@ -17,6 +18,7 @@ export default function Home() {
   const tops = (cats.data || []).filter(c => !c.parent_id)
   return (
     <>
+      {banner && <div style={{ background: '#F2B134', color: '#1a1a1a', textAlign: 'center', padding: '8px 16px', fontWeight: 600 }}>{stats.data.settings.home_banner_link ? <a href={stats.data.settings.home_banner_link} style={{ color: 'inherit' }}>📣 {banner}</a> : <>📣 {banner}</>}</div>}
       <section className="hero">
         <div className="container">
           <div className="slogan ltr">Build for Less</div>

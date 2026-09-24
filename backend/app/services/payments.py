@@ -83,8 +83,9 @@ def provider():
 
 
 # ------------------------------------------------------------------ helpers
-def fee_split(amount: float) -> tuple[float, float]:
-    fee = round(amount * config.PLATFORM_FEE_PCT / 100, 2)
+def fee_split(amount: float, pct: float | None = None) -> tuple[float, float]:
+    pct = config.PLATFORM_FEE_PCT if pct is None else pct
+    fee = round(amount * pct / 100, 2)
     return fee, round(amount - fee, 2)
 
 
@@ -130,7 +131,8 @@ def start_checkout(db: Session, order: Order, buyer: User, method: str = "card")
                 .order_by(Payment.id.desc()).first())
     if existing and existing.method == method and existing.status == "initiated" and existing.created_at > utcnow() - timedelta(hours=1):
         return existing
-    fee, net = fee_split(order.total)
+    from . import settings as _settings
+    fee, net = fee_split(order.total, _settings.get(db, "platform_fee_pct"))
     p = Payment(order_id=order.id, buyer_id=order.buyer_id, supplier_id=order.supplier_id, amount=round(order.total, 2),
                 platform_fee=fee, supplier_net=net, method=method)
     if method == "bank_transfer":

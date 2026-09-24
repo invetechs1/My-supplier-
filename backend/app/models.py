@@ -248,6 +248,8 @@ class Order(Base):
     subtotal: Mapped[float] = mapped_column(Float, default=0)
     vat: Mapped[float] = mapped_column(Float, default=0)
     delivery_fee: Mapped[float] = mapped_column(Float, default=0)
+    discount: Mapped[float] = mapped_column(Float, default=0)
+    coupon_code: Mapped[str] = mapped_column(String(40), default="")
     total: Mapped[float] = mapped_column(Float, default=0)
     currency: Mapped[str] = mapped_column(String(3), default="SAR")
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
@@ -479,3 +481,27 @@ class Dispute(Base):
     refunded: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PlatformSetting(Base):
+    """Admin-editable settings that override environment defaults (fee %, bank details, banner, toggles)."""
+    __tablename__ = "platform_settings"
+    key: Mapped[str] = mapped_column(String(60), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class Coupon(Base):
+    __tablename__ = "coupons"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    kind: Mapped[str] = mapped_column(String(10), default="percent")  # percent | fixed
+    value: Mapped[float] = mapped_column(Float)
+    min_order: Mapped[float] = mapped_column(Float, default=0)
+    max_discount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_uses: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    used: Mapped[int] = mapped_column(Integer, default=0)
+    audience: Mapped[str] = mapped_column(String(10), default="all")  # all | new (first order only)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

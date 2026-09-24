@@ -19,6 +19,7 @@ export default function ProductPage() {
   const [order, setOrder] = useState<Offer | null>(null)
   const [qty, setQty] = useState(1)
   const [addr, setAddr] = useState('')
+  const [coupon, setCoupon] = useState('')
   const [msg, setMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
   const [alertOpen, setAlertOpen] = useState(false)
   const [target, setTarget] = useState('')
@@ -29,7 +30,7 @@ export default function ProductPage() {
   const placeOrder = async () => {
     if (!user) return nav('/login')
     try {
-      const o = await api.post<any>('/orders/direct', { offer_id: order!.id, quantity: qty, delivery_address: addr })
+      const o = await api.post<any>('/orders/direct', { offer_id: order!.id, quantity: qty, delivery_address: addr, coupon_code: coupon })
       setOrder(null); setMsg({ kind: 'ok', text: `${t('order')} #${o.id} — ${t('success')}` })
     } catch (e: any) { setMsg({ kind: 'error', text: e.message }) }
   }
@@ -104,6 +105,7 @@ export default function ProductPage() {
         <Modal title={`${t('buy_now')} — ${order.supplier?.name}`} onClose={() => setOrder(null)}>
           <div className="field"><label>{order.rental_period ? `${t('quantity')} (${t('basis_' + order.rental_period)})` : `${t('quantity')} (${order.unit || p.unit}, ${t('min_qty')} ${order.min_qty})`}</label><input type="number" min={order.min_qty} value={qty} onChange={e => setQty(Number(e.target.value))} /></div>
           <div className="field"><label>{t('delivery_address')}</label><input value={addr} onChange={e => setAddr(e.target.value)} /></div>
+          <div className="field"><label>{t('coupon')}</label><input className="ltr" style={{ display: 'block' }} value={coupon} onChange={e => setCoupon(e.target.value.toUpperCase())} placeholder="BUILD10" /></div>
           <div className="stack small" style={{ marginBottom: 12 }}>
             <div className="row between"><span>{t('subtotal')}</span><Money v={order.price_ex_vat * qty} /></div>
             <div className="row between"><span>{t('vat')}</span><Money v={order.price_ex_vat * qty * 0.15} /></div>

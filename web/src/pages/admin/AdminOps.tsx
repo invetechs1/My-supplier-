@@ -8,6 +8,7 @@ export default function AdminOps() {
   const [status, setStatus] = useState('')
   const del = useLoad(() => api.get<Delivery[]>('/admin/deliveries', { status }), [status])
   const jobs = useLoad(() => api.get<any>('/admin/jobs'))
+  const audit = useLoad(() => api.get<any[]>('/admin/audit', { limit: 60 }))
   const run = async (name: string) => { const r = await api.post<any>(`/admin/jobs/${name}/run`); alert(JSON.stringify(r.result)); jobs.reload(); del.reload() }
   return (
     <div className="stack">
@@ -20,6 +21,10 @@ export default function AdminOps() {
         <thead><tr><th>#</th><th>{t('users')}</th><th>{lang === 'ar' ? 'القناة' : 'Channel'}</th><th>{lang === 'ar' ? 'الوجهة' : 'Destination'}</th><th>{t('status')}</th><th>{lang === 'ar' ? 'المزوّد' : 'Provider'}</th><th>{lang === 'ar' ? 'المحاولات' : 'Attempts'}</th><th>{t('updated')}</th><th></th></tr></thead>
         <tbody>{(del.data || []).map(d => <tr key={d.id}><td className="num">{d.id}</td><td className="num">{d.user_id}</td><td>{t('channel_' + d.channel)}</td><td className="ltr small">{d.destination}</td><td><Status s={d.status} />{d.error && <div className="small muted ltr">{d.error}</div>}</td><td>{d.provider}</td><td className="num">{d.attempts}</td><td className="small muted">{fmtDate(d.sent_at || d.created_at, lang)}</td><td>{d.status === 'failed' && <button className="btn ghost sm" onClick={() => api.post(`/admin/deliveries/${d.id}/retry`).then(del.reload)}>{t('retry')}</button>}</td></tr>)}</tbody>
       </table></div></div>}
+      <div className="card pad-0"><h3 style={{ padding: '12px 16px 0' }}>{t('audit')}</h3><div className="t-wrap"><table>
+        <thead><tr><th>#</th><th>{t('users')}</th><th>{lang === 'ar' ? 'الإجراء' : 'Action'}</th><th>{lang === 'ar' ? 'الكيان' : 'Entity'}</th><th>{lang === 'ar' ? 'التفاصيل' : 'Detail'}</th><th>{t('updated')}</th></tr></thead>
+        <tbody>{(audit.data || []).map(r => <tr key={r.id}><td className="num">{r.id}</td><td className="num">{r.actor_id ?? '—'}</td><td className="ltr">{r.action}</td><td className="ltr small">{r.entity}{r.entity_id ? ` #${r.entity_id}` : ''}</td><td className="ltr small muted">{JSON.stringify(r.detail)}</td><td className="small muted">{fmtDate(r.created_at, lang)}</td></tr>)}</tbody>
+      </table></div></div>
     </div>
   )
 }

@@ -19,6 +19,11 @@ import Payouts from './pages/supplier/Payouts'
 import AdminFinance from './pages/admin/AdminFinance'
 import AdminOps from './pages/admin/AdminOps'
 import AdminTrust from './pages/admin/AdminTrust'
+import AdminOrders from './pages/admin/AdminOrders'
+import AdminRFQs from './pages/admin/AdminRFQs'
+import AdminCatalog from './pages/admin/AdminCatalog'
+import AdminSettings from './pages/admin/AdminSettings'
+import AdminMarketing from './pages/admin/AdminMarketing'
 import NotificationsPage from './pages/NotificationsPage'
 import SettingsPage from './pages/SettingsPage'
 import BuyerHome from './pages/buyer/BuyerHome'
@@ -75,16 +80,22 @@ function SupplierPortal() {
 }
 function AdminPortal() {
   const { t } = useI18n()
+  const g = (ar: string, en: string) => t('brand') === 'مورّدي' ? ar : en
   return <Portal links={[
-    { to: '/admin', label: t('dashboard'), icon: '📈' },
-    { to: '/admin/suppliers', label: t('suppliers'), icon: '🏢' },
-    { to: '/admin/users', label: t('users'), icon: '👥' },
-    { to: '/admin/sources', label: t('sources'), icon: '🔗' },
-    { to: '/admin/quality', label: t('data_quality'), icon: '🧪' },
-    { to: '/admin/finance', label: t('finance'), icon: '💰' },
-    { to: '/admin/ops', label: t('deliveries'), icon: '📡' },
-    { to: '/admin/trust', label: t('disputes'), icon: '🛡️' },
-    { to: '/settings', label: t('settings'), icon: '⚙️' },
+    { to: '/admin', label: t('dashboard'), icon: '📈', group: g('نظرة عامة', 'Overview') },
+    { to: '/admin/orders', label: t('orders'), icon: '📦', group: g('المبيعات', 'Sales') },
+    { to: '/admin/rfqs', label: t('rfq'), icon: '📋', group: g('المبيعات', 'Sales') },
+    { to: '/admin/finance', label: t('finance'), icon: '💰', group: g('المبيعات', 'Sales') },
+    { to: '/admin/catalog', label: t('catalog_mgmt'), icon: '🗂️', group: g('الكتالوج', 'Catalog') },
+    { to: '/admin/sources', label: t('sources'), icon: '🔗', group: g('الكتالوج', 'Catalog') },
+    { to: '/admin/quality', label: t('data_quality'), icon: '🧪', group: g('الكتالوج', 'Catalog') },
+    { to: '/admin/suppliers', label: t('suppliers'), icon: '🏢', group: g('المستخدمون', 'People') },
+    { to: '/admin/users', label: t('users'), icon: '👥', group: g('المستخدمون', 'People') },
+    { to: '/admin/trust', label: t('disputes'), icon: '🛡️', group: g('المستخدمون', 'People') },
+    { to: '/admin/marketing', label: t('marketing'), icon: '📣', group: g('التشغيل', 'Operations') },
+    { to: '/admin/ops', label: t('deliveries'), icon: '📡', group: g('التشغيل', 'Operations') },
+    { to: '/admin/platform', label: t('settings'), icon: '🛠️', group: g('التشغيل', 'Operations') },
+    { to: '/settings', label: t('profile'), icon: '⚙️', group: g('حسابي', 'Account') },
   ]} />
 }
 
@@ -140,6 +151,11 @@ export default function App() {
           <Route path="finance" element={<AdminFinance />} />
           <Route path="ops" element={<AdminOps />} />
           <Route path="trust" element={<AdminTrust />} />
+          <Route path="orders" element={<AdminOrders />} />
+          <Route path="rfqs" element={<AdminRFQs />} />
+          <Route path="catalog" element={<AdminCatalog />} />
+          <Route path="platform" element={<AdminSettings />} />
+          <Route path="marketing" element={<AdminMarketing />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Route>

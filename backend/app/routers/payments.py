@@ -20,7 +20,10 @@ def payment_out(p: Payment) -> PaymentOut:
     out.supplier_name = p.supplier.name if p.supplier else ""
     out.buyer_name = (p.buyer.company_name or p.buyer.full_name) if p.buyer else ""
     if p.method == "bank_transfer":
-        out.bank_instructions = f"{config.PLATFORM_BANK_INSTRUCTIONS} — Reference: MS-{p.id}"
+        from ..services import settings as _settings
+        from ..db import SessionLocal
+        with SessionLocal() as _db:
+            out.bank_instructions = f"{_settings.get(_db, 'bank_instructions')} — Reference: MS-{p.id}"
     if p.provider == "moyasar":
         out.publishable_key = config.MOYASAR_PUBLISHABLE_KEY
     return out

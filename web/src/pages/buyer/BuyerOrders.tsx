@@ -43,6 +43,7 @@ export function OrdersTable({ orders, supplierView, reload }: { orders: Order[];
           </tr>
           {open === o.id && <tr key={o.id + 'd'}><td colSpan={8} style={{ background: 'var(--card-2)' }}>
             <table><tbody>{o.items.map(i => <tr key={i.id}><td>{i.description}</td><td className="num">{i.quantity} {i.unit}</td><td><Money v={i.unit_price} /></td><td><Money v={i.line_total} /></td></tr>)}
+              {o.discount > 0 && <tr><td colSpan={3} className="muted">{t('discount')} {o.coupon_code && <span className="ltr">({o.coupon_code})</span>}</td><td>- <Money v={o.discount} /></td></tr>}
               <tr><td colSpan={3} className="muted">{t('vat')}</td><td><Money v={o.vat} /></td></tr></tbody></table>
             {o.delivery_address && <div className="small muted">📍 {o.delivery_address}</div>}{o.notes && <div className="small muted">{o.notes}</div>}
             {(invoices[o.id] || []).length > 0 && <div className="row small" style={{ marginTop: 6 }}>{invoices[o.id].map(i => <a key={i.id} className="btn ghost sm" href={`${API_BASE}/payments/invoices/${i.id}.html?token=${getToken()}`} target="_blank" rel="noreferrer">🧾 {t(i.kind)} {i.number}</a>)}</div>}
