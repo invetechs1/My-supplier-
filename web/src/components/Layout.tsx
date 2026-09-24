@@ -2,13 +2,16 @@ import { ReactNode, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth, useQuoteList } from '../auth'
+import { useCart } from '../cart'
 import { useI18n } from '../i18n'
 import { Wordmark } from './Logo'
+import SearchBox from './SearchBox'
 
 export function TopNav() {
   const { t, lang, setLang } = useI18n()
   const { user, logout } = useAuth()
   const quote = useQuoteList()
+  const cart = useCart()
   const nav = useNavigate()
   const [open, setOpen] = useState(false)
   const [unread, setUnread] = useState(0)
@@ -29,10 +32,12 @@ export function TopNav() {
           <NavLink to="/market" className="link">{t('market')}</NavLink>
           {user && <NavLink to={portal} className="link">{t('dashboard')}</NavLink>}
         </div>
-        <div className="spacer" />
-        {(!user || user.role === 'buyer') && (
-          <button className="pill" onClick={() => nav('/buyer/rfq/new')}>📋 {t('quote_list')}{quote.items.length > 0 && <span className="dot">{quote.items.length}</span>}</button>
-        )}
+        <div className="spacer nav-search"><SearchBox /></div>
+        {(!user || user.role === 'buyer') && (<>
+          <button className="pill" title={t('favorites')} onClick={() => nav('/favorites')}>♥{cart.favorites.length > 0 && <span className="dot">{cart.favorites.length}</span>}</button>
+          <button className="pill" title={t('cart')} onClick={() => nav('/cart')}>🛒{cart.count > 0 && <span className="dot">{cart.count}</span>}</button>
+          <button className="pill" title={t('quote_list')} onClick={() => nav('/buyer/rfq/new')}>📋{quote.items.length > 0 && <span className="dot">{quote.items.length}</span>}</button>
+        </>)}
         {user && <button className="pill" onClick={() => nav('/notifications')}>🔔{unread > 0 && <span className="dot">{unread}</span>}</button>}
         <button className="pill" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}>{lang === 'ar' ? 'EN' : 'عربي'}</button>
         {user ? (

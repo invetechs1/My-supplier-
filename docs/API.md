@@ -79,3 +79,25 @@ Base URL: `/api/v1`. Auth: `Authorization: Bearer <token>` from `/auth/login` or
 
 ## v1.2: uploads, BOQ, disputes
 `POST /suppliers/me/logo` (multipart) · `GET/POST /suppliers/me/documents?kind=cr|vat|classification|bank|other` · `POST /catalog/products/{id}/image` · `POST /rfq/import-boq` (xlsx/csv → items with suggested `product_id`) · `GET /rfq/{id}/export.xlsx` · `POST /orders/{id}/dispute {reason}` · `GET /orders/{id}/disputes` · admin: `GET /admin/documents?status=` · `POST /admin/documents/{id}/review {status, note, expires_at}` · `GET /admin/disputes?status=` · `POST /admin/disputes/{id}/resolve {status, resolution, refund}`.
+
+## v1.5: storefront (cart, favorites, addresses, reviews, stock)
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| GET | /catalog/suggest?q= | public | search-as-you-type: products, categories, brands |
+| GET | /catalog/products | public | new filters `brand, price_min, price_max, basis=sale|rent, in_stock=true`, sorts `rating|newest|popular`; `summary.best_offer_id` = cheapest offer that can go straight into the cart; `image_url` always set (supplier photo or generated `/catalog/products/{id}/image.svg`) |
+| GET/POST | /catalog/products/{id}/reviews | public / logged in | `{rating 1-5, title, comment}`; `verified` when the buyer has a delivered order with the product; updates `Product.rating` |
+| GET | /market/home | public | `best_sellers, popular, new_arrivals, top_rated, top_suppliers, deals` |
+| GET | /cart?coupon_code= | buyer | grouped by supplier with delivery fee, free-delivery threshold, minimum order, coupon preview, VAT, total |
+| POST | /cart/items `{offer_id, quantity}` · PATCH /cart/items/{id} `{quantity}` · DELETE /cart/items/{id} · DELETE /cart | buyer | stock-aware (400 when over `available_qty`); reference (external) offers are rejected |
+| POST | /cart/sync `{items:[{offer_id, quantity}]}` | buyer | merge a guest cart after login |
+| POST | /cart/checkout `{address_id?, delivery_address?, coupon_code?, notes?}` | buyer | one order per supplier; coupon split proportionally; stock reserved; notes carry a shared `[cart-xxxx]` group marker → `Order.group_ref` |
+| POST | /payments/checkout-group `{order_ids, method}` | buyer | one payment per order sharing `group_ref`; single `checkout_url` for the group total; `mark_paid` / failure propagate to the whole group |
+| GET/POST/PUT/DELETE | /account/addresses | logged in | first address becomes default; `is_default` moves the default |
+| GET/POST/DELETE | /account/favorites[/{product_id}] | logged in | `ProductOut.is_favorite` is filled for logged-in users |
+| GET | /suppliers/me/products?q= | supplier | the storefront view of the supplier's offers (with product, image, available_qty, low_stock_threshold) |
+| POST | /suppliers/me/products | supplier | create a brand-new catalog product together with its offer `{category_id, name_ar, name_en, brand?, unit, price, city?, available_qty?, min_qty?, rental_period?}` |
+| POST | /suppliers/me/offers/{id}/image | supplier | multipart product photo (shown on the product card when the product has no photo) |
+| PATCH | /suppliers/me/offers/{id} | supplier | now also `available_qty`, `clear_qty`, `low_stock_threshold`; `available_qty 0` ⇒ `out_of_stock`, ≤ threshold ⇒ `limited` |
+| PUT | /suppliers/me | supplier | new `delivery_fee, free_delivery_over, min_order_amount` |
+| GET | /orders/… | parties | `OrderOut.events[]` (status timeline: pending → paid → confirmed → in_delivery → delivered / cancelled) and `group_ref` |
+| GET/DELETE | /admin/product-reviews[/{id}] | admin | moderation |

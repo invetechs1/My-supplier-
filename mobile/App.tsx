@@ -17,8 +17,11 @@ import AccountScreen from './src/screens/AccountScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import PriceListScreen from './src/screens/PriceListScreen';
+import CartScreen from './src/screens/CartScreen';
+import FavoritesScreen from './src/screens/FavoritesScreen';
+import MyProductsScreen from './src/screens/MyProductsScreen';
 
-export type RootStack = { Tabs: undefined; Product: { id: number }; RFQDetail: { id: number }; NewRFQ: undefined; Login: { mode?: 'login' | 'register' } | undefined; Notifications: undefined; PriceList: undefined };
+export type RootStack = { Tabs: undefined; Product: { id: number }; RFQDetail: { id: number }; NewRFQ: undefined; Login: { mode?: 'login' | 'register' } | undefined; Notifications: undefined; PriceList: undefined; Favorites: undefined; MyProducts: undefined };
 const Stack = createNativeStackNavigator<RootStack>();
 const Tab = createBottomTabNavigator();
 
@@ -26,11 +29,12 @@ const theme = { ...DefaultTheme, colors: { ...DefaultTheme.colors, primary: C.pr
 const icon = (e: string) => ({ tabBarIcon: () => <Text style={{ fontSize: 18 }}>{e}</Text> });
 
 function Tabs() {
-  const { user, unread } = useStore();
+  const { user, unread, cartCount } = useStore();
   return (
     <Tab.Navigator screenOptions={{ headerStyle: { backgroundColor: C.deep }, headerTintColor: '#fff', tabBarActiveTintColor: C.primary, tabBarLabelStyle: { fontWeight: '700' } }}>
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: t('prices'), ...icon('🏗️') }} />
       <Tab.Screen name="RFQs" component={RFQListScreen} options={{ title: user?.role === 'supplier' ? t('open_rfqs') : t('rfq'), ...icon('📋') }} />
+      {(!user || user.role === 'buyer') && <Tab.Screen name="Cart" component={CartScreen} options={{ title: t('cart'), ...icon('🛒'), tabBarBadge: cartCount > 0 ? cartCount : undefined }} />}
       <Tab.Screen name="Orders" component={OrdersScreen} options={{ title: t('orders'), ...icon('📦') }} />
       <Tab.Screen name="Account" component={AccountScreen} options={{ title: t('me'), ...icon('👤'), tabBarBadge: unread > 0 ? unread : undefined }} />
     </Tab.Navigator>
@@ -47,6 +51,8 @@ function Root() {
       <Stack.Screen name="Login" component={LoginScreen} options={{ title: t('login') }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: t('notifications') }} />
       <Stack.Screen name="PriceList" component={PriceListScreen} options={{ title: t('price_list') }} />
+      <Stack.Screen name="Favorites" component={FavoritesScreen} options={{ title: t('favorites') }} />
+      <Stack.Screen name="MyProducts" component={MyProductsScreen} options={{ title: t('my_products') }} />
     </Stack.Navigator>
   );
 }

@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { api, Category } from '../api'
+import { api, Category, HomeSections } from '../api'
+import { ProductCard } from './Catalog'
 import { Change, Money, useLoad } from '../components/ui'
 import { useI18n } from '../i18n'
 
@@ -14,6 +15,8 @@ export default function Home() {
   const cats = useLoad(() => api.get<Category[]>('/catalog/categories'))
   const index = useLoad(() => api.get<any[]>('/market/index'))
   const trending = useLoad(() => api.get<any[]>('/market/trending', { limit: 6 }))
+  const home = useLoad(() => api.get<HomeSections>('/market/home'))
+  const Section = ({ k, items }: { k: string; items: any[] }) => items.length ? <section className="container" style={{ padding: '26px 16px 0' }}><div className="section-head"><h2>{t(k)}</h2><Link to="/catalog" className="small">{t('shop_all')} →</Link></div><div className="hscroll">{items.slice(0, 8).map(p => <ProductCard key={p.id} p={p} />)}</div></section> : null
   const submit = (e: FormEvent) => { e.preventDefault(); nav(`/catalog?q=${encodeURIComponent(q)}${city ? `&city=${encodeURIComponent(city)}` : ''}`) }
   const tops = (cats.data || []).filter(c => !c.parent_id)
   return (
@@ -51,6 +54,11 @@ export default function Home() {
         </div>
       </section>
 
+      {home.data && <>
+        <Section k="best_sellers" items={home.data.best_sellers} />
+        {home.data.deals.length > 0 && <section className="container" style={{ padding: '26px 16px 0' }}><h2>🎁 {t('deals')}</h2><div className="grid grid-4">{home.data.deals.map(d => <div className="deal" key={d.code}><div className="code">{d.code}</div><div className="small">{d.kind === 'percent' ? `${d.value}%` : `${d.value} ${t('sar')}`} {t('discount')}{d.min_order > 0 && <> · {t('min_order_note')} {d.min_order} {t('sar')}</>}</div></div>)}</div></section>}
+        <Section k="new_arrivals" items={home.data.new_arrivals} />
+      </>}
       <section className="container" style={{ padding: '30px 16px 0' }}>
         <h2>{t('categories')}</h2>
         <div className="grid grid-4">
@@ -79,6 +87,11 @@ export default function Home() {
         </div>
       </section>
 
+      {home.data && <>
+        <Section k="popular" items={home.data.popular} />
+        <Section k="top_rated" items={home.data.top_rated} />
+        {home.data.top_suppliers.length > 0 && <section className="container" style={{ padding: '26px 16px 0' }}><div className="section-head"><h2>{t('top_suppliers')}</h2><Link to="/suppliers" className="small">{t('suppliers')} →</Link></div><div className="grid grid-4">{home.data.top_suppliers.map(s => <Link key={s.id} to={`/suppliers/${s.id}`} className="cat-tile">{s.logo_url ? <img src={s.logo_url} alt="" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 8 }} /> : <span className="ic">🏢</span>}<span><div className="n">{s.name}</div><div className="c">{s.city} · ★ {s.rating} ({s.rating_count})</div></span></Link>)}</div></section>}
+      </>}
       <section className="container" style={{ padding: '30px 16px 0' }}>
         <h2>{t('how_title')}</h2>
         <div className="grid grid-3 steps">

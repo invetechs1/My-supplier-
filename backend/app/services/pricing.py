@@ -47,6 +47,16 @@ def split_basis(offers: list[Offer]) -> tuple[list[Offer], str, dict]:
     return [o for o in rent if o.rental_period == extra["rental_basis"]], extra["rental_basis"], extra
 
 
+def best_orderable(offers: list) -> dict:
+    """Cheapest offer a buyer can put in the cart right now (registered supplier, not out of stock)."""
+    cand = [o for o in offers if o.supplier and not o.supplier.is_external and o.supplier.user_id and o.stock_status != "out_of_stock"]
+    if not cand:
+        return {"best_offer_id": None, "best_offer_price": None}
+    o = min(cand, key=lambda x: offer_prices(x)[0])
+    return {"best_offer_id": o.id, "best_offer_price": round(offer_prices(o)[0], 2), "best_offer_supplier": o.supplier.name,
+            "best_offer_stock": o.stock_status, "best_offer_min_qty": o.min_qty or 1}
+
+
 def summarize(db: Session, product_id: int, city: str | None = None) -> dict:
     offers = active_offers_query(db, product_id, city).all()
     if not offers:
@@ -75,6 +85,7 @@ def summarize(db: Session, product_id: int, city: str | None = None) -> dict:
         "cities": sorted({o.city for o in all_offers if o.city}),
         "basis": basis,
         **extra,
+        **best_orderable(offers),
     }
 
 
@@ -113,6 +124,7 @@ def bulk_summaries(db: Session, product_ids: list[int], city: str | None = None)
             "cities": sorted({o.city for o in all_offers if o.city}),
             "basis": basis,
             **extra,
+            **best_orderable(offers),
         }
         avg_now = out[pid]["avg_price"]
         out[pid]["change_30d_pct"] = round((avg_now - past[pid]) / past[pid] * 100, 2) if past.get(pid) else None

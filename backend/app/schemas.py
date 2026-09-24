@@ -146,6 +146,11 @@ class PriceSummary(BaseModel):
     basis: str = ""  # '' = sale price per unit | day | week | month = rental price
     rental_min_price: Optional[float] = None
     rental_basis: str = ""
+    best_offer_id: Optional[int] = None  # cheapest offer that can go straight into the cart
+    best_offer_price: Optional[float] = None
+    best_offer_supplier: str = ""
+    best_offer_stock: str = ""
+    best_offer_min_qty: float = 1
 
 
 class ProductOut(ORM):

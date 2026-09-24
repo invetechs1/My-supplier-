@@ -28,6 +28,7 @@ Building-materials price comparison, RFQ (request-for-quotation) and supplier-bi
 - Register, get verified by the platform, manage a **live price list** (per city, min qty, stock, VAT handling) or **bulk import CSV/JSON**.
 - Receive **open RFQs** in their specialties, submit / update / withdraw bids, see win-rate, orders, pipeline and revenue on their dashboard.
 - Confirm → deliver orders; collect ratings.
+- **"منتجاتي / My products" storefront page**: every item the supplier sells exactly as buyers see it — photo (upload from the page), price and available quantity editable in place, stock state, min qty, city, rental basis; add an item from the catalog or create a brand-new product that is not in the catalog yet. Shipping settings (delivery fee, free-delivery threshold, minimum order).
 
 **Payments, OTP, notifications (v1.1)**
 - **Escrow payments**: pay an order by mada / card / Apple Pay / STC Pay (Moyasar hosted page) or bank transfer; funds are held by the platform and released to the supplier after delivery, minus the platform fee. Payouts, refunds, ZATCA-style tax invoices with QR, platform-fee invoices, admin finance dashboard.
@@ -35,6 +36,7 @@ Building-materials price comparison, RFQ (request-for-quotation) and supplier-bi
 - **Notifications**: every event goes to in-app + email + SMS + WhatsApp + Expo push according to the user's preferences, through an outbox with retries and an admin delivery log.
 - **Background jobs**: RFQ expiry, price alerts, daily external feed fetching, payment expiry. Rate limiting, Alembic migrations.
 - **v1.2**: logo/product-image/document uploads (local or S3), supplier compliance document review, Excel/CSV bill-of-quantities import into an RFQ with product matching, bid comparison export to Excel, order disputes with admin resolution and refund, Sentry hook.
+- **v1.5 — a real storefront (Amazon/Noon-style, for construction)**: product images and placeholders, **shopping cart** (guest cart in the browser merged into the account on login), one checkout that creates **one order per supplier** and pays them all in **one payment** (escrow), supplier **delivery fees / free-delivery thresholds / minimum order**, coupons at checkout, saved **delivery addresses**, **favorites**, **product reviews** (verified-purchase badge), **stock quantities** (reserved on order, restored on cancel, low-stock alerts to the supplier), **order tracking timeline**, search-as-you-type, filters (sub-category, brand, price range, sale/rent, in stock) and sorting by rating / newest / popularity, home sections (best sellers, most viewed, new arrivals, top rated, top suppliers, deals) — on the web and in the mobile app.
 - Details and env variables: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
 **For the platform (admin dashboard)**

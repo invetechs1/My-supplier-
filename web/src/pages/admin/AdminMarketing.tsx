@@ -1,14 +1,15 @@
 import { FormEvent, useState } from 'react'
-import { api, Coupon, Review } from '../../api'
+import { api, Coupon, Review, ProductReview } from '../../api'
 import { Alert, Badge, Modal, Spinner, useLoad } from '../../components/ui'
 import { fmtDate, useI18n } from '../../i18n'
 
 const EMPTY = { code: '', kind: 'percent', value: 10, min_order: 0, max_discount: '' as string | number, max_uses: '' as string | number, audience: 'all', is_active: true, expires_at: '' }
 
 export default function AdminMarketing() {
-  const { t, lang } = useI18n()
+  const { t, lang, name } = useI18n()
   const coupons = useLoad(() => api.get<Coupon[]>('/admin/coupons'))
   const reviews = useLoad(() => api.get<Review[]>('/admin/reviews'))
+  const previews = useLoad(() => api.get<ProductReview[]>('/admin/product-reviews'))
   const [edit, setEdit] = useState<(typeof EMPTY & { id?: number }) | null>(null)
   const [bc, setBc] = useState({ title: '', body: '', audience: 'all' })
   const [msg, setMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
@@ -44,6 +45,13 @@ export default function AdminMarketing() {
         {reviews.loading ? <Spinner /> : <div className="t-wrap"><table>
           <thead><tr><th>#</th><th>{t('supplier')}</th><th>{t('role_buyer')}</th><th>{t('rating')}</th><th>{t('notes')}</th><th>{t('order')}</th><th>{t('updated')}</th><th></th></tr></thead>
           <tbody>{(reviews.data || []).map(r => <tr key={r.id}><td className="num">{r.id}</td><td>{r.supplier_name}</td><td>{r.buyer_name}</td><td><Badge>{'★'.repeat(r.rating)}</Badge></td><td>{r.comment}</td><td className="num">#{r.order_id}</td><td className="small muted">{fmtDate(r.created_at, lang)}</td><td><button className="btn ghost sm" onClick={() => { if (confirm(t('delete') + '?')) api.del(`/admin/reviews/${r.id}`).then(reviews.reload) }}>🗑</button></td></tr>)}</tbody>
+        </table></div>}
+      </div>
+      <div className="card pad-0"><h3 style={{ padding: '12px 16px 0' }}>{t('product_reviews')}</h3>
+        {previews.loading ? <Spinner /> : <div className="t-wrap"><table>
+          <thead><tr><th>#</th><th>{t('products')}</th><th>{t('role_buyer')}</th><th>{t('rating')}</th><th>{t('title')}</th><th>{t('notes')}</th><th>{t('updated')}</th><th></th></tr></thead>
+          <tbody>{(previews.data || []).map(r => <tr key={r.id}><td className="num">{r.id}</td><td><a href={`/products/${r.product_id}`} target="_blank" rel="noreferrer">{name({ name_ar: r.product_name_ar, name_en: r.product_name_en })}</a></td><td>{r.author}{r.verified && <> <Badge>✓ {t('verified_purchase')}</Badge></>}</td><td><Badge>{'★'.repeat(r.rating)}</Badge></td><td>{r.title}</td><td>{r.comment}</td><td className="small muted">{fmtDate(r.created_at, lang)}</td><td><button className="btn ghost sm" onClick={() => { if (confirm(t('delete') + '?')) api.del(`/admin/product-reviews/${r.id}`).then(previews.reload) }}>🗑</button></td></tr>)}
+            {(previews.data || []).length === 0 && <tr><td colSpan={8} className="muted" style={{ textAlign: 'center' }}>—</td></tr>}</tbody>
         </table></div>}
       </div>
       {edit && <Modal title={edit.id ? `${t('edit')} — ${edit.code}` : t('coupon')} onClose={() => setEdit(null)}>

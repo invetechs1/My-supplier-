@@ -24,7 +24,7 @@ export function OrdersTable({ orders, supplierView, reload }: { orders: Order[];
       <tbody>{orders.map(o => (
         <>
           <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => { setOpen(open === o.id ? null : o.id); if (open !== o.id && !invoices[o.id] && ['paid', 'released', 'refunded'].includes(o.payment_status)) loadInvoices(o.id) }}>
-            <td className="num">{o.id}{o.rfq_id && <div className="small muted">RFQ #{o.rfq_id}</div>}</td>
+            <td className="num">{o.id}{o.rfq_id && <div className="small muted">RFQ #{o.rfq_id}</div>}{o.group_ref && <div className="small muted" title={t('group_orders')}>🛒 {o.group_ref.slice(-4)}</div>}</td>
             <td>{supplierView ? o.buyer_name : o.supplier?.name}</td>
             <td className="num">{o.items.length}</td>
             <td className="bold"><Money v={o.total} /></td>
@@ -45,7 +45,8 @@ export function OrdersTable({ orders, supplierView, reload }: { orders: Order[];
             <table><tbody>{o.items.map(i => <tr key={i.id}><td>{i.description}</td><td className="num">{i.quantity} {i.unit}</td><td><Money v={i.unit_price} /></td><td><Money v={i.line_total} /></td></tr>)}
               {o.discount > 0 && <tr><td colSpan={3} className="muted">{t('discount')} {o.coupon_code && <span className="ltr">({o.coupon_code})</span>}</td><td>- <Money v={o.discount} /></td></tr>}
               <tr><td colSpan={3} className="muted">{t('vat')}</td><td><Money v={o.vat} /></td></tr></tbody></table>
-            {o.delivery_address && <div className="small muted">📍 {o.delivery_address}</div>}{o.notes && <div className="small muted">{o.notes}</div>}
+            {o.delivery_address && <div className="small muted">📍 {o.delivery_address}</div>}{o.notes && <div className="small muted">{o.notes.replace(/\n?\[cart-[a-z0-9]+\]/, '')}</div>}
+            {(o.events || []).length > 0 && <div style={{ marginTop: 6 }}><b className="small">🚚 {t('timeline')}</b><ul className="timeline">{o.events.map(e => <li key={e.id}><span className="pt" /><span className="small"><Status s={e.status} /> <span className="muted">{fmtDate(e.created_at, lang)}</span>{e.note && <div className="muted">{e.note}</div>}</span></li>)}</ul></div>}
             {(invoices[o.id] || []).length > 0 && <div className="row small" style={{ marginTop: 6 }}>{invoices[o.id].map(i => <a key={i.id} className="btn ghost sm" href={`${API_BASE}/payments/invoices/${i.id}.html?token=${getToken()}`} target="_blank" rel="noreferrer">🧾 {t(i.kind)} {i.number}</a>)}</div>}
           </td></tr>}
         </>

@@ -25,6 +25,12 @@ const d: Record<string, [string, string]> = {
   otp_send: ['أرسل رمز التحقق', 'Send code'], otp_code: ['رمز التحقق', 'Code'], otp_verify: ['تحقق', 'Verify'], otp_sent: ['أُرسل الرمز إلى', 'Code sent to'], phone: ['الجوال', 'Phone'], invoice: ['الفاتورة', 'Invoice'],
   push_enabled: ['إشعارات التطبيق مفعّلة', 'Push notifications enabled'], login_otp: ['دخول برمز الجوال', 'Log in with phone code'],
   rent: ['إيجار', 'Rent'], per_day: ['/ يوم', '/ day'], per_week: ['/ أسبوع', '/ week'], per_month: ['/ شهر', '/ month'], rent_from: ['إيجار من', 'Rent from'],
+  cart: ['السلة', 'Cart'], add_to_cart: ['أضف للسلة', 'Add to cart'], in_cart: ['في السلة ✓', 'In cart ✓'], cart_empty: ['سلتك فارغة', 'Your cart is empty'], checkout: ['إتمام الشراء', 'Checkout'], place_order: ['تأكيد الطلب', 'Place order'], pay_all: ['ادفع الكل', 'Pay all'],
+  subtotal: ['المجموع', 'Subtotal'], vat: ['الضريبة 15%', 'VAT 15%'], delivery: ['التوصيل', 'Delivery'], free_delivery: ['توصيل مجاني', 'Free delivery'], sold_by: ['يبيعه', 'Sold by'], coupon: ['كود خصم', 'Coupon'], apply: ['تطبيق', 'Apply'], discount: ['خصم', 'Discount'],
+  favorites: ['المفضلة', 'Favorites'], no_favorites: ['لا توجد منتجات مفضلة', 'No favorites yet'], address: ['عنوان التوصيل', 'Delivery address'], addresses: ['العناوين', 'Addresses'], my_products: ['منتجاتي', 'My products'], available_qty: ['الكمية المتاحة', 'Available qty'],
+  price: ['السعر', 'Price'], upload_image: ['صورة', 'Photo'], saved: ['تم الحفظ ✓', 'Saved ✓'], reviews: ['التقييمات', 'Reviews'], write_review: ['قيّم المنتج', 'Rate this product'], verified_purchase: ['شراء موثّق', 'Verified purchase'], no_reviews: ['لا توجد تقييمات بعد', 'No reviews yet'],
+  best_sellers: ['الأكثر مبيعاً', 'Best sellers'], new_arrivals: ['وصل حديثاً', 'New arrivals'], popular: ['الأكثر مشاهدة', 'Most viewed'], top_rated: ['الأعلى تقييماً', 'Top rated'], buyer_only: ['التسوق لحسابات المشترين فقط', 'Shopping is for buyer accounts only'], reference_only: ['سعر مرجعي', 'Reference price'],
+  timeline: ['تتبع الطلب', 'Tracking'], only_left: ['متبقٍ', 'left'], buy_now: ['اشترِ الآن', 'Buy now'], orders_created: ['تم إنشاء الطلبات', 'Orders created'], remove: ['إزالة', 'Remove'], clear: ['مسح', 'Clear'], login_to_checkout: ['سجّل الدخول لإتمام الشراء', 'Log in to check out'], notes: ['ملاحظات', 'Notes'],
   demo: ['حسابات تجريبية: buyer@demo.sa · supplier1@demo.sa / Demo@2026', 'Demo: buyer@demo.sa · supplier1@demo.sa / Demo@2026'], next: ['التالي', 'Next'],
 };
 export const t = (k: string) => (d[k] ? d[k][lang === 'ar' ? 0 : 1] : k);

@@ -4,6 +4,7 @@ import { useAuth } from '../auth'
 import OtpBox from '../components/OtpBox'
 import { Alert, Badge } from '../components/ui'
 import { useI18n } from '../i18n'
+import AddressesCard from './AddressesCard'
 
 export default function SettingsPage() {
   const { t } = useI18n()
@@ -36,6 +37,7 @@ export default function SettingsPage() {
         <div className="field"><label>{t('password')}</label><input type="password" value={pw.current_password} onChange={e => setPw({ ...pw, current_password: e.target.value })} required /></div>
         <div className="field"><label>{t('change_password')}</label><input type="password" value={pw.new_password} onChange={e => setPw({ ...pw, new_password: e.target.value })} required minLength={8} /></div>
         <button className="btn">{t('save')}</button></form>
+      {user?.role === 'buyer' && <AddressesCard />}
     </div>
   )
 }

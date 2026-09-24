@@ -87,9 +87,10 @@ def placeholder_image(product_id: int, db: Session = Depends(get_db)):
     p = db.get(Product, product_id)
     icon = (p.category.icon if p and p.category else "") or "📦"
     name = escape(p.name_ar if p else "")
+    hue = 120 + ((product_id * 37) % 60) - 30  # a soft, slightly different green tint per product
     svg = f"""<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300' width='400' height='300'>
-<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#EDF5EF'/><stop offset='1' stop-color='#C6E5D1'/></linearGradient></defs>
-<rect width='400' height='300' fill='url(#g)'/><text x='200' y='150' font-size='110' text-anchor='middle' dominant-baseline='middle'>{icon}</text>
+<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='hsl({hue},40%,95%)'/><stop offset='1' stop-color='hsl({hue},38%,82%)'/></linearGradient></defs>
+<rect width='400' height='300' fill='url(#g)'/><circle cx='200' cy='135' r='78' fill='#fff' opacity='.55'/><text x='200' y='140' font-size='96' text-anchor='middle' dominant-baseline='middle'>{icon}</text>
 <text x='200' y='262' font-family='Noto Kufi Arabic, sans-serif' font-size='18' fill='#124A2C' text-anchor='middle' direction='rtl'>{name[:40]}</text></svg>"""
     return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
 

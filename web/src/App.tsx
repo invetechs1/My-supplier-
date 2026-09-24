@@ -5,6 +5,9 @@ import { Portal, SiteLayout } from './components/Layout'
 import { Spinner } from './components/ui'
 import Home from './pages/Home'
 import Catalog from './pages/Catalog'
+import CartPage from './pages/CartPage'
+import FavoritesPage from './pages/FavoritesPage'
+import MyProducts from './pages/supplier/MyProducts'
 import ProductPage from './pages/ProductPage'
 import ComparePage from './pages/ComparePage'
 import SuppliersPage from './pages/SuppliersPage'
@@ -60,6 +63,8 @@ function BuyerPortal() {
     { to: '/buyer/rfq/new', label: t('new_rfq'), icon: '➕' },
     { to: '/buyer/rfqs', label: t('my_rfqs'), icon: '📋' },
     { to: '/buyer/orders', label: t('orders'), icon: '📦' },
+    { to: '/cart', label: t('cart'), icon: '🛒' },
+    { to: '/favorites', label: t('favorites'), icon: '♥' },
     { to: '/buyer/payments', label: t('payments'), icon: '💳' },
     { to: '/buyer/alerts', label: t('alerts'), icon: '🔔' },
     { to: '/settings', label: t('settings'), icon: '⚙️' },
@@ -69,6 +74,7 @@ function SupplierPortal() {
   const { t } = useI18n()
   return <Portal links={[
     { to: '/supplier', label: t('dashboard'), icon: '📊' },
+    { to: '/supplier/products', label: t('my_products'), icon: '🛍️' },
     { to: '/supplier/prices', label: t('price_list'), icon: '🏷️' },
     { to: '/supplier/rfqs', label: t('open_rfqs'), icon: '📨' },
     { to: '/supplier/bids', label: t('my_bids'), icon: '📝' },
@@ -107,6 +113,8 @@ export default function App() {
         <Route path="catalog" element={<Catalog />} />
         <Route path="products/:id" element={<ProductPage />} />
         <Route path="compare" element={<ComparePage />} />
+        <Route path="cart" element={<CartPage />} />
+        <Route path="favorites" element={<FavoritesPage />} />
         <Route path="suppliers" element={<SuppliersPage />} />
         <Route path="suppliers/:id" element={<SupplierProfilePage />} />
         <Route path="market" element={<MarketPage />} />
@@ -133,6 +141,7 @@ export default function App() {
 
         <Route path="supplier" element={<Guard roles={['supplier']}><SupplierPortal /></Guard>}>
           <Route index element={<SupplierDashboard />} />
+          <Route path="products" element={<MyProducts />} />
           <Route path="prices" element={<PriceList />} />
           <Route path="rfqs" element={<OpenRFQs />} />
           <Route path="rfqs/:id" element={<RFQDetail />} />

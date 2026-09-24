@@ -32,7 +32,9 @@ export default function AccountScreen({ navigation }: any) {
           )}
           <View style={{ height: 12 }} />
           <Btn title={`🔔 ${t('notifications')}${unread ? ` (${unread})` : ''}`} ghost onPress={() => navigation.navigate('Notifications')} style={{ marginBottom: 8 }} />
+          {user.role === 'supplier' && <Btn title={`🛍️ ${t('my_products')}`} ghost onPress={() => navigation.navigate('MyProducts')} style={{ marginBottom: 8 }} />}
           {user.role === 'supplier' && <Btn title={`🏷️ ${t('price_list')}`} ghost onPress={() => navigation.navigate('PriceList')} style={{ marginBottom: 8 }} />}
+          {user.role === 'buyer' && <Btn title={`♥ ${t('favorites')}`} ghost onPress={() => navigation.navigate('Favorites')} style={{ marginBottom: 8 }} />}
           <Btn title={t('logout')} ghost onPress={logout} style={{ marginBottom: 8 }} />
         </>
       ) : (
@@ -41,10 +43,11 @@ export default function AccountScreen({ navigation }: any) {
           <Text style={{ color: '#2E9E5B', fontWeight: '800', letterSpacing: 2, marginBottom: 12 }}>BUILD FOR LESS — {t('slogan_ar')}</Text>
           <Btn title={t('login')} onPress={() => navigation.navigate('Login')} style={{ marginBottom: 8 }} />
           <Btn title={t('register')} ghost onPress={() => navigation.navigate('Login', { mode: 'register' })} style={{ marginBottom: 8 }} />
+          <Btn title={`♥ ${t('favorites')}`} ghost onPress={() => navigation.navigate('Favorites')} style={{ marginBottom: 8 }} />
         </>
       )}
       <Btn title={`🌐 ${t('language')}`} ghost onPress={() => { setLang(lang === 'ar' ? 'en' : 'ar'); force(x => x + 1); }} />
-      <Text style={[S.muted, { marginTop: 20, textAlign: 'center' }]}>{t('brand')} · Build for Less · v1.1.0</Text>
+      <Text style={[S.muted, { marginTop: 20, textAlign: 'center' }]}>{t('brand')} · Build for Less · v1.5.0</Text>
     </ScrollView>
   );
 }

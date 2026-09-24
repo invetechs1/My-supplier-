@@ -38,6 +38,8 @@ export default function OrdersScreen({ navigation }: any) {
             <View style={S.card}>
               <View style={[S.row, S.between]}><Text style={S.bold}>#{o.id} · {isSupplier ? o.buyer_name : o.supplier?.name}</Text><View style={S.row}><Status s={o.status} /><Status s={o.payment_status} /></View></View>
               {o.items.map((i, idx) => <Text key={idx} style={S.muted}>{i.description} × {i.quantity} {i.unit} — {money(i.unit_price)}</Text>)}
+              {!!o.delivery_address && <Text style={S.muted}>📍 {o.delivery_address}</Text>}
+              {(o.events || []).length > 0 && <View style={{ marginTop: 4 }}><Text style={[S.muted, { fontWeight: '700' }]}>🚚 {t('timeline')}</Text>{o.events!.map(e => <Text key={e.id} style={S.muted}>● {t(e.status)} — {new Date(e.created_at.endsWith('Z') ? e.created_at : e.created_at + 'Z').toLocaleDateString('en-GB')}{e.note ? ` — ${e.note}` : ''}</Text>)}</View>}
               <View style={[S.row, S.between, { marginTop: 6 }]}>
                 <Text style={S.price}>{money(o.total)}</Text>
                 <View style={S.row}>{canPay(o) && <Btn title={'💳 ' + t('pay_now')} onPress={() => setPaying(paying === o.id ? null : o.id)} />}{(isSupplier ? NEXT[o.status] || [] : o.status === 'pending' ? ['cancelled'] : []).map(s => <Btn key={s} ghost title={t(s)} onPress={() => move(o, s)} />)}</View>

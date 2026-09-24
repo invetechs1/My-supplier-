@@ -43,6 +43,12 @@
         {
           "color": "#175934"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow access to your photos to upload product pictures to your storefront."
+        }
       ]
     ],
     "description": "Build for Less — building material prices from every supplier, RFQs and bidding.",
