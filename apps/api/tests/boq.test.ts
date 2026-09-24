@@ -75,6 +75,18 @@ describe("matchLine", () => {
   });
 });
 
+describe("equipment vocabulary", () => {
+  it("maps Arabic and English equipment words to one token", () => {
+    expect(tokenize("حفار صغير 3.5 طن").words).toContain("excavator");
+    expect(tokenize("Mini excavator 3.5 ton").words).toContain("excavator");
+    expect(tokenize("مولدة ديزل 30 كي في إيه").words).toContain("generator");
+    expect(tokenize("طفاية حريق بودرة 6 كجم").words).toContain("extinguisher");
+  });
+  it("matches Arabic words spelled with ta marbuta through the synonym table", () => {
+    expect(tokenize("خرسانة جاهزة").words).toEqual(expect.arrayContaining(["concrete", "readymix"]));
+  });
+});
+
 describe("optimise", () => {
   const offer = (supplierId: string, price: number, lead = 3) => ({ listingId: `${supplierId}-${price}`, supplierId, supplierName: supplierId.toUpperCase(), verified: true, city: "Riyadh", price, minQty: 1, leadTimeDays: lead, source: "SUPPLIER" });
   it("builds cheapest basket and best single supplier", () => {

@@ -44,7 +44,7 @@ Docs: [API contract](docs/API.md) · [Architecture](docs/ARCHITECTURE.md) · [Ro
   per line, the cheapest mixed basket, the best single supplier that can cover the whole BOQ,
   savings versus the market average, and a per-supplier breakdown. One click turns the BOQ into an
   RFQ so registered suppliers bid on it. Available on web (`/boq`) and mobile.
-* **Price discovery** – search 120+ seeded products across 22 categories (cement, rebar, blocks, aggregates, tiles,
+* **Price discovery** – search 270 seeded products across 32 categories (cement, rebar, blocks, aggregates, equipment, machinery, generators, welding, lifting, surveying, site facilities, fire protection, solar, tiles,
   paints, MEP, insulation, timber, gypsum, doors/windows, tools, PPE, hardware, HVAC, sanitary,
   lighting, scaffolding, roofing, chemicals, precast). Each material shows the lowest,
   average, median and highest price, every supplier's listing, imported market reference prices,

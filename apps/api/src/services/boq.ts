@@ -73,7 +73,24 @@ const SYNONYMS: Record<string, string> = {
   white: "white", ابيض: "white", أبيض: "white",
   deformed: "rebar", grade: "grade", "g60": "grade60", "gr60": "grade60",
   مقاوم: "resistant", كبريتات: "sulphate", sulfate: "sulphate", src: "sulphate",
+  // equipment & site vocabulary
+  حفار: "excavator", حفارة: "excavator", digger: "excavator", excavators: "excavator", بوكلين: "backhoe", بكلين: "backhoe",
+  شيول: "loader", لودر: "loader", بوبكات: "skid", قلاب: "dump", tipper: "dump", مدحلة: "roller", رصاصة: "roller", قريدر: "grader",
+  فوركلفت: "forklift", رافعة: "crane", كرين: "crane", ونش: "hoist", winch: "hoist", جندول: "gondola", سقالة: "scaffold", سقالات: "scaffold", scaffolding: "scaffold",
+  مولد: "generator", مولدة: "generator", genset: "generator", generators: "generator", ضاغط: "compressor", كمبروسر: "compressor", كمبريسور: "compressor",
+  مضخة: "pump", pumps: "pump", غطاس: "submersible", خلاطة: "mixer", دكاكة: "compactor", rammer: "compactor",
+  هزاز: "vibrator", لحام: "welding", welder: "welding", الكترود: "electrode", إلكترود: "electrode", electrodes: "electrode",
+  طفاية: "extinguisher", extinguishers: "extinguisher", حريق: "fire", رشاش: "sprinkler", sprinklers: "sprinkler",
+  كرفان: "cabin", بورتاكابين: "cabin", portacabin: "cabin", كونتينر: "container", حاوية: "container", سياج: "fence", fencing: "fence",
+  خوذة: "helmet", قفازات: "gloves", سترة: "vest", سلم: "ladder", ladders: "ladder", مصعد: "elevator", lift: "elevator", elevators: "elevator",
+  شمسي: "solar", شمسية: "solar", لوح: "panel", ألواح: "panel", الواح: "panel", بطارية: "battery", انفرتر: "inverter", إنفرتر: "inverter",
+  توتال: "total", ميزان: "level", ليزر: "laser",
 };
+// Tokens are normalised (ة→ه, أ→ا …) before lookup, so index the synonym table by its normalised keys as well.
+for (const [k, v] of Object.entries(SYNONYMS)) {
+  const nk = normaliseArabic(k);
+  if (nk !== k && !(nk in SYNONYMS)) SYNONYMS[nk] = v;
+}
 
 const STOP = new Set(["of", "the", "and", "for", "with", "per", "to", "in", "x", "by", "supply", "install", "including", "incl", "type", "size", "as", "spec", "approved", "complete", "works", "slump", "pumped", "delivered", "delivery", "site", "grade", "class", "من", "في", "مع", "توريد", "تركيب", "و", "حسب", "المواصفات", "درجه", "نوع"]);
 
@@ -90,7 +107,7 @@ const SIZE_SUFFIXES = new Set(["mm", "cm", "m", "kg", "g", "kn", "mpa", "w", "kw
 export function tokenize(text: string): { words: string[]; numbers: string[]; sized: string[] } {
   const clean = normaliseArabic(text.toLowerCase())
     .replace(/["“”'’]/g, " inch ")
-    .replace(/[×xX]/g, " x ")
+    .replace(/×/g, " x ").replace(/(\d)\s*[xX]\s*(?=\d)/g, "$1 x ")
     .replace(/(\p{L})-(\p{L})/gu, "$1 $2") // ready-mix -> ready mix (keep 3/4 and 12.5)
     .replace(/[^\p{L}\p{N}./-]+/gu, " ");
   const numbers = new Set<string>();
