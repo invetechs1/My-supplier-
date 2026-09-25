@@ -1,14 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import type { Category } from "@mysupplier/shared";
 import { api } from "@/lib/api";
+import { marketplaceApi } from "@/lib/api/marketplace";
 import { useAsync, usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { cn, formatNumber } from "@/lib/format";
 import { Alert, Card, EmptyState, LinkButton, LoadingBlock } from "@/components/ui";
 import { ProductCard, ProductRail, SectionHeading } from "@/components/shop/ProductCard";
+import { ProductListing } from "@/components/shop/ProductListing";
+import { BrandTile } from "@/components/shop/BrandTile";
+import { RecentlyViewed, Recommended } from "@/components/shop/RecentlyViewed";
+
+/** Query keys that turn /shop into the search / listing view (header search submits to /shop?q=). */
+const LISTING_KEYS = ["q", "categoryId", "brand", "city", "minPrice", "maxPrice", "inStock", "minRating", "sort", "page"];
 
 interface Banner {
   key: string;
@@ -116,6 +124,29 @@ function CategoryRail({ categories, lang }: { categories: Category[]; lang: "en"
   );
 }
 
+function BrandStrip() {
+  const { t } = useI18n();
+  const brands = useAsync(() => marketplaceApi.brands(), []);
+  const list = (brands.data ?? []).slice(0, 12);
+  if (brands.error || (!brands.loading && list.length === 0)) return null;
+  return (
+    <section aria-labelledby="shop-brands">
+      <SectionHeading title={<span id="shop-brands">{t("nav.brands")}</span>} subtitle="Shop by manufacturer" href="/brands" linkLabel="All brands" />
+      {brands.loading ? (
+        <div className="h-28 animate-pulse rounded-xl bg-slate-100" aria-hidden />
+      ) : (
+        <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+          <div className="flex gap-3">
+            {list.map((b) => (
+              <BrandTile key={b.brand} brand={b} compact />
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 const TRUST = [
   { title: "Verified suppliers", body: "CR and VAT checked before the badge is shown." },
   { title: "Live prices", body: "Offers update as suppliers change their lists." },
@@ -123,7 +154,7 @@ const TRUST = [
   { title: "Delivery across KSA", body: "Per-supplier delivery to any major city." },
 ];
 
-export default function ShopHomePage() {
+function ShopHome() {
   const { t, lang } = useI18n();
   usePageTitle(t("shop.title"));
   const home = useAsync(() => api.shopHome(), []);
@@ -157,6 +188,8 @@ export default function ShopHomePage() {
             <ProductRail products={home.data.deals ?? []} emptyText="No deals right now — check back soon." />
           </section>
 
+          <Recommended />
+
           <section aria-labelledby="shop-featured">
             <SectionHeading title={<span id="shop-featured">{t("shop.featured")}</span>} href="/shop/products" />
             {(home.data.featured ?? []).length === 0 ? (
@@ -176,6 +209,10 @@ export default function ShopHomePage() {
             <SectionHeading title={<span id="shop-new">{t("shop.newArrivals")}</span>} href="/shop/products?sort=newest" />
             <ProductRail products={home.data.newArrivals ?? []} emptyText="No new products this week." />
           </section>
+
+          <BrandStrip />
+
+          <RecentlyViewed />
 
           <section aria-label="Why MySupplier" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -202,5 +239,20 @@ export default function ShopHomePage() {
         </>
       )}
     </div>
+  );
+}
+
+function ShopEntry() {
+  const params = useSearchParams();
+  const isListing = LISTING_KEYS.some((k) => params.has(k)) || Array.from(params.keys()).some((k) => k.startsWith("spec."));
+  if (isListing) return <ProductListing basePath="/shop" />;
+  return <ShopHome />;
+}
+
+export default function ShopPage() {
+  return (
+    <Suspense fallback={<LoadingBlock className="min-h-[50vh]" />}>
+      <ShopEntry />
+    </Suspense>
   );
 }

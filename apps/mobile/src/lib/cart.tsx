@@ -2,8 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { storage } from "./storage";
-import { VAT_RATE, type CartItem, type DeliveryQuote, type Material, type ShopOffer } from "@mysupplier/shared";
-import { api, type CartWithQuotes } from "./api";
+import { VAT_RATE, type CartCoupon, type CartItem, type DeliveryQuote, type Material, type ShopOffer } from "@mysupplier/shared";
+import { api, type CartCredit, type CartLine, type CartWithQuotes } from "./api";
 import { useAuth } from "./auth";
 import { colors, radius, spacing } from "@/theme";
 
@@ -25,6 +25,10 @@ export interface CartSummary {
   deliveryFee: number;
   total: number;
   supplierCount: number;
+  /** Coupon discount on the subtotal (0 when none). */
+  discount: number;
+  /** Total tier / sale saving versus list prices (0 for guests). */
+  savings: number;
   /** true when totals are computed on-device (guest) rather than by the API */
   estimated: boolean;
 }
@@ -36,12 +40,12 @@ export interface CartGroup {
   supplierName: string;
   verified: boolean;
   city: string;
-  items: CartItem[];
+  items: CartLine[];
   subtotal: number;
 }
 
 interface CartContextValue {
-  items: CartItem[];
+  items: CartLine[];
   groups: CartGroup[];
   summary: CartSummary;
   /** Number of distinct lines – used for the tab badge. */
@@ -56,6 +60,16 @@ interface CartContextValue {
   quotes: Record<string, DeliveryQuote | null>;
   /** Re-price the cart for a delivery city (server picks the cheapest quote per supplier). */
   setDeliveryCity: (city: string | null) => Promise<void>;
+  /** Promotion code being tried (`GET /cart?coupon=`); pass it as `couponCode` at checkout when `coupon` is set. */
+  couponCode: string | null;
+  /** Coupon accepted by the server for the current cart (null when none / rejected). */
+  coupon: CartCoupon | null;
+  /** Why the coupon was rejected, if any. */
+  couponError: string | null;
+  /** Validate a promotion code against the cart (null clears it). */
+  setCoupon: (code: string | null) => Promise<void>;
+  /** Buyer's credit terms (null without a company). */
+  credit: CartCredit | null;
   addItem: (offer: ShopOffer, material: Material, quantity: number) => Promise<void>;
   updateQuantity: (itemId: string, quantity: number) => Promise<void>;
   removeItem: (itemId: string) => Promise<void>;
@@ -109,7 +123,7 @@ async function writeGuestCart(items: LocalCartItem[]): Promise<void> {
   }
 }
 
-function localToCartItems(local: LocalCartItem[]): CartItem[] {
+function localToCartItems(local: LocalCartItem[]): CartLine[] {
   return local.map((l) => ({
     id: `local:${l.listingId}`,
     listingId: l.listingId,
@@ -128,7 +142,7 @@ function supplierKey(offer: ShopOffer): string {
   return offer.companyId ?? `market:${offer.sourceName ?? offer.companyName}`;
 }
 
-export function groupBySupplier(items: CartItem[]): CartGroup[] {
+export function groupBySupplier(items: CartLine[]): CartGroup[] {
   const map = new Map<string, CartGroup>();
   items.forEach((item) => {
     const key = supplierKey(item.offer);
@@ -156,7 +170,7 @@ export function estimateSummary(items: CartItem[]): CartSummary {
   const supplierCount = new Set(items.map((i) => supplierKey(i.offer))).size;
   const vat = round2(subtotal * VAT_RATE);
   const deliveryFee = supplierCount * GUEST_DELIVERY_FEE_PER_SUPPLIER;
-  return { subtotal, vat, deliveryFee, total: round2(subtotal + vat + deliveryFee), supplierCount, estimated: true };
+  return { subtotal, vat, deliveryFee, total: round2(subtotal + vat + deliveryFee), supplierCount, discount: 0, savings: 0, estimated: true };
 }
 
 // Provider --------------------------------------------------------------------
@@ -166,6 +180,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [serverCart, setServerCart] = useState<CartWithQuotes | null>(null);
   const [deliveryCity, setDeliveryCityState] = useState<string | null>(null);
   const deliveryCityRef = useRef<string | null>(null);
+  const [couponCode, setCouponCodeState] = useState<string | null>(null);
+  const couponRef = useRef<string | null>(null);
   const [localItems, setLocalItems] = useState<LocalCartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -182,7 +198,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const loadServerCart = useCallback(async () => {
     try {
-      const cart = await api.cart(deliveryCityRef.current);
+      const cart = await api.cart(deliveryCityRef.current, couponRef.current);
       setServerCart(cart);
       setError(null);
     } catch (err) {
@@ -242,7 +258,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setToast({ id: Date.now(), message });
   }, []);
 
-  const items = useMemo<CartItem[]>(
+  const items = useMemo<CartLine[]>(
     () => (isAuthenticated ? serverCart?.items ?? [] : localToCartItems(localItems)),
     [isAuthenticated, serverCart, localItems],
   );
@@ -255,6 +271,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         deliveryFee: serverCart.deliveryFee,
         total: serverCart.total,
         supplierCount: serverCart.supplierCount,
+        discount: serverCart.discount ?? 0,
+        savings: serverCart.savings ?? 0,
         estimated: false,
       };
     }
@@ -272,13 +290,22 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /** Item mutations respond without the coupon / delivery city; re-quote when either is active. */
+  const applyMutation = useCallback(
+    async (cart: CartWithQuotes) => {
+      if (couponRef.current || deliveryCityRef.current) await loadServerCart();
+      else setServerCart(cart);
+    },
+    [loadServerCart],
+  );
+
   const addItem = useCallback(
     async (offer: ShopOffer, material: Material, quantity: number) => {
       const qty = Math.max(1, Math.max(offer.minQty || 1, Math.round(quantity)));
       await withBusy(async () => {
         if (isAuthenticated) {
           const cart = await api.addCartItem(offer.listingId, qty);
-          setServerCart(cart);
+          await applyMutation(cart);
         } else {
           const current = localRef.current;
           const idx = current.findIndex((l) => l.listingId === offer.listingId);
@@ -290,7 +317,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         }
       });
     },
-    [isAuthenticated, setLocal, withBusy],
+    [isAuthenticated, setLocal, withBusy, applyMutation],
   );
 
   const updateQuantity = useCallback(
@@ -299,14 +326,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       await withBusy(async () => {
         if (isAuthenticated) {
           const cart = await api.updateCartItem(itemId, qty);
-          setServerCart(cart);
+          await applyMutation(cart);
         } else {
           const listingId = itemId.replace(/^local:/, "");
           setLocal(localRef.current.map((l) => (l.listingId === listingId ? { ...l, quantity: qty } : l)));
         }
       });
     },
-    [isAuthenticated, setLocal, withBusy],
+    [isAuthenticated, setLocal, withBusy, applyMutation],
   );
 
   const removeItem = useCallback(
@@ -314,14 +341,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       await withBusy(async () => {
         if (isAuthenticated) {
           const cart = await api.removeCartItem(itemId);
-          setServerCart(cart);
+          await applyMutation(cart);
         } else {
           const listingId = itemId.replace(/^local:/, "");
           setLocal(localRef.current.filter((l) => l.listingId !== listingId));
         }
       });
     },
-    [isAuthenticated, setLocal, withBusy],
+    [isAuthenticated, setLocal, withBusy, applyMutation],
   );
 
   const clear = useCallback(async () => {
@@ -343,6 +370,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (isAuthenticated) await loadServerCart();
     },
     [isAuthenticated, loadServerCart],
+  );
+
+  const setCoupon = useCallback(
+    async (code: string | null) => {
+      const next = code && code.trim() ? code.trim().toUpperCase() : null;
+      couponRef.current = next;
+      setCouponCodeState(next);
+      if (isAuthenticated) await withBusy(loadServerCart);
+    },
+    [isAuthenticated, loadServerCart, withBusy],
   );
 
   const refresh = useCallback(async () => {
@@ -374,6 +411,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       deliveryCity,
       quotes: (isAuthenticated && serverCart?.quotes) || {},
       setDeliveryCity,
+      couponCode,
+      coupon: (isAuthenticated && serverCart?.coupon) || null,
+      couponError: (isAuthenticated && serverCart?.couponError) || null,
+      setCoupon,
+      credit: (isAuthenticated && serverCart?.credit) || null,
       addItem,
       updateQuantity,
       removeItem,
@@ -382,7 +424,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       quantityFor,
       showToast,
     }),
-    [items, groups, summary, loading, authLoading, busy, error, isAuthenticated, serverCart, deliveryCity, setDeliveryCity, addItem, updateQuantity, removeItem, clear, refresh, quantityFor, showToast],
+    [items, groups, summary, loading, authLoading, busy, error, isAuthenticated, serverCart, deliveryCity, setDeliveryCity, couponCode, setCoupon, addItem, updateQuantity, removeItem, clear, refresh, quantityFor, showToast],
   );
 
   return (

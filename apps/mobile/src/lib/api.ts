@@ -13,6 +13,7 @@ import type {
   Carrier,
   CarrierCode,
   Cart,
+  CartItem,
   Category,
   CheckoutPayload,
   CheckoutResult,
@@ -73,6 +74,39 @@ import type {
   TeamMember,
   UpsertPricePayload,
   User,
+  // marketplace (product discovery)
+  ProductSearchResponse,
+  ProductSort,
+  ShopSuggestions,
+  ShopOfferWithPricing,
+  ProductDiscoveryDetail,
+  ProductReviewsResponse,
+  ProductReviewPayload,
+  ProductReview,
+  ProductQuestion,
+  Wishlist,
+  WishlistContains,
+  WishlistItem,
+  WishlistItemPayload,
+  WishlistAddToCartResult,
+  PriceAlert,
+  PriceAlertPayload,
+  // commerce (B2B)
+  Address,
+  AddressPayload,
+  CartItemPricing,
+  CheckoutExtras,
+  CreditInfo,
+  FrequentlyOrderedItem,
+  ListingTier,
+  RecurringOrder,
+  RecurringOrderPayload,
+  RecurringOrderUpdatePayload,
+  RecurringRunResult,
+  ReorderResult,
+  ReturnPayload,
+  ReturnRequest,
+  ReturnStatus,
 } from "@mysupplier/shared";
 
 export const API_URL: string =
@@ -277,21 +311,83 @@ export type MaterialsQuery = {
   sort?: MaterialSort;
 };
 
-export type ShopSort = "relevance" | "price_asc" | "price_desc" | "newest" | "popular";
+export type ShopSort = ProductSort;
 
 // Type alias (not interface) so it is assignable to the indexed Query type.
 export type ShopProductsQuery = {
   q?: string;
   categoryId?: string;
   city?: string;
+  /** Comma separated for OR. */
   brand?: string;
   minPrice?: number;
   maxPrice?: number;
   inStock?: 1 | undefined;
+  minRating?: number;
   sort?: ShopSort;
   page?: number;
   pageSize?: number;
+  /** `spec.<key>` = "value,value" (OR) or "min..max" for NUMBER attributes. */
+  [spec: `spec.${string}`]: string | undefined;
 };
+
+/** Selected value(s) of one spec facet: a value list (SELECT/TEXT/BOOLEAN) or a numeric range (NUMBER). */
+export type SpecFilterValue = { values: string[] } | { min?: number; max?: number };
+
+/** Serialises spec selections to `spec.<key>` query params (empty selections are dropped). */
+export function specQuery(specs: Record<string, SpecFilterValue>): Record<`spec.${string}`, string | undefined> {
+  const out: Record<`spec.${string}`, string | undefined> = {};
+  Object.entries(specs).forEach(([key, v]) => {
+    if ("values" in v) {
+      if (v.values.length) out[`spec.${key}`] = v.values.join(",");
+    } else if (v.min !== undefined || v.max !== undefined) {
+      out[`spec.${key}`] = `${v.min ?? ""}..${v.max ?? ""}`;
+    }
+  });
+  return out;
+}
+
+/** `GET /shop/products/:id`: ProductDetail + discovery extras; offers carry sale / tier pricing. */
+export type ProductPage = Omit<ProductDetail, "offers" | "bestOffer" | "related"> &
+  ProductDiscoveryDetail & {
+    offers: ShopOfferWithPricing[];
+    bestOffer?: ShopOfferWithPricing | null;
+    related: Product[];
+    /** Gallery pictures (may be empty; `imageUrl` is the primary one). */
+    images?: string[];
+    datasheetUrl?: string | null;
+    videoUrl?: string | null;
+    ratingAvg?: number;
+    ratingCount?: number;
+  };
+
+export type RecommendationsResponse = { basis: "recently_viewed" | "popular"; items: Product[] };
+export type RecentlyViewedProduct = Product & { viewedAt: string };
+
+export type ReviewSort = "recent" | "helpful" | "rating";
+
+/** `GET /wishlists/:id` – items with the enriched material. */
+export type WishlistDetail = Wishlist & { items: WishlistItem[] };
+
+/** Credit terms as returned inside the cart (`canCoverCart`) and by `GET /me/credit`. */
+export type CartCredit = CreditInfo & { canCoverCart: boolean };
+
+/** Cart line with the effective pricing computed by the API (tier / sale). */
+export type CartLine = CartItem & Partial<CartItemPricing> & { tiers?: ListingTier[] };
+
+export type ReturnDetail = ReturnRequest & { estimatedRefund?: number | null };
+
+export type ReturnsQuery = {
+  status?: ReturnStatus;
+  orderId?: string;
+  page?: number;
+};
+
+export type RecurringOrderRow = RecurringOrder & {
+  lastOrder?: { id: string; reference: string; total: number; status: string; createdAt: string } | null;
+};
+
+export type RecurringRunResponse = RecurringRunResult & { total: number; recurringOrder: RecurringOrderRow };
 
 /** URL of the generated SVG product image for a material without imageUrl. */
 export function materialImageUrl(sku: string): string {
@@ -373,11 +469,19 @@ export interface StockMovementInput {
 
 // Go-live: OTP, refunds, shipments & carriers, client errors -----------------
 
-/** `GET /cart?deliveryCity=` adds a cheapest quote per supplier (null = no carrier rate, flat fee applies). */
-export type CartWithQuotes = Cart & { quotes?: Record<string, DeliveryQuote | null> };
+/**
+ * `GET /cart?deliveryCity=&coupon=`: cheapest quote per supplier (null = no carrier rate, flat fee applies),
+ * per-line tier / sale pricing, total `savings`, and the buyer's `credit` terms (null without a company).
+ */
+export type CartWithQuotes = Omit<Cart, "items"> & {
+  items: CartLine[];
+  quotes?: Record<string, DeliveryQuote | null>;
+  savings?: number;
+  credit?: CartCredit | null;
+};
 
-/** `POST /checkout` accepts the carrier chosen per supplier group. */
-export type CheckoutPayloadWithCarriers = CheckoutPayload & { carrierBySupplier?: Record<string, CarrierCode> };
+/** `POST /checkout` accepts the carrier chosen per supplier group plus a saved address / PO number. */
+export type CheckoutPayloadWithCarriers = CheckoutPayload & CheckoutExtras & { carrierBySupplier?: Record<string, CarrierCode> };
 
 export interface ShippingQuoteBody {
   supplierCompanyId?: string;
@@ -561,18 +665,87 @@ export const api = {
   // Shop (public)
   shopHome: () => request<ShopHome>("/shop/home", { auth: false }),
   shopProducts: (query: ShopProductsQuery = {}) =>
-    request<Paginated<Product>>("/shop/products", { query, auth: false }),
-  shopProduct: (id: string) => request<ProductDetail>(`/shop/products/${id}`, { auth: false }),
-  shopBrands: () => request<string[]>("/shop/brands", { auth: false }),
+    request<ProductSearchResponse>("/shop/products", { query, auth: false }),
+  /** Product page; sent with the token when logged in so the API records "recently viewed". */
+  shopProduct: (id: string, city?: string | null) => request<ProductPage>(`/shop/products/${encodeURIComponent(id)}`, { query: { city } }),
+  shopBrands: () => request<Array<{ brand: string; productCount: number; imageUrl: string | null }>>("/shop/brands", { auth: false }),
+  shopSuggest: (q: string) => request<ShopSuggestions>("/shop/suggest", { query: { q }, auth: false }),
+  recommendations: (city?: string | null) => request<RecommendationsResponse>("/shop/recommendations", { query: { city } }),
+  recentlyViewed: (city?: string | null) => request<RecentlyViewedProduct[]>("/shop/recently-viewed", { query: { city } }),
+
+  // Product reviews & Q&A
+  productReviews: (id: string, query: { sort?: ReviewSort; page?: number } = {}) =>
+    request<ProductReviewsResponse>(`/shop/products/${encodeURIComponent(id)}/reviews`, { query, auth: false }),
+  createProductReview: (id: string, payload: ProductReviewPayload) =>
+    request<ProductReview>(`/shop/products/${encodeURIComponent(id)}/reviews`, { method: "POST", body: payload }),
+  markReviewHelpful: (reviewId: string) =>
+    request<{ id: string; helpful: number }>(`/shop/reviews/${encodeURIComponent(reviewId)}/helpful`, { method: "POST" }),
+  productQuestions: (id: string, page = 1) =>
+    request<Paginated<ProductQuestion>>(`/shop/products/${encodeURIComponent(id)}/questions`, { query: { page }, auth: false }),
+  askProductQuestion: (id: string, question: string) =>
+    request<ProductQuestion>(`/shop/products/${encodeURIComponent(id)}/questions`, { method: "POST", body: { question } }),
+
+  // Wishlists / project lists
+  wishlists: () => request<Wishlist[]>("/wishlists"),
+  createWishlist: (name: string) => request<Wishlist>("/wishlists", { method: "POST", body: { name } }),
+  wishlist: (id: string, city?: string | null) => request<WishlistDetail>(`/wishlists/${encodeURIComponent(id)}`, { query: { city } }),
+  renameWishlist: (id: string, name: string) => request<Wishlist>(`/wishlists/${encodeURIComponent(id)}`, { method: "PATCH", body: { name } }),
+  deleteWishlist: (id: string) => request<{ ok: true }>(`/wishlists/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  wishlistContains: (materialId: string) => request<WishlistContains>("/wishlists/contains", { query: { materialId } }),
+  /** `wishlistId` may be "default". */
+  addWishlistItem: (wishlistId: string, payload: WishlistItemPayload) =>
+    request<WishlistItem>(`/wishlists/${encodeURIComponent(wishlistId)}/items`, { method: "POST", body: payload }),
+  updateWishlistItem: (wishlistId: string, itemId: string, patch: Partial<Omit<WishlistItemPayload, "materialId">>) =>
+    request<WishlistItem>(`/wishlists/${encodeURIComponent(wishlistId)}/items/${encodeURIComponent(itemId)}`, { method: "PATCH", body: patch }),
+  removeWishlistItem: (wishlistId: string, itemId: string) =>
+    request<{ ok: true }>(`/wishlists/${encodeURIComponent(wishlistId)}/items/${encodeURIComponent(itemId)}`, { method: "DELETE" }),
+  wishlistAddToCart: (wishlistId: string, city?: string | null) =>
+    request<WishlistAddToCartResult>(`/wishlists/${encodeURIComponent(wishlistId)}/add-to-cart`, { method: "POST", body: { city: city ?? undefined } }),
+
+  // Price alerts
+  alerts: () => request<PriceAlert[]>("/alerts"),
+  createAlert: (payload: PriceAlertPayload) => request<PriceAlert>("/alerts", { method: "POST", body: payload }),
+  deleteAlert: (id: string) => request<{ ok: true }>(`/alerts/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  // Address book
+  addresses: () => request<Address[]>("/addresses"),
+  createAddress: (payload: AddressPayload) => request<Address>("/addresses", { method: "POST", body: payload }),
+  updateAddress: (id: string, patch: Partial<AddressPayload>) =>
+    request<Address>(`/addresses/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
+  deleteAddress: (id: string) => request<{ ok: true }>(`/addresses/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  setDefaultAddress: (id: string) => request<Address>(`/addresses/${encodeURIComponent(id)}/default`, { method: "POST" }),
+
+  // Credit terms
+  myCredit: () => request<CreditInfo & { openOrders: number; overdue: number }>("/me/credit"),
+
+  // Reorder / buy again
+  reorder: (orderId: string) => request<ReorderResult>(`/orders/${encodeURIComponent(orderId)}/reorder`, { method: "POST" }),
+  frequentlyOrdered: (limit = 20) => request<FrequentlyOrderedItem[]>("/orders/frequently-ordered", { query: { limit } }),
+
+  // Returns / RMA
+  createReturn: (orderId: string, payload: ReturnPayload) =>
+    request<ReturnRequest>(`/orders/${encodeURIComponent(orderId)}/returns`, { method: "POST", body: payload }),
+  returns: (query: ReturnsQuery = {}) => request<Paginated<ReturnRequest>>("/returns", { query }),
+  returnDetail: (id: string) => request<ReturnDetail>(`/returns/${encodeURIComponent(id)}`),
+  cancelReturn: (id: string) => request<ReturnRequest>(`/returns/${encodeURIComponent(id)}`, { method: "PATCH", body: { status: "CANCELLED" } }),
+
+  // Recurring orders
+  recurringOrders: () => request<RecurringOrderRow[]>("/recurring"),
+  createRecurring: (payload: RecurringOrderPayload) => request<RecurringOrderRow>("/recurring", { method: "POST", body: payload }),
+  updateRecurring: (id: string, patch: RecurringOrderUpdatePayload) =>
+    request<RecurringOrderRow>(`/recurring/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }),
+  deleteRecurring: (id: string) => request<{ ok: true }>(`/recurring/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  runRecurringNow: (id: string) => request<RecurringRunResponse>(`/recurring/${encodeURIComponent(id)}/run-now`, { method: "POST" }),
 
   // Cart & checkout (auth)
-  cart: (deliveryCity?: string | null) => request<CartWithQuotes>("/cart", { query: { deliveryCity } }),
+  /** `coupon` validates a promotion code (result in `coupon` / `couponError`); pass it again as `couponCode` at checkout. */
+  cart: (deliveryCity?: string | null, coupon?: string | null) => request<CartWithQuotes>("/cart", { query: { deliveryCity, coupon } }),
   addCartItem: (listingId: string, quantity: number) =>
-    request<Cart>("/cart/items", { method: "POST", body: { listingId, quantity } }),
+    request<CartWithQuotes>("/cart/items", { method: "POST", body: { listingId, quantity } }),
   updateCartItem: (id: string, quantity: number) =>
-    request<Cart>(`/cart/items/${id}`, { method: "PATCH", body: { quantity } }),
-  removeCartItem: (id: string) => request<Cart>(`/cart/items/${id}`, { method: "DELETE" }),
-  clearCart: () => request<Cart>("/cart", { method: "DELETE" }),
+    request<CartWithQuotes>(`/cart/items/${id}`, { method: "PATCH", body: { quantity } }),
+  removeCartItem: (id: string) => request<CartWithQuotes>(`/cart/items/${id}`, { method: "DELETE" }),
+  clearCart: () => request<CartWithQuotes>("/cart", { method: "DELETE" }),
   checkout: (payload: CheckoutPayloadWithCarriers) => request<CheckoutResult>("/checkout", { method: "POST", body: payload }),
 
   // Orders (OrderExtended: RFQ-awarded and direct shop orders)

@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import type { Branch, CompanyDocument, DocumentStatus, TeamMember, VerificationStatus } from "@mysupplier/shared";
 import { adminDocumentFileUrl, api, errorMessage, fileUrl, type AdminCompanyDetail } from "@/lib/api";
+import { supplierCommerceApi } from "@/lib/api/supplierCommerce";
 import { COMPANY_ROLE_LABEL } from "@/lib/auth";
 import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
@@ -53,6 +54,7 @@ export default function AdminCompanyDetailPage() {
   const { t, lang } = useI18n();
   const state = useAsync(() => api.adminCompany(id), [id]);
   const settings = useAsync(() => api.adminSettings(), []);
+  const credit = useAsync(() => supplierCommerceApi.adminCompanyCredit(id), [id]);
   const [flash, setFlash] = useFlash(6000);
   const [verification, setVerification] = useState<{ status: VerificationStatus; notes: string; commissionPct: string }>({ status: "PENDING", notes: "", commissionPct: "" });
   const [savingVerification, setSavingVerification] = useState(false);
@@ -155,6 +157,32 @@ export default function AdminCompanyDetailPage() {
               <Input label="Commission override (%)" name="commissionPct" type="number" min={0} max={100} step="0.1" dir="ltr" value={verification.commissionPct} onChange={(e) => setVerification({ ...verification, commissionPct: e.target.value })} hint={`Blank = platform default${settings.data ? ` (${settings.data.commissionPct}%)` : ""}`} />
               <Button className="w-full" onClick={saveVerification} loading={savingVerification}>Save verification</Button>
             </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Credit terms"
+              subtitle="Net-terms purchasing on account"
+              action={<Link href={`/admin/credit?q=${encodeURIComponent(c.name)}`} className="text-xs font-semibold text-brand-700 hover:underline">Manage →</Link>}
+            />
+            {credit.loading && !credit.data ? <LoadingBlock className="py-6" /> : credit.error ? <Alert onRetry={credit.reload} className="m-4">{credit.error}</Alert> : credit.data ? (
+              <CardBody>
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-sm text-slate-500">Status</span>
+                  {credit.data.credit.approved ? <Badge tone="green">Approved · net {credit.data.credit.termsDays} days</Badge> : <Badge tone="slate">Not approved</Badge>}
+                </div>
+                <dl className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="rounded-xl bg-slate-50 px-3 py-2"><dt className="text-xs text-slate-500">Limit</dt><dd className="font-semibold tabular-nums text-slate-900">{formatSar(credit.data.credit.limit, lang)}</dd></div>
+                  <div className="rounded-xl bg-slate-50 px-3 py-2"><dt className="text-xs text-slate-500">Used</dt><dd className="font-semibold tabular-nums text-slate-900">{formatSar(credit.data.credit.used, lang)}</dd></div>
+                  <div className="rounded-xl bg-slate-50 px-3 py-2"><dt className="text-xs text-slate-500">Available</dt><dd className="font-semibold tabular-nums text-emerald-700">{formatSar(credit.data.credit.available, lang)}</dd></div>
+                </dl>
+                <p className="mt-3 text-xs text-slate-500">
+                  {credit.data.openOrders.length} open credit {credit.data.openOrders.length === 1 ? "order" : "orders"}
+                  {credit.data.overdue > 0 ? <span className="font-semibold text-red-700"> · {credit.data.overdue} overdue</span> : null}
+                  {" · "}{credit.data.settled.orders} settled ({formatSar(credit.data.settled.amount, lang)})
+                </p>
+              </CardBody>
+            ) : null}
           </Card>
 
           <Card>

@@ -8,6 +8,7 @@ import { homeForRole, useAuth } from "@/lib/auth";
 import { useCart } from "@/lib/cart";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/format";
+import { SearchAutocomplete } from "@/components/shop/SearchAutocomplete";
 
 export function Logo({ light }: { light?: boolean }) {
   return (
@@ -108,33 +109,7 @@ export function CartButton({ className }: { className?: string }) {
 }
 
 export function HeaderSearch({ className, autoFocus }: { className?: string; autoFocus?: boolean }) {
-  const { t } = useI18n();
-  const router = useRouter();
-  const [q, setQ] = useState("");
-  return (
-    <form
-      role="search"
-      className={cn("relative", className)}
-      onSubmit={(e) => {
-        e.preventDefault();
-        const term = q.trim();
-        router.push(term ? `/shop/products?q=${encodeURIComponent(term)}` : "/shop/products");
-      }}
-    >
-      <svg viewBox="0 0 20 20" fill="currentColor" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden>
-        <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
-      </svg>
-      <input
-        type="search"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder={t("nav.searchPlaceholder")}
-        aria-label={t("nav.searchPlaceholder")}
-        autoFocus={autoFocus}
-        className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 ps-9 pe-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-600/20"
-      />
-    </form>
-  );
+  return <SearchAutocomplete className={className} autoFocus={autoFocus} searchPath="/shop" />;
 }
 
 function UserMenu() {

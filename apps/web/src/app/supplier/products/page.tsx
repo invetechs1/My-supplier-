@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import React, { Suspense, useEffect, useRef, useState } from "react";
-import type { ListingStatus, SupplierProduct, SupplierProductPatch } from "@mysupplier/shared";
+import type { ListingStatus, ListingTier, SupplierProduct } from "@mysupplier/shared";
 import { api, errorMessage } from "@/lib/api";
+import { isSaleLive, supplierCommerceApi, validateTiers, type ListingPricingExtras, type SupplierPricingPatch, type SupplierProductWithPricing } from "@/lib/api/supplierCommerce";
 import { useAsync, useDebounce, useFlash, type Flash } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n";
-import { cn, formatNumber, formatSar, timeAgo } from "@/lib/format";
+import { useI18n, type Lang } from "@/lib/i18n";
+import { cn, formatDate, formatNumber, formatSar, timeAgo, toDateTimeLocal } from "@/lib/format";
 import { Alert, Badge, Button, Card, EmptyState, FlashMessage, Input, LinkButton, LoadingBlock, PageHeader, Pagination, Select, Spinner, StatTile, Toggle } from "@/components/ui";
 import { generatedImageUrl } from "@/components/shop/ProductCard";
 import { RoleGuard } from "@/components/RoleGuard";
@@ -58,28 +59,64 @@ function ListingImage({ src: initial, sku, alt, className }: { src: string; sku:
   );
 }
 
+interface TierRow {
+  minQty: string;
+  price: string;
+}
+
 interface EditForm {
   price: string;
   stock: string;
   minQty: string;
   leadTimeDays: string;
+  salePrice: string;
+  saleEndsAt: string;
+  tiers: TierRow[];
 }
 
-const formFor = (p: SupplierProduct): EditForm => ({
+const MAX_TIERS = 10;
+
+const formFor = (p: SupplierProductWithPricing): EditForm => ({
   price: String(p.price),
   stock: p.stock === null || p.stock === undefined ? "" : String(p.stock),
   minQty: String(p.minQty),
   leadTimeDays: String(p.leadTimeDays),
+  salePrice: p.salePrice === null || p.salePrice === undefined ? "" : String(p.salePrice),
+  saleEndsAt: toDateTimeLocal(p.saleEndsAt),
+  tiers: (p.tiers ?? []).map((t) => ({ minQty: String(t.minQty), price: String(t.price) })),
 });
+
+/** Parses the tier rows; blank rows are dropped, half-filled rows are an error. */
+function parseTiers(rows: TierRow[]): { tiers: ListingTier[]; error: string | null } {
+  const tiers: ListingTier[] = [];
+  for (const [i, row] of rows.entries()) {
+    const q = row.minQty.trim();
+    const pr = row.price.trim();
+    if (!q && !pr) continue;
+    if (!q || !pr) return { tiers, error: `Tier ${i + 1}: enter both a minimum quantity and a price.` };
+    const minQty = Math.floor(Number(q));
+    const price = Number(pr);
+    if (!Number.isFinite(minQty) || !Number.isFinite(price)) return { tiers, error: `Tier ${i + 1}: quantity and price must be numbers.` };
+    tiers.push({ minQty, price });
+  }
+  tiers.sort((a, b) => a.minQty - b.minQty);
+  return { tiers, error: null };
+}
+
+const sameTiers = (a: ListingTier[], b: ListingTier[]) => a.length === b.length && a.every((t, i) => t.minQty === b[i].minQty && Math.abs(t.price - b[i].price) < 0.005);
+
+const tiersLine = (tiers: ListingTier[], lang: Lang) => tiers.map((t) => `${formatNumber(t.minQty, lang)}+ ${formatSar(t.price, lang)}`).join(" · ");
 
 function SupplierProductCard({
   product: p,
   onReplace,
+  onPricingChange,
   onReload,
   onFlash,
 }: {
-  product: SupplierProduct;
-  onReplace: (next: SupplierProduct) => void;
+  product: SupplierProductWithPricing;
+  onReplace: (next: SupplierProductWithPricing) => void;
+  onPricingChange: (listingId: string, extras: ListingPricingExtras) => void;
   onReload: () => void;
   onFlash: (flash: Flash) => void;
 }) {
@@ -109,8 +146,17 @@ function SupplierProductCard({
     setEditing(false);
   };
 
+  const currentTiers: ListingTier[] = p.tiers ?? [];
+  const saleLive = isSaleLive(p);
+  const parsedTiers = parseTiers(form.tiers);
+  const draftPrice = Number(form.price);
+  const tiersHint = parsedTiers.error ?? (Number.isFinite(draftPrice) && draftPrice > 0 ? validateTiers(parsedTiers.tiers, draftPrice) : null);
+  const updateTier = (index: number, patch: Partial<TierRow>) => setForm((f) => ({ ...f, tiers: f.tiers.map((row, i) => (i === index ? { ...row, ...patch } : row)) }));
+  const removeTier = (index: number) => setForm((f) => ({ ...f, tiers: f.tiers.filter((_, i) => i !== index) }));
+  const addTier = () => setForm((f) => (f.tiers.length >= MAX_TIERS ? f : { ...f, tiers: [...f.tiers, { minQty: "", price: "" }] }));
+
   const save = async () => {
-    const patch: SupplierProductPatch = {};
+    const patch: SupplierPricingPatch = {};
     const price = Number(form.price);
     if (!form.price.trim() || Number.isNaN(price) || price <= 0) {
       onFlash({ kind: "error", message: "Enter a valid price." });
@@ -139,21 +185,80 @@ function SupplierProductCard({
     }
     if (leadTimeDays !== p.leadTimeDays) patch.leadTimeDays = leadTimeDays;
 
-    if (Object.keys(patch).length === 0) {
+    // Sale price + end date
+    const saleRaw = form.salePrice.trim();
+    const salePrice = saleRaw === "" ? null : Number(saleRaw);
+    if (salePrice !== null && (Number.isNaN(salePrice) || salePrice <= 0)) {
+      onFlash({ kind: "error", message: "Enter a valid sale price or leave it blank." });
+      return;
+    }
+    if (salePrice !== null && salePrice >= price) {
+      onFlash({ kind: "error", message: "Sale price must be lower than the base price." });
+      return;
+    }
+    let saleEndsAt: string | null = null;
+    if (form.saleEndsAt.trim()) {
+      const ends = new Date(form.saleEndsAt);
+      if (Number.isNaN(ends.getTime())) {
+        onFlash({ kind: "error", message: "Enter a valid sale end date." });
+        return;
+      }
+      if (salePrice === null) {
+        onFlash({ kind: "error", message: "Set a sale price, or clear the sale end date." });
+        return;
+      }
+      if (ends.getTime() <= Date.now()) {
+        onFlash({ kind: "error", message: "Sale end date must be in the future." });
+        return;
+      }
+      saleEndsAt = ends.toISOString();
+    }
+    const currentSale = p.salePrice ?? null;
+    const currentEnds = p.saleEndsAt ? new Date(p.saleEndsAt).getTime() : null;
+    if (salePrice !== currentSale) patch.salePrice = salePrice;
+    if (salePrice !== null && (saleEndsAt ? new Date(saleEndsAt).getTime() : null) !== currentEnds) patch.saleEndsAt = saleEndsAt;
+
+    // Volume tiers
+    if (parsedTiers.error) {
+      onFlash({ kind: "error", message: parsedTiers.error });
+      return;
+    }
+    const tierError = validateTiers(parsedTiers.tiers, price);
+    if (tierError) {
+      onFlash({ kind: "error", message: tierError });
+      return;
+    }
+    const tiersChanged = !sameTiers(parsedTiers.tiers, currentTiers);
+
+    if (Object.keys(patch).length === 0 && !tiersChanged) {
       setEditing(false);
       return;
     }
     setSaving(true);
     try {
-      const updated = await api.updateSupplierPrice(p.id, patch);
+      // Order matters: the API validates the existing ladder against a new price and a new ladder against the
+      // existing price, so save tiers first when the price goes down and last when it goes up.
+      const priceDown = patch.price !== undefined && patch.price < p.price;
+      let listing: Awaited<ReturnType<typeof supplierCommerceApi.updatePricing>> | null = null;
+      if (tiersChanged && priceDown) listing = await supplierCommerceApi.replaceTiers(p.id, parsedTiers.tiers);
+      if (Object.keys(patch).length) listing = await supplierCommerceApi.updatePricing(p.id, patch);
+      if (tiersChanged && !priceDown) listing = await supplierCommerceApi.replaceTiers(p.id, parsedTiers.tiers);
+
+      const extras: ListingPricingExtras = {
+        salePrice: listing && listing.salePrice !== undefined ? listing.salePrice : salePrice,
+        saleEndsAt: listing && listing.saleEndsAt !== undefined ? listing.saleEndsAt : salePrice === null ? null : saleEndsAt,
+        tiers: listing?.tiers ?? parsedTiers.tiers,
+      };
+      onPricingChange(p.id, extras);
       onReplace({
         ...p,
-        price: updated.price ?? price,
-        stock: updated.stock === undefined ? stock : updated.stock,
-        minQty: updated.minQty ?? minQty,
-        leadTimeDays: updated.leadTimeDays ?? leadTimeDays,
-        validUntil: updated.validUntil ?? p.validUntil,
-        updatedAt: updated.updatedAt ?? new Date().toISOString(),
+        ...extras,
+        price: listing?.price ?? price,
+        stock: listing?.stock === undefined ? stock : listing.stock,
+        minQty: listing?.minQty ?? minQty,
+        leadTimeDays: listing?.leadTimeDays ?? leadTimeDays,
+        validUntil: listing?.validUntil ?? p.validUntil,
+        updatedAt: listing?.updatedAt ?? new Date().toISOString(),
       });
       setEditing(false);
       onFlash({ kind: "success", message: `${p.material.name} updated.` });
@@ -321,6 +426,49 @@ function SupplierProductCard({
               <Input label="Min qty" name={`minQty-${p.id}`} type="number" min={1} step={1} dir="ltr" value={form.minQty} onChange={(e) => setForm({ ...form, minQty: e.target.value })} onKeyDown={onEditKey} disabled={saving} />
               <Input label="Lead time (days)" name={`lead-${p.id}`} type="number" min={0} step={1} dir="ltr" value={form.leadTimeDays} onChange={(e) => setForm({ ...form, leadTimeDays: e.target.value })} onKeyDown={onEditKey} disabled={saving} />
             </div>
+
+            <div className="mt-3 border-t border-brand-100 pt-3">
+              <p className="text-xs font-semibold text-slate-700">Sale</p>
+              <div className="mt-1.5 grid grid-cols-2 gap-2">
+                <Input label="Sale price (SAR)" name={`sale-${p.id}`} type="number" min={0} step="0.01" dir="ltr" placeholder="No sale" value={form.salePrice} onChange={(e) => setForm({ ...form, salePrice: e.target.value })} onKeyDown={onEditKey} disabled={saving} />
+                <Input label="Sale ends" name={`saleEnds-${p.id}`} type="datetime-local" dir="ltr" value={form.saleEndsAt} onChange={(e) => setForm({ ...form, saleEndsAt: e.target.value })} onKeyDown={onEditKey} disabled={saving || !form.salePrice.trim()} />
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">Must be below the base price. Leave the end date blank for an open-ended sale; clear the sale price to end it.</p>
+            </div>
+
+            <div className="mt-3 border-t border-brand-100 pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-slate-700">Quantity tiers</p>
+                <Button size="sm" variant="ghost" onClick={addTier} disabled={saving || form.tiers.length >= MAX_TIERS}>+ Add tier</Button>
+              </div>
+              {form.tiers.length === 0 ? (
+                <p className="mt-1 text-[11px] text-slate-500">No volume discounts. Add a tier to offer a lower unit price from a minimum quantity.</p>
+              ) : (
+                <div className="mt-1.5 space-y-1.5">
+                  <div className="grid grid-cols-[1fr_1fr_2rem] gap-2 text-[11px] font-medium text-slate-500">
+                    <span>From qty ({p.material.unit})</span>
+                    <span>Unit price (SAR)</span>
+                    <span />
+                  </div>
+                  {form.tiers.map((row, i) => (
+                    <div key={i} className="grid grid-cols-[1fr_1fr_2rem] items-center gap-2">
+                      <Input name={`tier-qty-${p.id}-${i}`} aria-label={`Tier ${i + 1} minimum quantity`} type="number" min={2} step={1} dir="ltr" placeholder="e.g. 50" value={row.minQty} onChange={(e) => updateTier(i, { minQty: e.target.value })} onKeyDown={onEditKey} disabled={saving} />
+                      <Input name={`tier-price-${p.id}-${i}`} aria-label={`Tier ${i + 1} price`} type="number" min={0} step="0.01" dir="ltr" placeholder="e.g. 27.50" value={row.price} onChange={(e) => updateTier(i, { price: e.target.value })} onKeyDown={onEditKey} disabled={saving} />
+                      <button type="button" onClick={() => removeTier(i)} disabled={saving} aria-label={`Remove tier ${i + 1}`} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50">
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
+                      </button>
+                    </div>
+                  ))}
+                  {tiersHint ? (
+                    <p className="text-[11px] text-red-600">{tiersHint}</p>
+                  ) : parsedTiers.tiers.length > 0 ? (
+                    <p className="text-[11px] text-emerald-700">Buyers will see: {tiersLine(parsedTiers.tiers, lang)}</p>
+                  ) : null}
+                  <p className="text-[11px] text-slate-500">Quantities ascending (above 1), each price lower than the previous one and below the base price. Max {MAX_TIERS} tiers.</p>
+                </div>
+              )}
+            </div>
+
             <p className="mt-2 text-[11px] text-slate-500">Leave stock blank if you do not track it. Enter saves, Escape cancels.</p>
             <div className="mt-2 flex justify-end gap-2">
               <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={saving}>{t("common.cancel")}</Button>
@@ -332,8 +480,20 @@ function SupplierProductCard({
             <div className="flex items-start justify-between gap-2">
               <dl className="grid flex-1 grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
                 <div>
-                  <dt className="text-slate-500">Price</dt>
-                  <dd className="text-base font-bold tabular-nums text-brand-700">{formatSar(p.price, lang)}<span className="ms-1 text-[11px] font-normal text-slate-500">/ {p.material.unit}</span></dd>
+                  <dt className="flex items-center gap-1.5 text-slate-500">
+                    Price
+                    {saleLive && <Badge tone="red" className="px-1.5 py-0 text-[10px]">Sale</Badge>}
+                  </dt>
+                  {saleLive ? (
+                    <dd>
+                      <span className="text-base font-bold tabular-nums text-red-600">{formatSar(p.salePrice ?? p.price, lang)}</span>
+                      <span className="ms-1.5 text-xs tabular-nums text-slate-400 line-through" dir="ltr">{formatSar(p.price, lang)}</span>
+                      <span className="ms-1 text-[11px] font-normal text-slate-500">/ {p.material.unit}</span>
+                      <p className="text-[11px] text-slate-500">{p.saleEndsAt ? `Ends ${formatDate(p.saleEndsAt, lang)}` : "No end date"}</p>
+                    </dd>
+                  ) : (
+                    <dd className="text-base font-bold tabular-nums text-brand-700">{formatSar(p.price, lang)}<span className="ms-1 text-[11px] font-normal text-slate-500">/ {p.material.unit}</span></dd>
+                  )}
                 </div>
                 <div>
                   <dt className="text-slate-500">Stock</dt>
@@ -350,6 +510,11 @@ function SupplierProductCard({
               </dl>
               <Button size="sm" variant="outline" onClick={startEdit}>Edit</Button>
             </div>
+            {currentTiers.length > 0 && (
+              <p className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-600" title="Volume pricing shown to buyers">
+                <span className="font-medium text-slate-700">Volume:</span> <span className="tabular-nums">{tiersLine(currentTiers, lang)}</span>
+              </p>
+            )}
           </div>
         )}
 
@@ -393,6 +558,10 @@ function SupplierProductsInner() {
     () => api.supplierProducts({ q: dq.trim() || undefined, status: status || undefined, city: city || undefined, categoryId: categoryId || undefined, sort, page }),
     [dq, status, city, categoryId, sort, page],
   );
+  // The "My products" rows do not carry sale / tier fields; the raw listings do. Load them once and merge by listing id.
+  const pricing = useAsync(() => supplierCommerceApi.listingPricingMap(), []);
+  const [pricingOverrides, setPricingOverrides] = useState<Record<string, ListingPricingExtras>>({});
+  const onPricingChange = (listingId: string, extras: ListingPricingExtras) => setPricingOverrides((prev) => ({ ...prev, [listingId]: extras }));
 
   const pickStatus = (next: StatusFilter) => {
     setStatus(next);
@@ -402,7 +571,11 @@ function SupplierProductsInner() {
     state.setData((prev) => (prev ? { ...prev, data: prev.data.map((row) => (row.id === next.id ? next : row)) } : prev));
 
   const summary = state.data?.summary;
-  const rows = state.data?.data ?? [];
+  const rows: SupplierProductWithPricing[] = (state.data?.data ?? []).map((raw) => {
+    const row = raw as SupplierProductWithPricing;
+    const extras = pricingOverrides[row.id] ?? (row.tiers !== undefined || row.salePrice !== undefined ? { salePrice: row.salePrice ?? null, saleEndsAt: row.saleEndsAt ?? null, tiers: row.tiers ?? [] } : pricing.data?.get(row.id) ?? {});
+    return { ...row, ...extras };
+  });
   const filtersActive = Boolean(dq.trim() || status || city || categoryId);
   const noProductsAtAll = !state.loading && !state.error && summary !== undefined && summary.total === 0;
   const clearFilters = () => {
@@ -415,6 +588,7 @@ function SupplierProductsInner() {
 
   const actions = (
     <>
+      <LinkButton href="/supplier/reviews" variant="ghost">Reviews &amp; questions</LinkButton>
       <LinkButton href="/supplier/catalog" variant="outline">Sell a new product</LinkButton>
       <LinkButton href="/supplier/prices" variant="primary">+ Add product / price</LinkButton>
     </>
@@ -487,7 +661,7 @@ function SupplierProductsInner() {
         <>
           <div className={cn("grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3", state.loading && "opacity-60 transition")} aria-busy={state.loading}>
             {rows.map((p) => (
-              <SupplierProductCard key={p.id} product={p} onReplace={replaceProduct} onReload={state.reload} onFlash={setFlash} />
+              <SupplierProductCard key={p.id} product={p} onReplace={replaceProduct} onPricingChange={onPricingChange} onReload={state.reload} onFlash={setFlash} />
             ))}
           </div>
           {state.data && state.data.total > state.data.pageSize && (

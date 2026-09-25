@@ -18,3 +18,6 @@ export { CartButton, CartBadge } from "./CartButton";
 export { SvgImage } from "./SvgImage";
 export { AppErrorBoundary } from "./AppErrorBoundary";
 export { DeliverySection } from "./DeliverySection";
+export { BottomSheet } from "./BottomSheet";
+export { Stars } from "./Stars";
+export { AddressSheet } from "./AddressSheet";
