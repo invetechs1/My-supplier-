@@ -5,6 +5,8 @@ import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import { env } from "./lib/env";
 import { optionalAuth } from "./middleware/auth";
+import { apiKeyAuth } from "./middleware/apiKey";
+import integrationRoutes from "./routes/integrations";
 import { errorHandler } from "./middleware/errorHandler";
 import authRoutes from "./routes/auth";
 import catalogRoutes from "./routes/catalog";
@@ -49,6 +51,7 @@ export function createApp() {
   app.use(express.json({ limit: "2mb" }));
   if (env.nodeEnv !== "test") app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
   app.use(rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: true, legacyHeaders: false }));
+  app.use(apiKeyAuth());
   app.use(optionalAuth);
 
   const api = express.Router();
@@ -69,6 +72,7 @@ export function createApp() {
   api.use(opsRoutes);
   api.use(shippingRoutes);
   api.use(einvoiceRoutes);
+  api.use(integrationRoutes);
   api.use("/auth", authRoutes);
   api.use("/auth", otpRoutes);
   api.use(rfqRoutes);

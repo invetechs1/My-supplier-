@@ -10,6 +10,7 @@
 import crypto from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
+import { emitOrderWebhook } from "./webhooks";
 import { env } from "../lib/env";
 import { zatcaTlvBase64 } from "./zatca";
 
@@ -100,7 +101,9 @@ export function ensureEInvoice(orderId: string) {
     const total = Number(order.total), vat = Number(order.vat);
     const qr = zatcaTlvBase64({ sellerName: order.company.name, vatNumber: order.company.vatNumber ?? env.seller.vatNumber, timestamp: issuedAt, total, vat });
     const xml = buildUblXml(order, { invoiceNumber, uuid, counter, previousHash, issuedAt, qr });
-    return prisma.eInvoiceRecord.create({ data: { orderId, invoiceNumber, uuid, counter, previousInvoiceHash: previousHash, invoiceHash: invoiceHash(xml), xml, status: "GENERATED" } });
+    const rec = await prisma.eInvoiceRecord.create({ data: { orderId, invoiceNumber, uuid, counter, previousInvoiceHash: previousHash, invoiceHash: invoiceHash(xml), xml, status: "GENERATED" } });
+    void emitOrderWebhook("invoice.issued", orderId, { invoice: { id: rec.id, invoiceNumber: rec.invoiceNumber, uuid: rec.uuid, invoiceHash: rec.invoiceHash, issuedAt } });
+    return rec;
   });
   chain = run.catch(() => undefined);
   return run;

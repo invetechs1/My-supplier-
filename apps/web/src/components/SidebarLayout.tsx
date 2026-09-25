@@ -102,6 +102,7 @@ export const supplierNav: NavItem[] = [
   { href: "/supplier/inventory", labelKey: "sup.inventory", icon: <Icon>{I.archive}</Icon>, group: "sup.group.operations", area: "inventory" },
   { href: "/supplier/branches", labelKey: "sup.branches", icon: <Icon>{I.pin}</Icon>, group: "sup.group.operations", area: "branches" },
   { href: "/supplier/returns", labelKey: "sup.returns", icon: <Icon>{I.undo}</Icon>, group: "sup.group.operations", area: "orders" },
+  { href: "/supplier/reviews", labelKey: "sup.reviews", icon: <Icon>{I.star}</Icon>, group: "sup.group.operations", area: "orders" },
   { href: "/supplier/company", labelKey: "sup.company", icon: <Icon>{I.storefront}</Icon>, group: "sup.group.company", area: "company" },
   { href: "/supplier/team", labelKey: "sup.team", icon: <Icon>{I.users}</Icon>, group: "sup.group.company", area: "team" },
   { href: "/supplier/documents", labelKey: "sup.documents", icon: <Icon>{I.shield}</Icon>, group: "sup.group.company", area: "documents" },

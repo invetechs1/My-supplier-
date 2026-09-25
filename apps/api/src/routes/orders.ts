@@ -10,6 +10,7 @@ import { paged, paginate } from "../lib/pagination";
 import { companyUserIds, notify } from "../services/notifications";
 import { applyStockMovement, recordOrderEvent, requireCompanyRole } from "../services/portal";
 import { frequentlyOrdered, releaseCredit } from "../services/commerce";
+import { emitOrderWebhook } from "../services/webhooks";
 
 const router = Router();
 
@@ -89,6 +90,7 @@ router.patch(
     if (!transitions[order.status].includes(status)) throw badRequest(`Cannot move order from ${order.status} to ${status}`);
     const updated = await prisma.order.update({ where: { id: order.id }, data: { status }, include: orderInclude });
     await recordOrderEvent(order.id, "STATUS", { status, userId: user.id });
+    void emitOrderWebhook(status === "CANCELLED" ? "order.cancelled" : "order.status_changed", order.id, { previousStatus: order.status, status });
     if (status === "CANCELLED") {
       // Return reserved stock to the shelf and free the buyer's credit line for unpaid net-terms orders.
       for (const item of updated.items) if (item.listingId) await applyStockMovement(item.listingId, "RELEASE", item.quantity, { reason: `Order ${order.reference} cancelled`, orderId: order.id, userId: user.id }).catch(() => undefined);
@@ -128,6 +130,7 @@ router.patch(
     // Net-terms settlement: paying a CREDIT order frees the company's credit line again.
     let released = 0;
     if (order.paymentMethod === "CREDIT" && paymentStatus === "PAID" && order.paymentStatus !== "PAID") released = await releaseCredit(order.id);
+    if (paymentStatus === "PAID" && order.paymentStatus !== "PAID") void emitOrderWebhook("order.paid", order.id, { payment: { method: order.paymentMethod } });
     await recordOrderEvent(order.id, "PAYMENT", { message: `Payment ${paymentStatus.toLowerCase()}${released ? ` · SAR ${released.toLocaleString("en-US")} credit released` : ""}`, userId: req.user!.id });
     await notify({ userIds: [order.buyerId], type: "ORDER_UPDATE", title: `Order ${order.reference} marked ${paymentStatus.toLowerCase()}`, body: `Updated by ${req.user!.name}.`, link: `/dashboard/orders/${order.id}` });
     res.json(serialize(updated));

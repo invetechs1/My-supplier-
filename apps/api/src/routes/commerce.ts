@@ -6,6 +6,7 @@ import { Router, type Request } from "express";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
+import { emitWebhook } from "../services/webhooks";
 import { asyncHandler } from "../middleware/errorHandler";
 import { requireAuth, requireCompany } from "../middleware/auth";
 import { badRequest, forbidden, notFound } from "../lib/errors";
@@ -246,6 +247,7 @@ router.post("/orders/:id/returns", requireAuth("BUYER", "ADMIN"), asyncHandler(a
     body: `${lines.map((l) => `${l.quantity} ${l.unit} ${l.name}`).join(", ")} · ${body.reason.replace("_", " ").toLowerCase()}. Please approve or reject.`,
     link: `/supplier/returns/${ret.id}`,
   });
+  void emitWebhook("return.requested", [order.companyId], { return: serialize(ret), order: { id: order.id, reference: order.reference } });
   res.status(201).json(serialize(ret));
 }));
 

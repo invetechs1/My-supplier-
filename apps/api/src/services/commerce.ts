@@ -8,6 +8,7 @@
 import { Prisma, type CarrierCode, type PaymentMethod } from "@prisma/client";
 import type { CartItemPricing, CreditInfo, ListingTier } from "@mysupplier/shared";
 import { prisma } from "../lib/prisma";
+import { emitOrderWebhook } from "./webhooks";
 import { badRequest } from "../lib/errors";
 import { round2 } from "./pricing";
 import { VAT_RATE, deliveryFee, isPurchasable, toOffer, type ListingWithCompany } from "./shop";
@@ -286,6 +287,7 @@ export async function createDirectOrders(input: CreateDirectOrdersInput) {
       return created;
     });
     orders.push(order);
+    void emitOrderWebhook("order.created", order.id);
     await notify({
       userIds: await companyUserIds([g.companyId]),
       type: "ORDER_UPDATE",
