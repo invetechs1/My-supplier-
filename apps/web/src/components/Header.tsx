@@ -212,6 +212,7 @@ export function Header() {
   const nav: Array<{ href: string; label: string; highlight?: boolean }> = [
     { href: "/shop", label: t("nav.shop") },
     { href: "/materials", label: t("nav.materials") },
+    { href: "/brands", label: t("nav.brands") },
     { href: "/suppliers", label: t("nav.suppliers") },
     { href: "/compare", label: t("nav.compare") },
     { href: "/boq", label: t("nav.boq"), highlight: true },
