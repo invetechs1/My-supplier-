@@ -5,9 +5,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import type { OrderEvent, OrderExtended, OrderMessage, OrderStatus, PaymentConfig, PaymentMethod, Review } from "@mysupplier/shared";
-import { Screen, Button, StatusBadge, Card, SectionHeader, KeyValue, LoadingView, ErrorView, RequireAuth, ProductImage, SvgImage, TextField, DeliverySection, statusLabel } from "@/components";
+import { Screen, Button, StatusBadge, Card, SectionHeader, KeyValue, LoadingView, ErrorView, RequireAuth, ProductImage, SvgImage, TextField, DeliverySection, ReturnSheet, statusLabel } from "@/components";
 import { api, deliveryNoteUrl, getErrorMessage, invoiceHtmlUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useCart } from "@/lib/cart";
 import { useI18n } from "@/lib/i18n";
 import { formatDate, formatDateTime, formatSar } from "@/lib/format";
 import { startCardPayment } from "@/lib/payments";
@@ -368,9 +369,15 @@ function OrderDetailContent() {
   const router = useRouter();
   const { t } = useI18n();
   const { user, isSupplier, token, canManageCompany } = useAuth();
+  const { refresh: refreshCart } = useCart();
   const { data, loading, error, refreshing, reload, refresh, setData, silentReload } = useApi(() => api.order(id), [id], Boolean(id));
   const [busy, setBusy] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [reorderBusy, setReorderBusy] = useState(false);
+  const [returnsVersion, setReturnsVersion] = useState(0);
+  // Buyer's return requests for this order (shown under the items).
+  const myReturns = useApi(() => api.returns({ orderId: id }), [id, returnsVersion, data?.status], Boolean(id) && Boolean(data) && user?.id === data?.buyerId);
   const [payBusy, setPayBusy] = useState(false);
   const [cardBusy, setCardBusy] = useState(false);
   const [cardError, setCardError] = useState<string | null>(null);
@@ -487,6 +494,28 @@ function OrderDetailContent() {
     WebBrowser.openBrowserAsync(invoiceHtmlUrl(order.id, token)).catch(() => undefined);
   };
 
+  const canReturn = isBuyer && (order.status === "IN_TRANSIT" || order.status === "DELIVERED") && items.length > 0;
+  const canReorder = isBuyer && items.length > 0 && items.some((it) => it.materialId);
+
+  /** POST /orders/:id/reorder – original listings or the cheapest current offer per material. */
+  const reorder = async () => {
+    setReorderBusy(true);
+    try {
+      const res = await api.reorder(order.id);
+      await refreshCart();
+      const skipped = res.skipped.length;
+      Alert.alert(
+        t("reorder"),
+        `${res.added} ${t("addedToCartCount")}${skipped ? `\n${skipped} ${t("itemsSkipped")}:\n${res.skipped.map((s) => `• ${s.name} (${s.reason})`).join("\n")}` : ""}`,
+        [{ text: t("continueShopping"), style: "cancel" }, { text: t("cart"), onPress: () => router.push("/cart") }],
+      );
+    } catch (err) {
+      Alert.alert(t("reorder"), getErrorMessage(err));
+    } finally {
+      setReorderBusy(false);
+    }
+  };
+
   const openDeliveryNote = () => {
     if (!token) return;
     WebBrowser.openBrowserAsync(deliveryNoteUrl(order.id, token)).catch(() => undefined);
@@ -571,6 +600,12 @@ function OrderDetailContent() {
       ) : null}
       {(isOrderSupplier || isAdmin) && !cancelled ? (
         <Button title={t("deliveryNote")} variant="outline" icon="clipboard-outline" fullWidth onPress={openDeliveryNote} style={{ marginTop: spacing.md }} />
+      ) : null}
+      {canReorder ? (
+        <Button title={t("reorder")} variant="secondary" icon="repeat-outline" fullWidth loading={reorderBusy} onPress={() => void reorder()} style={{ marginTop: spacing.md }} />
+      ) : null}
+      {canReturn ? (
+        <Button title={t("requestReturn")} variant="outline" icon="return-down-back-outline" fullWidth onPress={() => setReturnOpen(true)} style={{ marginTop: spacing.md }} />
       ) : null}
       {isBuyer && order.status === "PENDING" ? (
         <Button
@@ -752,6 +787,27 @@ function OrderDetailContent() {
         </>
       ) : null}
 
+      {isBuyer && myReturns.data?.data.length ? (
+        <>
+          <SectionHeader title={t("returns")} actionTitle={t("seeAll")} onAction={() => router.push("/returns")} />
+          <Card style={{ paddingVertical: spacing.xs }}>
+            {myReturns.data.data.map((r, i) => (
+              <Pressable key={r.id} onPress={() => router.push(`/returns/${r.id}`)} style={[styles.itemRow, i > 0 && styles.itemRowBorder]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemDesc}>{r.reference}</Text>
+                  <Text style={typography.caption}>
+                    {r.items.length} {r.items.length === 1 ? t("item") : t("items")} · {formatDate(r.createdAt)}
+                    {r.refundAmount ? ` · ${formatSar(r.refundAmount)}` : ""}
+                  </Text>
+                </View>
+                <StatusBadge status={r.status} small />
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </Pressable>
+            ))}
+          </Card>
+        </>
+      ) : null}
+
       <ReviewSection order={order} isBuyer={isBuyer} isOrderSupplier={isOrderSupplier} t={t} />
 
       <MessagesSection orderId={order.id} meId={user?.id} canPost={(isBuyer || isOrderSupplier || isAdmin) && !cancelled} t={t} />
@@ -763,6 +819,17 @@ function OrderDetailContent() {
       ) : null}
       {type === "DIRECT" && isBuyer ? (
         <Button title={t("continueShopping")} variant="ghost" icon="storefront-outline" onPress={() => router.push("/(tabs)/shop")} style={{ marginTop: spacing.sm }} />
+      ) : null}
+      {isBuyer ? (
+        <ReturnSheet
+          order={order}
+          visible={returnOpen}
+          onClose={() => setReturnOpen(false)}
+          onSubmitted={(ret) => {
+            setReturnsVersion((v) => v + 1);
+            Alert.alert(t("returnSubmitted"), ret.reference, [{ text: t("done"), style: "cancel" }, { text: t("returns"), onPress: () => router.push(`/returns/${ret.id}`) }]);
+          }}
+        />
       ) : null}
     </Screen>
   );

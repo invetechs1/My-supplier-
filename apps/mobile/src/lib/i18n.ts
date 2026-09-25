@@ -187,6 +187,7 @@ const dictionary = {
     specifications: "Specifications",
     showAll: "Show all",
     showLess: "Show less",
+    all: "All",
     // Marketplace: product page
     sale: "Sale",
     saleEnds: "Sale ends",
@@ -568,6 +569,7 @@ const dictionary = {
     specifications: "المواصفات",
     showAll: "عرض الكل",
     showLess: "عرض أقل",
+    all: "الكل",
     // Marketplace: product page
     sale: "تخفيض",
     saleEnds: "ينتهي التخفيض",

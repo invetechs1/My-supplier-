@@ -560,7 +560,7 @@ export default function ShopSearchScreen() {
             <Ionicons name="location-outline" size={14} color={city ? "#fff" : colors.textSecondary} />
             <Text style={[styles.filterText, city ? styles.filterTextActive : null]}>{city || t("allCities")}</Text>
           </Pressable>
-          <Chip label={t("showAll")} active={!categoryId} onPress={() => setCategoryId("")} />
+          <Chip label={t("all")} active={!categoryId} onPress={() => setCategoryId("")} />
           {categories.map((c) => (
             <Chip key={c.id} label={`${c.icon ? `${c.icon} ` : ""}${locale === "ar" ? c.nameAr : c.name}`} active={categoryId === c.id} onPress={() => setCategoryId(c.id)} />
           ))}

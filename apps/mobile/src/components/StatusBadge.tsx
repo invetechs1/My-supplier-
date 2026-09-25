@@ -52,6 +52,9 @@ const palette: Record<string, { bg: string; fg: string }> = {
   MANAGER: { bg: colors.infoLight, fg: colors.info },
   SALES: { bg: colors.accentLight, fg: "#B07A00" },
   WAREHOUSE: { bg: colors.purpleLight, fg: colors.purple },
+  // Returns / RMA
+  REQUESTED: { bg: colors.warningLight, fg: colors.warning },
+  RECEIVED: { bg: colors.infoLight, fg: colors.info },
   // Shipments
   BOOKED: { bg: colors.infoLight, fg: colors.info },
   PICKED_UP: { bg: colors.infoLight, fg: colors.info },

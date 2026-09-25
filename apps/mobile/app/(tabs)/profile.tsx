@@ -189,6 +189,11 @@ export default function ProfileScreen() {
         ) : null}
         {isAuthenticated && !isSupplier ? (
           <>
+            <Row icon="repeat-outline" label={t("buyAgain")} onPress={() => router.push("/buy-again")} />
+            <Row icon="heart-outline" label={t("myLists")} onPress={() => router.push("/lists")} />
+            <Row icon="calendar-outline" label={t("recurringOrders")} onPress={() => router.push("/recurring")} />
+            <Row icon="return-down-back-outline" label={t("returns")} onPress={() => router.push("/returns")} />
+            <Row icon="notifications-circle-outline" label={t("priceAlerts")} onPress={() => router.push("/alerts")} />
             <Row icon="document-text-outline" label={t("newRfq")} onPress={() => router.push("/rfq/new")} />
             <Row icon="receipt-outline" label={user?.role === "ADMIN" ? "Import prices" : t("uploadQuotation")} onPress={() => router.push("/imports/new")} />
             <Row icon="albums-outline" label={user?.role === "ADMIN" ? t("myImports") : t("myQuotations")} onPress={() => router.push("/imports")} />
@@ -201,6 +206,7 @@ export default function ProfileScreen() {
           <SectionHeader title={t("account")} />
           <View style={styles.group}>
             <Row icon="person-circle-outline" label={t("accountSettings")} onPress={() => router.push("/account")} />
+            <Row icon="location-outline" label={t("addresses")} onPress={() => router.push("/addresses")} />
             <Row icon="log-out-outline" label={t("logout")} onPress={confirmLogout} danger />
           </View>
         </>

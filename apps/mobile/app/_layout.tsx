@@ -83,6 +83,15 @@ export default function RootLayout() {
                   <Stack.Screen name="shop/product/[id]" options={{ title: "Product" }} />
                   <Stack.Screen name="cart" options={{ title: "Cart" }} />
                   <Stack.Screen name="checkout" options={{ title: "Checkout" }} />
+                  <Stack.Screen name="lists/index" options={{ title: "My lists" }} />
+                  <Stack.Screen name="lists/[id]" options={{ title: "List" }} />
+                  <Stack.Screen name="addresses" options={{ title: "Addresses" }} />
+                  <Stack.Screen name="buy-again" options={{ title: "Buy again" }} />
+                  <Stack.Screen name="returns/index" options={{ title: "Returns" }} />
+                  <Stack.Screen name="returns/[id]" options={{ title: "Return" }} />
+                  <Stack.Screen name="recurring/index" options={{ title: "Recurring orders" }} />
+                  <Stack.Screen name="recurring/new" options={{ title: "New recurring order" }} />
+                  <Stack.Screen name="alerts" options={{ title: "Price alerts" }} />
                 </Stack>
               </AppErrorBoundary>
             </CartProvider>
