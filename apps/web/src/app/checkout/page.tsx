@@ -181,6 +181,7 @@ export default function CheckoutPage() {
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [payingCard, setPayingCard] = useState(false);
   // Promotion code: validated server-side via GET /cart?coupon=; the priced cart replaces the plain cart in the summary.
+  const COUPON_KEY = "ms_coupon";
   const [couponInput, setCouponInput] = useState("");
   const [couponCart, setCouponCart] = useState<CartWithQuotes | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -197,7 +198,13 @@ export default function CheckoutPage() {
       setCouponCart(null); setCouponError(errorMessage(err, "Could not check the coupon"));
     } finally { setCouponBusy(false); }
   };
-  const removeCoupon = () => { setCouponInput(""); setCouponCart(null); setCouponError(null); };
+  const removeCoupon = () => { setCouponInput(""); setCouponCart(null); setCouponError(null); try { localStorage.removeItem(COUPON_KEY); } catch { /* ignore */ } };
+  // A code entered on the cart page is carried over and applied once the cart is priced.
+  const [pendingCoupon] = useState<string | null>(() => { try { return localStorage.getItem(COUPON_KEY); } catch { return null; } });
+  useEffect(() => {
+    if (pendingCoupon && cart && !couponCart && !couponInput) { setCouponInput(pendingCoupon); void applyCoupon(pendingCoupon); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCoupon, cart?.items.length]);
   // Re-price when the cart contents or city change while a coupon is applied.
   useEffect(() => {
     if (couponCart?.coupon) void applyCoupon(couponCart.coupon.code);
@@ -360,6 +367,7 @@ export default function CheckoutPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
+    if (!couponCart?.coupon) setCouponError(null); // a rejected code that was never applied should not linger next to address errors
     if (!validate()) return;
     setSubmitting(true);
     try {

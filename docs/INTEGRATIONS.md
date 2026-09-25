@@ -52,6 +52,7 @@ supplier's listings and sales orders; a buyer key only sees purchases made by th
 ### 1.4 Limits and errors
 * 600 requests / minute per key (`RateLimit-Limit`, `RateLimit-Remaining` headers; `429` when exceeded). Bulk endpoints take up to 1000 rows per call, so a 20 000-line price list is 20 calls.
 * JSON bodies up to 2 MB.
+* API keys work only on `/api/v1/integrations/*`, never carry the platform ADMIN role, and must not be sent together with a user `Authorization: Bearer` header (the request is rejected).
 * Errors are `{ "error": "message", "details": … }`. `401` = key problem (missing / malformed / revoked / expired), `403` = missing scope or wrong company type, `400` = validation (`details.fieldErrors`), `404` = not found or not yours, `409` = duplicate.
 
 ## 2. Sync patterns

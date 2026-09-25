@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Suspense, useEffect, useRef, useState } from "react";
 import type { ListingStatus, ListingTier, SupplierProduct } from "@mysupplier/shared";
 import { api, errorMessage } from "@/lib/api";
@@ -541,16 +541,31 @@ function SupplierProductCard({
 function SupplierProductsInner() {
   const { t, lang } = useI18n();
   const params = useSearchParams();
-  const [q, setQ] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const [q, setQ] = useState(() => params.get("q") ?? "");
   const dq = useDebounce(q, 350);
   const [status, setStatus] = useState<StatusFilter>(() => {
     const initial = params.get("status");
     return isListingStatus(initial) ? initial : "";
   });
-  const [city, setCity] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [sort, setSort] = useState("updated");
-  const [page, setPage] = useState(1);
+  const [city, setCity] = useState(() => params.get("city") ?? "");
+  const [categoryId, setCategoryId] = useState(() => params.get("categoryId") ?? "");
+  const [sort, setSort] = useState(() => params.get("sort") ?? "updated");
+  const [page, setPage] = useState(() => Math.max(1, Number(params.get("page")) || 1));
+  // Keep filters in the URL so a filtered view survives reload and can be shared.
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (dq.trim()) next.set("q", dq.trim());
+    if (status) next.set("status", status);
+    if (city) next.set("city", city);
+    if (categoryId) next.set("categoryId", categoryId);
+    if (sort !== "updated") next.set("sort", sort);
+    if (page > 1) next.set("page", String(page));
+    const qs = next.toString();
+    if (qs !== params.toString()) router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dq, status, city, categoryId, sort, page]);
   const [flash, setFlash] = useFlash(6000);
 
   const categories = useAsync(() => api.categories(), []);

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { SAUDI_CITIES, type Material, type PriceListing, type UpsertPricePayload } from "@mysupplier/shared";
-import { api, errorMessage, type SupplierListing } from "@/lib/api";
+import { ApiRequestError, api, errorMessage, type SupplierListing } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
@@ -97,14 +97,22 @@ export default function SupplierPricesPage() {
     if (Object.keys(next).length > 0 || !form.material) return;
     setSaving(true);
     try {
-      await api.upsertPrice({
+      const payload: UpsertPricePayload = {
         materialId: form.material.id,
         price,
         city: form.city,
         minQty: Number(form.minQty) || 1,
         leadTimeDays: Number(form.leadTimeDays) || 0,
         validUntil: form.validUntil ? new Date(form.validUntil).toISOString() : undefined,
-      });
+      };
+      try {
+        await api.upsertPrice({ ...payload, overwrite: Boolean(modal.editing) });
+      } catch (err) {
+        // The API refuses to silently replace a live offer for the same material + city; ask before overwriting.
+        if (!(err instanceof ApiRequestError && err.status === 409) || modal.editing) throw err;
+        if (!window.confirm(`${errorMessage(err)}\n\nReplace the existing offer with SAR ${price}?`)) return;
+        await api.upsertPrice({ ...payload, overwrite: true });
+      }
       setFlash({ kind: "success", message: modal.editing ? "Price updated." : "Price listing added." });
       setModal({ open: false, editing: null });
       state.reload();

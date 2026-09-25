@@ -116,12 +116,14 @@ router.get(
     const where: Prisma.ProductReviewWhereInput = { materialId: req.params.id, hidden: false };
     const orderBy: Prisma.ProductReviewOrderByWithRelationInput[] =
       sort === "helpful" ? [{ helpful: "desc" }, { createdAt: "desc" }] : sort === "rating" ? [{ rating: "desc" }, { helpful: "desc" }, { createdAt: "desc" }] : [{ createdAt: "desc" }];
-    const [total, rows, summary] = await Promise.all([
+    const [total, rows, summary, mine] = await Promise.all([
       prisma.productReview.count({ where }),
       prisma.productReview.findMany({ where, include: reviewAuthor, orderBy, skip, take }),
       productReviewSummary(req.params.id),
+      req.user ? prisma.productReview.findFirst({ where: { materialId: req.params.id, userId: req.user.id }, include: reviewAuthor }) : Promise.resolve(null),
     ]);
-    res.json({ ...paged(serialize(rows.map(shapeReview)), page, pageSize, total), summary });
+    // `mine` lets the UI offer "edit your review" instead of a dead-end 409 on a second post.
+    res.json({ ...paged(serialize(rows.map(shapeReview)), page, pageSize, total), summary, mine: mine ? serialize(shapeReview(mine)) : null });
   }),
 );
 

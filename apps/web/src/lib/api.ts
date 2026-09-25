@@ -698,6 +698,9 @@ export const api = {
     request<Paginated<Company>>("/admin/companies", { query }),
   adminVerifyCompany: (id: string, verified: boolean) =>
     request<Company>(`/admin/companies/${encodeURIComponent(id)}/verify`, { method: "PATCH", body: { verified } }),
+  adminUpdateCategory: (id: string, body: { slug?: string; name?: string; nameAr?: string; parentId?: string | null; icon?: string | null }) =>
+    request<Category>(`/admin/categories/${encodeURIComponent(id)}`, { method: "PATCH", body }),
+  adminDeleteCategory: (id: string) => request<{ ok: boolean }>(`/admin/categories/${encodeURIComponent(id)}`, { method: "DELETE" }),
   adminCreateCategory: (body: { slug: string; name: string; nameAr: string; parentId?: string; icon?: string }) =>
     request<Category>("/admin/categories", { method: "POST", body }),
   adminCreateMaterial: (body: AdminMaterialPayload) => request<Material>("/admin/materials", { method: "POST", body }),

@@ -301,6 +301,8 @@ export interface UpsertPricePayload {
   leadTimeDays?: number;
   city: string;
   validUntil?: string;
+  /** Replace an existing offer for the same material + city (the API answers 409 otherwise). */
+  overwrite?: boolean;
 }
 
 export function formatSar(value: number | null | undefined, locale: "en" | "ar" = "en"): string {

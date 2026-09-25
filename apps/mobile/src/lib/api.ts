@@ -684,9 +684,11 @@ export const api = {
 
   // Product reviews & Q&A
   productReviews: (id: string, query: { sort?: ReviewSort; page?: number } = {}) =>
-    request<ProductReviewsResponse>(`/shop/products/${encodeURIComponent(id)}/reviews`, { query, auth: false }),
+    request<ProductReviewsResponse>(`/shop/products/${encodeURIComponent(id)}/reviews`, { query }), // token optional; when present the response carries `mine`
   createProductReview: (id: string, payload: ProductReviewPayload) =>
     request<ProductReview>(`/shop/products/${encodeURIComponent(id)}/reviews`, { method: "POST", body: payload }),
+  updateProductReview: (reviewId: string, payload: Partial<ProductReviewPayload>) =>
+    request<ProductReview>(`/shop/reviews/${encodeURIComponent(reviewId)}`, { method: "PATCH", body: payload }),
   markReviewHelpful: (reviewId: string) =>
     request<{ id: string; helpful: number }>(`/shop/reviews/${encodeURIComponent(reviewId)}/helpful`, { method: "POST" }),
   productQuestions: (id: string, page = 1) =>

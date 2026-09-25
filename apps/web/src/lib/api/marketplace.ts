@@ -113,6 +113,7 @@ export const marketplaceApi = {
   reviews: (productId: string, query: { sort?: ReviewSort; page?: number; pageSize?: number } = {}) =>
     request<ProductReviewsResponse>(`/shop/products/${enc(productId)}/reviews`, { query }),
   createReview: (productId: string, body: ProductReviewPayload) => request<ProductReview>(`/shop/products/${enc(productId)}/reviews`, { method: "POST", body }),
+  updateReview: (reviewId: string, body: Partial<ProductReviewPayload>) => request<ProductReview>(`/shop/reviews/${enc(reviewId)}`, { method: "PATCH", body }),
   markHelpful: (reviewId: string) => request<{ id: string; helpful: number }>(`/shop/reviews/${enc(reviewId)}/helpful`, { method: "POST" }),
 
   // Q&A

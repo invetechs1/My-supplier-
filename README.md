@@ -8,7 +8,7 @@ plus an RFQ / bidding marketplace where registered suppliers compete for your or
 | App | Path | Stack |
 |---|---|---|
 | REST API | `apps/api` | Node 20, Express, TypeScript, Prisma, PostgreSQL |
-| Website + dashboards (buyer, supplier, admin) | `apps/web` | Next.js 14, Tailwind, EN/AR |
+| Website + dashboards (buyer, supplier, admin) | `apps/web` | Next.js 15, Tailwind, EN/AR |
 | iOS & Android app | `apps/mobile` | Expo SDK 51, expo-router |
 | Shared types | `packages/shared` | TypeScript |
 

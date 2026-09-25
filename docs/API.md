@@ -200,6 +200,8 @@ Verification documents are now served only through `GET /supplier/company/docume
 | POST | `/auth/login` | body `LoginPayload` -> `AuthResponse` |
 | GET | `/auth/me` | `User` (company embedded) |
 | PATCH | `/auth/me` | `{ name?, phone?, locale? }` -> `User` |
+| POST | `/auth/logout` | Revokes every session token issued so far for the user (bumps `tokenVersion`); password change/reset, role change and deactivation do the same |
+| POST | `/auth/download-token` | `{ path }` -> `{ token, expiresIn: 60 }`. Path-bound 60-second token for links that cannot send a header: `/orders/:id/invoice.html`, `/orders/:id/delivery-note.html`, `/orders/:id/einvoice.xml`, `/supplier/inventory/export.csv`, `/supplier/finance/statement.csv`, `/supplier/company/documents/:id/file`, `/admin/companies/:id/documents/:docId/file`, `/payments/:orderId/page`. Append it as `?token=`; session JWTs are rejected in URLs and download tokens are rejected as sessions |
 
 ## Buyer (role BUYER or ADMIN)
 | POST | `/rfqs` | `CreateRfqPayload` -> `Rfq` (notifies suppliers: `NEW_RFQ`) |
@@ -216,7 +218,7 @@ Verification documents are now served only through `GET /supplier/company/docume
 | GET | `/bids?status=&page=` | `Paginated<Bid>` (my company's bids with rfq embedded) |
 | POST | `/bids/:id/withdraw` | -> `Bid` |
 | GET | `/supplier/prices?page=` | `Paginated<PriceListing>` (my company) |
-| POST | `/supplier/prices` | `UpsertPricePayload` -> `PriceListing` (upsert on materialId+city) |
+| POST | `/supplier/prices` | `UpsertPricePayload` -> `PriceListing`. 409 when the company already lists that material in that city; send `overwrite: true` to replace it (the web form asks for confirmation) |
 | POST | `/supplier/prices/bulk` | `{ items: UpsertPricePayload[] }` -> `{ upserted: number }` |
 | DELETE | `/supplier/prices/:id` | `{ ok: true }` |
 
@@ -237,6 +239,8 @@ Verification documents are now served only through `GET /supplier/company/docume
 | GET | `/admin/companies?verified=&page=` | `Paginated<Company>` |
 | PATCH | `/admin/companies/:id/verify` | `{ verified: boolean }` -> `Company` |
 | POST | `/admin/categories` | `{ slug, name, nameAr, parentId?, icon? }` |
+| PATCH | `/admin/categories/:id` | partial `{ slug?, name?, nameAr?, parentId? (null = top level), icon? }` (audited) |
+| DELETE | `/admin/categories/:id` | `{ ok: true }` – only for categories with no products and no sub-categories (409 otherwise) |
 | POST | `/admin/materials` | `{ sku, name, nameAr, unit, categoryId, brand?, specs?, description? }` |
 | PATCH | `/admin/materials/:id` | partial material |
 | DELETE | `/admin/materials/:id` | `{ ok: true }` |
@@ -372,10 +376,10 @@ Amazon-class search, browse and engagement on top of the shop. Offers everywhere
 ### Product reviews
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/shop/products/:id/reviews?sort=recent|helpful|rating&page=` | Public. `ProductReviewsResponse` (hidden excluded) + `summary: ProductReviewSummary` |
+| GET | `/shop/products/:id/reviews?sort=recent|helpful|rating&page=` | Public. `ProductReviewsResponse` (hidden excluded) + `summary: ProductReviewSummary` + `mine` (the caller's own review or null when signed in) |
 | POST | `/shop/products/:id/reviews` | BUYER. `ProductReviewPayload { rating 1..5, title?, body?, images? }`; one review per user per product (409 otherwise); `verified = true` when the buyer has a non-cancelled order containing the product. Recomputes `Material.ratingAvg/ratingCount` |
 | PATCH | `/shop/reviews/:id` | Author only: edit `rating/title/body/images` |
-| POST | `/shop/reviews/:id/helpful` | Public. Increments `helpful`, returns `{ id, helpful }` |
+| POST | `/shop/reviews/:id/helpful` | Auth. One vote per user (`ReviewVote`); returns `{ id, helpful, voted }` |
 | POST | `/supplier/reviews/:id/reply` | SUPPLIER whose company lists the product: `{ reply }` → `supplierReply`; the author is notified |
 | GET | `/admin/product-reviews?hidden=&q=&rating=&page=` | Admin moderation list + `summary { average, total, hidden }` |
 | PATCH/DELETE | `/admin/product-reviews/:id` | Admin. `PATCH { hidden }`; both recompute the product rating and are audited |

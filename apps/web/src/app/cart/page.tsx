@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SAUDI_CITIES, type CartItem } from "@mysupplier/shared";
 import { useAuth } from "@/lib/auth";
+import { api, errorMessage } from "@/lib/api";
 import { GUEST_DELIVERY_FEE_PER_SUPPLIER, clampQty, minQtyFor, supplierKey, useCart } from "@/lib/cart";
 import { usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
@@ -74,6 +75,35 @@ export default function CartPage() {
   const cart = rawCart as CommerceCart | null;
   const savings = cart?.savings ?? 0;
   const [rowBusy, setRowBusy] = useState<string | null>(null);
+
+  // Promo code: validated server-side (GET /cart?coupon=) and remembered so checkout applies it automatically.
+  const COUPON_KEY = "ms_coupon";
+  const [couponInput, setCouponInput] = useState("");
+  const [couponCart, setCouponCart] = useState<CommerceCart | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponBusy, setCouponBusy] = useState(false);
+  const applyCoupon = async (code = couponInput) => {
+    const trimmed = code.trim().toUpperCase();
+    if (!trimmed) return;
+    setCouponBusy(true);
+    try {
+      const priced = (await api.cart(deliveryCity || undefined, trimmed)) as unknown as CommerceCart;
+      if (priced.couponError || !priced.coupon) { setCouponCart(null); setCouponError(priced.couponError ?? "Coupon not valid"); try { localStorage.removeItem(COUPON_KEY); } catch { /* ignore */ } }
+      else { setCouponCart(priced); setCouponError(null); setCouponInput(priced.coupon.code); try { localStorage.setItem(COUPON_KEY, priced.coupon.code); } catch { /* ignore */ } }
+    } catch (err) {
+      setCouponCart(null); setCouponError(errorMessage(err, "Could not check the coupon"));
+    } finally { setCouponBusy(false); }
+  };
+  const removeCoupon = () => { setCouponInput(""); setCouponCart(null); setCouponError(null); try { localStorage.removeItem(COUPON_KEY); } catch { /* ignore */ } };
+  useEffect(() => {
+    if (isGuest) return;
+    let saved: string | null = null;
+    try { saved = localStorage.getItem(COUPON_KEY); } catch { /* ignore */ }
+    if (saved && !couponCart) { setCouponInput(saved); void applyCoupon(saved); }
+    else if (couponCart?.coupon) void applyCoupon(couponCart.coupon.code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGuest, cart?.subtotal, cart?.items.length, deliveryCity]);
+  const shown = (couponCart?.coupon ? couponCart : cart) as CommerceCart | null;
 
   const groups = useMemo<Group[]>(() => {
     const map = new Map<string, Group>();
@@ -248,15 +278,25 @@ export default function CartPage() {
                     <dd className="tabular-nums">− {formatSar(savings, lang)}</dd>
                   </div>
                 )}
-                {(cart?.discount ?? 0) > 0 && cart?.coupon && (
-                  <div className="flex justify-between text-brand-700">
-                    <dt>Coupon {cart.coupon.code}</dt>
-                    <dd className="tabular-nums">− {formatSar(cart.discount, lang)}</dd>
+                {!isGuest && (
+                  <div className="pb-1 pt-1">
+                    {shown?.coupon ? (
+                      <div className="flex items-center justify-between text-brand-700">
+                        <dt>Coupon <span className="font-mono">{shown.coupon.code}</span></dt>
+                        <dd className="flex items-center gap-2 tabular-nums">− {formatSar(shown.discount, lang)}<button type="button" className="text-xs text-slate-500 underline" onClick={removeCoupon}>Remove</button></dd>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <input name="coupon" value={couponInput} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void applyCoupon(); } }} placeholder="Promo code" dir="ltr" aria-label="Promo code" className="h-9 min-w-0 flex-1 rounded-lg border border-slate-300 px-3 font-mono text-sm uppercase focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600" />
+                        <Button type="button" variant="outline" size="sm" onClick={() => void applyCoupon()} loading={couponBusy} disabled={!couponInput.trim()}>Apply</Button>
+                      </div>
+                    )}
+                    {couponError && <p className="mt-1 text-xs text-red-600">{couponError}</p>}
                   </div>
                 )}
                 <div className="flex justify-between">
                   <dt className="text-slate-500">VAT (15%)</dt>
-                  <dd className="tabular-nums text-slate-900">{formatSar(cart?.vat, lang)}</dd>
+                  <dd className="tabular-nums text-slate-900">{formatSar(shown?.vat ?? cart?.vat, lang)}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-slate-500">
@@ -270,7 +310,7 @@ export default function CartPage() {
                 </div>
                 <div className="flex justify-between border-t border-slate-200 pt-3 text-base">
                   <dt className="font-semibold text-slate-900">Total</dt>
-                  <dd className="font-bold tabular-nums text-brand-700">{formatSar(cart?.total, lang)}</dd>
+                  <dd className="font-bold tabular-nums text-brand-700">{formatSar(shown?.total ?? cart?.total, lang)}</dd>
                 </div>
               </dl>
               <div className="px-5 pb-5">

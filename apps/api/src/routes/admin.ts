@@ -9,6 +9,7 @@ import { serialize } from "../lib/serialize";
 import { paged, paginate } from "../lib/pagination";
 import { platformStats, priceIndex, snapshotHistory } from "../services/catalog";
 import { audit } from "../lib/audit";
+import { badRequest, conflict } from "../lib/errors";
 
 const router = Router();
 router.use("/admin", requireAuth("ADMIN"));
@@ -95,7 +96,37 @@ router.post(
       .object({ slug: z.string().min(2), name: z.string().min(2), nameAr: z.string().min(1), parentId: z.string().optional(), icon: z.string().optional() })
       .parse(req.body);
     const category = await prisma.category.create({ data });
+    await audit(req, "category.create", "Category", category.id, { slug: category.slug });
     res.status(201).json(serialize(category));
+  }),
+);
+
+router.patch(
+  "/admin/categories/:id",
+  asyncHandler(async (req, res) => {
+    const data = z
+      .object({ slug: z.string().min(2).optional(), name: z.string().min(2).optional(), nameAr: z.string().min(1).optional(), parentId: z.string().nullable().optional(), icon: z.string().nullable().optional() })
+      .parse(req.body);
+    if (data.parentId === req.params.id) throw badRequest("A category cannot be its own parent");
+    const category = await prisma.category.update({ where: { id: req.params.id }, data });
+    await audit(req, "category.update", "Category", category.id, data as Record<string, unknown>);
+    res.json(serialize(category));
+  }),
+);
+
+/** Deleting is allowed only for empty leaves; move materials and sub-categories first so nothing disappears from the shop. */
+router.delete(
+  "/admin/categories/:id",
+  asyncHandler(async (req, res) => {
+    const [materials, children] = await Promise.all([
+      prisma.material.count({ where: { categoryId: req.params.id } }),
+      prisma.category.count({ where: { parentId: req.params.id } }),
+    ]);
+    if (materials) throw conflict(`This category still has ${materials} product(s); move them to another category first`);
+    if (children) throw conflict(`This category still has ${children} sub-categor${children === 1 ? "y" : "ies"}; move or delete them first`);
+    const category = await prisma.category.delete({ where: { id: req.params.id } });
+    await audit(req, "category.delete", "Category", category.id, { slug: category.slug });
+    res.json({ ok: true });
   }),
 );
 

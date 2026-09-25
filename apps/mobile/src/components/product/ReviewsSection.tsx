@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -37,20 +37,31 @@ function Distribution({ summary }: { summary: ProductReviewSummary }) {
   );
 }
 
-function ReviewSheet({ visible, materialId, onClose, onSubmitted }: { visible: boolean; materialId: string; onClose: () => void; onSubmitted: (r: ProductReview) => void }) {
+function ReviewSheet({ visible, materialId, existing, onClose, onSubmitted }: { visible: boolean; materialId: string; existing?: ProductReview | null; onClose: () => void; onSubmitted: (r: ProductReview) => void }) {
   const { t } = useI18n();
-  const [rating, setRating] = useState(0);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+  const [rating, setRating] = useState(existing?.rating ?? 0);
+  const [title, setTitle] = useState(existing?.title ?? "");
+  const [body, setBody] = useState(existing?.body ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // One review per product: when the buyer already reviewed it, the sheet edits that review instead of failing with 409.
+  useEffect(() => {
+    if (!visible) return;
+    setRating(existing?.rating ?? 0);
+    setTitle(existing?.title ?? "");
+    setBody(existing?.body ?? "");
+    setError(null);
+  }, [visible, existing?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async () => {
     if (rating < 1) return setError(t("yourRating"));
     setBusy(true);
     setError(null);
     try {
-      const review = await api.createProductReview(materialId, { rating, title: title.trim() || undefined, body: body.trim() || undefined });
+      const payload = { rating, title: title.trim() || undefined, body: body.trim() || undefined };
+      const review = existing
+        ? await api.updateProductReview(existing.id, { ...payload, title: payload.title ?? "", body: payload.body ?? "" })
+        : await api.createProductReview(materialId, payload);
       onSubmitted(review);
       setRating(0);
       setTitle("");
@@ -64,13 +75,13 @@ function ReviewSheet({ visible, materialId, onClose, onSubmitted }: { visible: b
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title={t("writeReview")}>
+    <BottomSheet visible={visible} onClose={onClose} title={existing ? t("editReview") : t("writeReview")}>
       <Text style={styles.fieldLabel}>{t("yourRating")}</Text>
       <Stars value={rating} size={32} onChange={setRating} style={{ marginBottom: spacing.md }} />
       <TextField label={`${t("reviewTitle")} (${t("optional")})`} value={title} onChangeText={setTitle} maxLength={120} />
       <TextField label={`${t("reviewBody")} (${t("optional")})`} value={body} onChangeText={setBody} placeholder={t("reviewPlaceholder")} multiline maxLength={2000} />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Button title={t("submitReview")} icon="star-outline" size="lg" fullWidth loading={busy} disabled={rating < 1} onPress={() => void submit()} />
+      <Button title={existing ? t("saveChanges") : t("submitReview")} icon="star-outline" size="lg" fullWidth loading={busy} disabled={rating < 1} onPress={() => void submit()} />
     </BottomSheet>
   );
 }
@@ -95,6 +106,8 @@ export function ReviewsSection({ materialId, summary: initialSummary }: Props) {
   const reviews = useApi(() => api.productReviews(materialId, { sort, page: 1 }), [materialId, sort]);
 
   const summary = reviews.data?.summary ?? initialSummary;
+  const mine = reviews.data?.mine ?? null;
+  const writeLabel = mine ? t("editReview") : t("writeReview");
   const list = [...(reviews.data?.data ?? []), ...extra];
   const total = reviews.data?.total ?? summary.count;
   const hasMore = list.length < total;
@@ -114,6 +127,7 @@ export function ReviewsSection({ materialId, summary: initialSummary }: Props) {
 
   const markHelpful = async (r: ProductReview) => {
     if (helpfulDone[r.id] !== undefined) return;
+    if (!isAuthenticated) return showToast(t("signInToVote"));
     try {
       const res = await api.markReviewHelpful(r.id);
       setHelpfulDone((prev) => ({ ...prev, [r.id]: res.helpful }));
@@ -129,7 +143,7 @@ export function ReviewsSection({ materialId, summary: initialSummary }: Props) {
 
   return (
     <View>
-      <SectionHeader title={`${t("reviews")}${summary.count ? ` (${summary.count})` : ""}`} actionTitle={isBuyer || !isAuthenticated ? t("writeReview") : undefined} onAction={write} />
+      <SectionHeader title={`${t("reviews")}${summary.count ? ` (${summary.count})` : ""}`} actionTitle={isBuyer || !isAuthenticated ? writeLabel : undefined} onAction={write} />
       <Card>
         {summary.count > 0 ? (
           <View style={styles.summaryRow}>
@@ -147,7 +161,7 @@ export function ReviewsSection({ materialId, summary: initialSummary }: Props) {
             <Ionicons name="chatbubble-ellipses-outline" size={28} color={colors.textMuted} />
             <Text style={[typography.body, { fontWeight: "600", marginTop: spacing.xs }]}>{t("noReviewsYet")}</Text>
             <Text style={typography.caption}>{t("beFirstReview")}</Text>
-            {isBuyer || !isAuthenticated ? <Button title={t("writeReview")} size="sm" variant="secondary" onPress={write} style={{ marginTop: spacing.md }} /> : null}
+            {isBuyer || !isAuthenticated ? <Button title={writeLabel} size="sm" variant="secondary" onPress={write} style={{ marginTop: spacing.md }} /> : null}
           </View>
         )}
 
@@ -211,7 +225,7 @@ export function ReviewsSection({ materialId, summary: initialSummary }: Props) {
 
       <ReviewSheet
         visible={writeOpen}
-        materialId={materialId}
+        materialId={materialId} existing={mine}
         onClose={() => setWriteOpen(false)}
         onSubmitted={() => {
           showToast(t("reviewSubmitted"));

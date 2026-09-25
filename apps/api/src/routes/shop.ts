@@ -72,6 +72,7 @@ const boolish = z.enum(["1", "true", "0", "false"]).optional();
 const listQuery = z.object({
   q: z.string().trim().max(120).optional(),
   categoryId: z.string().optional(),
+  category: z.string().optional(), // slug alternative to categoryId
   city: z.string().optional(),
   brand: z.string().optional(),
   minPrice: z.coerce.number().nonnegative().optional(),
@@ -87,8 +88,14 @@ router.get(
   anonCache(60_000),
   asyncHandler(async (req, res) => {
     const qy = listQuery.parse(req.query);
+    if (qy.minPrice !== undefined && qy.maxPrice !== undefined && qy.minPrice > qy.maxPrice) [qy.minPrice, qy.maxPrice] = [qy.maxPrice, qy.minPrice];
     const specFilters = parseSpecFilters(req.query as Record<string, unknown>);
     const { page, pageSize, skip, take } = paginate(req.query);
+    if (!qy.categoryId && qy.category) {
+      const bySlug = await prisma.category.findUnique({ where: { slug: qy.category }, select: { id: true } });
+      if (!bySlug) throw notFound("Category not found");
+      qy.categoryId = bySlug.id;
+    }
     const categoryIds = qy.categoryId ? await categoryScope(qy.categoryId) : undefined;
     const minRating = qy.minRating ?? qy.rating;
     const brands = qy.brand ? qy.brand.split(",").map((b) => b.trim()).filter(Boolean) : [];

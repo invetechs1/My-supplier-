@@ -84,6 +84,11 @@ Store listing needs: privacy policy URL (`https://mysupplier.sa/privacy`), suppo
 * Card payments are bound to their order through gateway metadata; suppliers can only confirm cash-on-delivery after delivery; payouts cover card and bank-transfer money only, COD commission is invoiced to the supplier.
 * After deploying, run `pnpm --filter @mysupplier/api add xlsx@https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz` (the sandbox that built this could not reach the SheetJS CDN); the parser is already bounded to 8 MB / 5,000 rows.
 * Rotate any API key that was ever pasted into a chat or ticket. Keep `JWT_SECRET`, webhook secrets and Moyasar keys only in `deploy/.env`.
+* Sessions are revocable: `POST /auth/logout`, a password change/reset, a role change or deactivation invalidates every token issued before. Printable invoices, delivery notes, CSV exports, private files and the mobile payment page use 60-second path-bound download tokens; the session JWT never appears in a URL.
+* `TRUST_PROXY=1` matches the Caddy topology in `docker-compose.prod.yml`. If you add another proxy/CDN hop in front, raise it to the real hop count; never higher (rate limits key on the client IP behind that many hops).
+* ERP API keys (`X-Api-Key`) work only under `/api/v1/integrations/*`, never carry the ADMIN role, and cannot be combined with a bearer session in the same request.
+* The web app ships a Content-Security-Policy (see `apps/web/next.config.mjs`); the API's HTML pages carry their own nonce-based CSP. If you self-host fonts or add a third-party script, add its origin there.
+* Third-party audit at hand-over: web/api runtime dependencies are clean except `xlsx` (see the SheetJS line above); the remaining advisories are Expo/React-Native CLI dev tooling that is not shipped in the app binaries.
 
 ## 7. Operations
 | Task | How |

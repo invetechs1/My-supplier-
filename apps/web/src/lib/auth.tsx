@@ -46,7 +46,7 @@ export function safeNext(raw: string | null | undefined): string | null {
 }
 
 /** Per-user browser state cleared on logout (keys owned by lib/cart.tsx, app/boq, components/shop/ProductReviews.tsx). */
-const USER_STORAGE_KEYS = ["ms_cart", "ms_boq_draft", "ms_helpful_reviews", "ms_delivery_city"] as const;
+const USER_STORAGE_KEYS = ["ms_cart", "ms_boq_draft", "ms_helpful_reviews", "ms_delivery_city", "ms_coupon"] as const;
 
 export const COMPANY_ROLES: CompanyRole[] = ["OWNER", "MANAGER", "SALES", "WAREHOUSE"];
 

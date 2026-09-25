@@ -43,7 +43,7 @@ A pnpm monorepo. One PostgreSQL database, one REST API, one web app and one mobi
 | Path | What it is | Stack |
 |---|---|---|
 | apps/api | REST API, background jobs (outreach, feeds), file uploads, AI extraction, payments, shipping, e-invoicing | Node 20, Express 4, TypeScript, Prisma 5, PostgreSQL 16, zod, JWT, Anthropic SDK, Sentry |
-| apps/web | Public site, buyer dashboard, supplier portal, admin console | Next.js 14 app router, Tailwind, pure SVG charts, Playwright e2e |
+| apps/web | Public site, buyer dashboard, supplier portal, admin console | Next.js 15.5 app router (React 19), Tailwind, pure SVG charts, Playwright e2e |
 | apps/mobile | iOS and Android app (and a web export used for previews) | Expo SDK 51, expo-router, secure-store, notifications, image and document pickers |
 | packages/shared | Domain types shared by API, web and mobile | TypeScript |
 | docs/ | API contract, architecture, roadmap, this handover | Markdown |
@@ -107,7 +107,7 @@ Delete or change these before the public launch (see task 6.14).
 ### Tests and checks a contributor runs before pushing
 
 ```
-pnpm -r test                       # 36 unit tests in apps/api/tests
+pnpm -r test                       # 104 unit tests in apps/api/tests (vitest 3)
 cd apps/api && bash scripts/smoke.sh # API end-to-end: RFQ -> bid -> award -> order, BOQ, shop checkout, AI import
 cd apps/web && pnpm build && pnpm e2e  # Next build and Playwright browser smoke (WEB_URL, API_URL env)
 cd apps/mobile && pnpm typecheck
@@ -187,7 +187,11 @@ Redeploying after a code change is the same deploy.sh command. Migrations run au
 ### Security measures in place
 
 - Helmet, CORS allow-list, rate limits on auth, OTP and BOQ; bcrypt passwords; JWT with expiry; private fields (IBAN, commission, verification notes, token hashes) never serialised to clients.
-- Uploads validated by magic bytes and size, private documents streamed only through authenticated routes, SSRF guard on feed URLs, CSV formula neutralisation, timing-safe webhook secret comparison, payment amount and order verified server-side.
+- Uploads validated by magic bytes and size, private documents streamed only through authenticated routes, SSRF guard on feed URLs (IPv4/IPv6/NAT64/6to4 private ranges), CSV formula neutralisation, timing-safe webhook secret comparison, payment amount and order verified server-side.
+- Revocable sessions (`tokenVersion` checked on every request; logout / password change / role change revoke all earlier tokens), 60-second path-bound download tokens for printable and downloadable links (no session JWT in URLs), nonce-based CSP on the API's HTML pages and a CSP + security headers on the web app.
+- Checkout is race-safe: cart lines are claimed first, credit and coupon usage are reserved atomically in SQL, coupons are released when order creation fails; refunds aggregate duplicate lines and are capped at the order total; supplier stock edits go through the stock-movement ledger.
+- ERP API keys are confined to `/integrations`, never resolve to ADMIN and cannot be mixed with a bearer session; credit-limit fields are hidden from anyone but the buyer; product-review images must be platform uploads; per-user hourly limits on reviews, questions, alerts and lists; one helpful vote per user.
+- Client side: open-redirect guard on `next`/`redirect` params, http(s)-only outbound links, logout clears per-user local storage, error reports send masked paths only; mobile uses an ephemeral auth session for card payments and https-only tracking links.
 
 
 ## 6. Remaining work and how to do it

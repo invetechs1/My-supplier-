@@ -27,7 +27,8 @@ echo "--- accept bid"; ACC=$(curl -s -X POST $B/bids/$BIDID/accept -H "authoriza
 OID=$(echo "$ACC" | j "d['order']['id']")
 echo "--- supplier confirms order"; curl -s -X PATCH $B/orders/$OID/status -H "authorization: Bearer $ST" -H 'content-type: application/json' -d '{"status":"CONFIRMED"}' | j "d['status']"
 echo "--- buyer illegal transition"; curl -s -X PATCH $B/orders/$OID/status -H "authorization: Bearer $BT" -H 'content-type: application/json' -d '{"status":"DELIVERED"}'
-echo; echo "--- supplier upsert price"; curl -s -X POST $B/supplier/prices -H "authorization: Bearer $ST" -H 'content-type: application/json' -d "{\"materialId\":\"$MID\",\"price\":2599,\"city\":\"Riyadh\",\"minQty\":5,\"leadTimeDays\":2}" | j "d['price'], d['city']"
+echo; echo "--- supplier duplicate price is refused (409) unless overwrite"; curl -s -o /dev/null -w "%{http_code}\n" -X POST $B/supplier/prices -H "authorization: Bearer $ST" -H 'content-type: application/json' -d "{\"materialId\":\"$MID\",\"price\":2599,\"city\":\"Riyadh\",\"minQty\":5,\"leadTimeDays\":2}"
+echo "--- supplier upsert price"; curl -s -X POST $B/supplier/prices -H "authorization: Bearer $ST" -H 'content-type: application/json' -d "{\"materialId\":\"$MID\",\"price\":2599,\"city\":\"Riyadh\",\"minQty\":5,\"leadTimeDays\":2,\"overwrite\":true}" | j "d['price'], d['city']"
 echo "--- admin stats"; curl -s $B/admin/stats -H "authorization: Bearer $AT" | j "d['orders'], d['gmv'], d['rfqsByStatus']"
 echo "--- admin import"; curl -s -X POST $B/admin/prices/import -H "authorization: Bearer $AT" -H 'content-type: application/json' -d '{"sourceName":"Smoke Source","items":[{"sku":"CEM-OPC-50","price":15.9,"city":"Riyadh"},{"sku":"NOPE","price":1,"city":"Riyadh"}]}'
 echo; echo "--- unauthorized"; curl -s $B/admin/stats -H "authorization: Bearer $BT"

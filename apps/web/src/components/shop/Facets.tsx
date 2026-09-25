@@ -128,14 +128,20 @@ function CheckList({ name, options, selected, onToggle, max = 8 }: { name: strin
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? options : options.slice(0, max);
   const norm = (v: string) => v.toLowerCase();
-  const sel = new Set(selected.map(norm));
+  // Selection is owned by the URL; mirror it locally so the box flips on click instead of after navigation.
+  const [sel, setSel] = useState(() => new Set(selected.map(norm)));
+  useEffect(() => setSel(new Set(selected.map(norm))), [selected.join("\u0000")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggle = (value: string) => {
+    setSel((prev) => { const next = new Set(prev); if (next.has(norm(value))) next.delete(norm(value)); else next.add(norm(value)); return next; });
+    onToggle(value);
+  };
   if (options.length === 0) return <p className="text-xs text-slate-400">No options</p>;
   return (
     <ul className="space-y-1">
       {visible.map((o) => (
         <li key={o.value}>
           <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" name={name} checked={sel.has(norm(o.value))} onChange={() => onToggle(o.value)} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600" />
+            <input type="checkbox" name={name} checked={sel.has(norm(o.value))} onChange={() => toggle(o.value)} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600" />
             <span className="min-w-0 flex-1 truncate">{o.label ?? o.value}</span>
             <span className="text-xs tabular-nums text-slate-400">{o.count}</span>
           </label>
@@ -155,14 +161,21 @@ function CheckList({ name, options, selected, onToggle, max = 8 }: { name: strin
 function RangeInputs({ id, min, max, unit, initialMin, initialMax, onApply, placeholderMin, placeholderMax }: { id: string; min?: number | null; max?: number | null; unit?: string | null; initialMin: string; initialMax: string; onApply: (min: string, max: string) => void; placeholderMin?: string; placeholderMax?: string }) {
   const [lo, setLo] = useState(initialMin);
   const [hi, setHi] = useState(initialMax);
+  const [rangeError, setRangeError] = useState<string | null>(null);
   useEffect(() => setLo(initialMin), [initialMin]);
   useEffect(() => setHi(initialMax), [initialMax]);
   return (
     <form
-      className="flex items-center gap-2"
+      className="flex flex-wrap items-center gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        onApply(lo.trim(), hi.trim());
+        const a = lo.trim(), b = hi.trim();
+        if (a && b && Number(a) > Number(b)) {
+          setRangeError("Minimum must be lower than maximum.");
+          return;
+        }
+        setRangeError(null);
+        onApply(a, b);
       }}
     >
       <Input id={`${id}-min`} type="number" step="any" min={0} placeholder={placeholderMin ?? (min !== null && min !== undefined ? String(min) : "Min")} value={lo} onChange={(e) => setLo(e.target.value)} dir="ltr" aria-label={`Minimum ${id}`} />
@@ -172,6 +185,7 @@ function RangeInputs({ id, min, max, unit, initialMin, initialMax, onApply, plac
       <Button type="submit" size="sm" variant="outline" aria-label={`Apply ${id} range`}>
         Go
       </Button>
+      {rangeError && <p className="w-full text-xs text-red-600" role="alert">{rangeError}</p>}
     </form>
   );
 }
@@ -261,13 +275,13 @@ export function FacetSidebar({
       <FacetGroup title="Availability">
         <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-slate-700">
           <span>{t("shop.inStock")} only</span>
-          <input type="checkbox" checked={filters.inStock} onChange={(e) => onChange({ inStock: e.target.checked })} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600" />
+          <input type="checkbox" key={`stock-${filters.inStock}`} defaultChecked={filters.inStock} onChange={(e) => onChange({ inStock: e.target.checked })} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600" />
         </label>
         <label className="mt-2 flex cursor-pointer items-center justify-between gap-3 text-sm text-slate-700">
           <span className="inline-flex items-center gap-1.5">
             <Stars value={4} /> &amp; up
           </span>
-          <input type="checkbox" checked={filters.minRating === "4"} onChange={(e) => onChange({ minRating: e.target.checked ? "4" : "" })} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600" />
+          <input type="checkbox" key={`rating-${filters.minRating}`} defaultChecked={filters.minRating === "4"} onChange={(e) => onChange({ minRating: e.target.checked ? "4" : "" })} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600" />
         </label>
       </FacetGroup>
 

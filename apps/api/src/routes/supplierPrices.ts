@@ -4,7 +4,7 @@ import { httpUrl } from "../lib/security";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/errorHandler";
 import { requireAuth, requireCompany } from "../middleware/auth";
-import { badRequest, notFound } from "../lib/errors";
+import { badRequest, conflict, notFound } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import { paged, paginate } from "../lib/pagination";
 import { snapshotHistory } from "../services/catalog";
@@ -60,6 +60,12 @@ router.post(
     const body = priceSchema.parse(req.body);
     const material = await prisma.material.findUnique({ where: { id: body.materialId } });
     if (!material) throw notFound("Material not found");
+    // Adding a price for a material+city that already has one silently replaced the live offer; require an explicit overwrite.
+    const overwrite = z.object({ overwrite: z.coerce.boolean().optional() }).parse(req.body).overwrite === true;
+    if (!overwrite) {
+      const existing = await prisma.priceListing.findFirst({ where: { companyId, materialId: body.materialId, city: body.city, source: "SUPPLIER" }, select: { id: true, price: true } });
+      if (existing) throw conflict(`You already list ${material.name} in ${body.city} at SAR ${Number(existing.price)}. Edit that offer or confirm the overwrite.`);
+    }
     const listing = await upsertPrice(companyId, body);
     await snapshotHistory([body.materialId]);
     res.status(201).json(serialize(listing));

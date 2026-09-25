@@ -124,6 +124,15 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
   const reviews = useAsync(() => marketplaceApi.reviews(productId, { sort, page, pageSize: 10 }), [productId, sort, page]);
   const summary = reviews.data?.summary ?? initialSummary;
   const canReview = user?.role === "BUYER";
+  const mine = reviews.data?.mine ?? null;
+  const openWrite = () => {
+    // One review per product: a second click edits the existing review instead of hitting a 409.
+    setRating(mine?.rating ?? 0);
+    setTitle(mine?.title ?? "");
+    setBody(mine?.body ?? "");
+    setFormError(null);
+    setWriteOpen(true);
+  };
 
   const markHelpful = async (id: string) => {
     if (voted.has(id)) return;
@@ -145,7 +154,9 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
     setSaving(true);
     setFormError(null);
     try {
-      await marketplaceApi.createReview(productId, { rating, title: title.trim() || undefined, body: body.trim() || undefined });
+      const payload = { rating, title: title.trim() || undefined, body: body.trim() || undefined };
+      if (mine) await marketplaceApi.updateReview(mine.id, { ...payload, title: payload.title ?? "", body: payload.body ?? "" });
+      else await marketplaceApi.createReview(productId, payload);
       setWriteOpen(false);
       setPosted(true);
       setRating(0);
@@ -170,8 +181,8 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
         subtitle="Only buyers can review; verified badges mark confirmed purchases."
         action={
           canReview ? (
-            <Button size="sm" onClick={() => setWriteOpen(true)}>
-              Write a review
+            <Button size="sm" variant={mine ? "outline" : "primary"} onClick={openWrite}>
+              {mine ? "Edit your review" : "Write a review"}
             </Button>
           ) : !user ? (
             <Link href="/login" className="text-sm font-semibold text-brand-700 hover:underline">
@@ -187,6 +198,12 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
             <Alert kind="success" className="mt-4">
               Thanks — your review is live.
             </Alert>
+          )}
+          {mine && !posted && (
+            <p className="mt-4 text-xs text-slate-500">
+              You reviewed this product on {new Date(mine.createdAt).toLocaleDateString()} ({mine.rating}/5).{" "}
+              <button type="button" className="font-semibold text-brand-700 hover:underline" onClick={openWrite}>Edit</button>
+            </p>
           )}
         </div>
         <div className="min-w-0">
@@ -211,7 +228,7 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
           ) : reviews.error ? (
             <Alert onRetry={reviews.reload}>{reviews.error}</Alert>
           ) : (reviews.data?.data.length ?? 0) === 0 ? (
-            <EmptyState title="No reviews yet" description={canReview ? "Bought this product? Be the first to share how it performed." : "Reviews from buyers will appear here."} action={canReview ? <Button variant="outline" onClick={() => setWriteOpen(true)}>Write the first review</Button> : undefined} />
+            <EmptyState title="No reviews yet" description={canReview ? "Bought this product? Be the first to share how it performed." : "Reviews from buyers will appear here."} action={canReview ? <Button variant="outline" onClick={openWrite}>{mine ? "Edit your review" : "Write the first review"}</Button> : undefined} />
           ) : (
             <>
               <ul className="divide-y divide-slate-100">
@@ -227,7 +244,7 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
 
       <Modal
         open={writeOpen}
-        title="Write a review"
+        title={mine ? "Edit your review" : "Write a review"}
         onClose={() => setWriteOpen(false)}
         footer={
           <>
@@ -235,7 +252,7 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
               Cancel
             </Button>
             <Button onClick={submitReview} loading={saving}>
-              Post review
+              {mine ? "Save changes" : "Post review"}
             </Button>
           </>
         }

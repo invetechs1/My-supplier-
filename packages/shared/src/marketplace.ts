@@ -130,6 +130,8 @@ export interface ProductReviewSummary {
 
 export interface ProductReviewsResponse extends Paginated<ProductReview> {
   summary: ProductReviewSummary;
+  /** The signed-in buyer's own review of this product (null when none, absent for guests). */
+  mine?: ProductReview | null;
 }
 
 export interface ProductReviewPayload {
