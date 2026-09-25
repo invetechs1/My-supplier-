@@ -120,6 +120,7 @@ model User {
   id            String         @id @default(cuid())
   email         String         @unique
   passwordHash  String
+  tokenVersion  Int            @default(0)
   name          String
   phone         String?
   role          Role           @default(BUYER)
@@ -270,6 +271,9 @@ model Material {
   @@index([categoryId])
   @@index([name])
   @@index([featured])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "Material_name_trgm_idx")
+  @@index([nameAr(ops: raw("gin_trgm_ops"))], type: Gin, map: "Material_nameAr_trgm_idx")
+  @@index([brand(ops: raw("gin_trgm_ops"))], type: Gin, map: "Material_brand_trgm_idx")
 }
 
 model PriceListing {
@@ -1048,11 +1052,22 @@ model ProductReview {
   hidden        Boolean   @default(false)
   helpful       Int       @default(0)
   supplierReply String?
+  votes         ReviewVote[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   @@unique([materialId, userId])
   @@index([materialId, hidden])
+}
+
+model ReviewVote {
+  id        String        @id @default(cuid())
+  reviewId  String
+  review    ProductReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime      @default(now())
+
+  @@unique([reviewId, userId])
 }
 
 model ProductQuestion {

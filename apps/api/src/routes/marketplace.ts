@@ -4,6 +4,8 @@
  * Search, suggestions, brands and the product page itself live in routes/shop.ts.
  */
 import { Router } from "express";
+import { UPLOAD_BASE_URL } from "../lib/uploads";
+import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
@@ -19,6 +21,8 @@ import { emptyEnrichment, enrichMaterials, isPurchasable, offerInclude, productI
 import { productReviewSummary, recentlyViewedProducts, recommendations, recomputeMaterialRating } from "../services/marketplace";
 
 const router = Router();
+/** Per-user (falls back to IP) hourly limit for user-generated content, against spam and scripted abuse. */
+const perUserLimiter = (limit: number) => rateLimit({ windowMs: 60 * 60_000, limit, standardHeaders: true, legacyHeaders: false, keyGenerator: (req) => `ugc:${req.user?.id ?? req.ip}`, message: { error: "Too many requests, please slow down and try again later" } });
 const admin = requireAuth("ADMIN");
 const authed = requireAuth();
 const cityOf = (req: { query: Record<string, unknown> }) => (typeof req.query.city === "string" ? req.query.city : undefined);
@@ -88,7 +92,7 @@ const reviewBody = z.object({
   rating: z.coerce.number().int().min(1).max(5),
   title: z.string().trim().max(120).optional().nullable(),
   body: z.string().trim().max(4000).optional().nullable(),
-  images: z.array(z.string().url().max(500)).max(6).optional(),
+  images: z.array(z.string().url().max(500).refine((u) => u.startsWith(`${UPLOAD_BASE_URL}/`), "Review images must be uploaded to MySupplier")).max(6).optional(),
 });
 
 async function activeMaterial(id: string) {
@@ -123,6 +127,7 @@ router.get(
 
 router.post(
   "/shop/products/:id/reviews",
+  perUserLimiter(10),
   requireAuth("BUYER"),
   asyncHandler(async (req, res) => {
     const body = reviewBody.parse(req.body);
@@ -156,11 +161,18 @@ router.patch(
 
 router.post(
   "/shop/reviews/:id/helpful",
+  requireAuth(),
   asyncHandler(async (req, res) => {
-    const review = await prisma.productReview.findFirst({ where: { id: req.params.id, hidden: false } });
+    const review = await prisma.productReview.findFirst({ where: { id: req.params.id, hidden: false }, select: { id: true, helpful: true } });
     if (!review) throw notFound("Review not found");
-    const updated = await prisma.productReview.update({ where: { id: review.id }, data: { helpful: { increment: 1 } }, select: { id: true, helpful: true } });
-    res.json(updated);
+    const userId = req.user!.id;
+    const existing = await prisma.reviewVote.findUnique({ where: { reviewId_userId: { reviewId: review.id, userId } } });
+    if (existing) return res.json({ id: review.id, helpful: review.helpful, voted: true });
+    const [, updated] = await prisma.$transaction([
+      prisma.reviewVote.create({ data: { reviewId: review.id, userId } }),
+      prisma.productReview.update({ where: { id: review.id }, data: { helpful: { increment: 1 } }, select: { id: true, helpful: true } }),
+    ]);
+    res.json({ ...updated, voted: true });
   }),
 );
 
@@ -239,6 +251,7 @@ router.get(
 
 router.post(
   "/shop/products/:id/questions",
+  perUserLimiter(20),
   authed,
   asyncHandler(async (req, res) => {
     const { question } = z.object({ question: z.string().trim().min(5).max(1000) }).parse(req.body);
@@ -346,7 +359,7 @@ router.get("/wishlists/contains", asyncHandler(async (req, res) => {
   res.json({ materialId, wishlistIds: items.map((i) => i.wishlistId), saved: items.length > 0 });
 }));
 
-router.post("/wishlists", asyncHandler(async (req, res) => {
+router.post("/wishlists", perUserLimiter(60), asyncHandler(async (req, res) => {
   const { name } = z.object({ name: z.string().trim().min(1).max(80) }).parse(req.body);
   const count = await prisma.wishlist.count({ where: { userId: req.user!.id } });
   if (count >= 50) throw badRequest("You can have at most 50 lists");
@@ -465,7 +478,7 @@ router.get("/alerts", asyncHandler(async (req, res) => {
   res.json(serialize(alerts.map((a, i) => ({ ...a, material: materials[i] }))));
 }));
 
-router.post("/alerts", asyncHandler(async (req, res) => {
+router.post("/alerts", perUserLimiter(60), asyncHandler(async (req, res) => {
   const body = z.object({
     materialId: z.string().min(1),
     targetPrice: z.coerce.number().positive().optional().nullable(),

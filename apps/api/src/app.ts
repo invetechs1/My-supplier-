@@ -40,7 +40,8 @@ import marketplaceRoutes from "./routes/marketplace";
 export function createApp() {
   initSentry();
   const app = express();
-  app.set("trust proxy", 1);
+  // Behind Caddy there is exactly one trusted hop; set TRUST_PROXY to the real hop count (or false) when the topology differs.
+  app.set("trust proxy", process.env.TRUST_PROXY === "false" ? false : Number(process.env.TRUST_PROXY ?? 1));
   app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
   app.use(
     cors({
@@ -49,6 +50,8 @@ export function createApp() {
     }),
   );
   app.use(express.json({ limit: "2mb" }));
+  // Never write tokens (download links, magic links) into access logs.
+  morgan.token("url", (req) => ((req as express.Request).originalUrl ?? req.url ?? "").replace(/([?&])(token|code)=[^&]*/gi, "$1$2=[redacted]").replace(/\/(update-prices|reset-password)\/[^/?]+/g, "/$1/[token]"));
   if (env.nodeEnv !== "test") app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
   app.use(rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: true, legacyHeaders: false }));
   app.use(apiKeyAuth());

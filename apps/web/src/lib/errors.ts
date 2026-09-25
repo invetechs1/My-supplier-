@@ -20,6 +20,23 @@ function allow(key: string): boolean {
   return true;
 }
 
+/**
+ * Page location for a report: origin + pathname only (never the query string, which can carry
+ * `?token=` / `?next=`), with secret path segments masked.
+ */
+export function reportLocation(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    return `${window.location.origin}${maskPath(window.location.pathname)}`;
+  } catch {
+    return undefined;
+  }
+}
+
+export function maskPath(pathname: string): string {
+  return pathname.replace(/^\/update-prices\/[^/]+/, "/update-prices/[token]").replace(/^\/reset-password\/[^/]+/, "/reset-password/[token]");
+}
+
 function toReport(input: unknown, extra: Partial<ClientErrorReport> = {}): ClientErrorReport | null {
   let message = "";
   let stack: string | undefined;
@@ -49,7 +66,7 @@ function toReport(input: unknown, extra: Partial<ClientErrorReport> = {}): Clien
   return {
     message: message.slice(0, 1000),
     stack: (extra.stack ?? stack)?.slice(0, 8000),
-    url: extra.url ?? (typeof window !== "undefined" ? window.location.href : undefined),
+    url: extra.url ?? reportLocation(),
     userAgent: extra.userAgent ?? (typeof navigator !== "undefined" ? navigator.userAgent : undefined),
     platform: "web",
   };

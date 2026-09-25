@@ -7,7 +7,7 @@ import { SAUDI_CITIES, type Feed } from "@mysupplier/shared";
 import { api, errorMessage, importErrorText, type CatalogImportResult, type FeedFormat, type FeedRow, type FeedRunResult } from "@/lib/api";
 import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
-import { formatDateTime, formatNumber } from "@/lib/format";
+import { formatDateTime, formatNumber, safeHref } from "@/lib/format";
 import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, FlashMessage, Input, LoadingBlock, PageHeader, Select, Table, Textarea, type Column } from "@/components/ui";
 
 const SAMPLE_ROWS: FeedRow[] = [
@@ -216,7 +216,7 @@ export default function AdminFeedsPage() {
       render: (f) => (
         <div>
           <p className="font-medium text-slate-900">{f.name}</p>
-          <a href={f.url} target="_blank" rel="noreferrer" className="block max-w-[320px] truncate text-xs text-slate-500 hover:text-brand-700" dir="ltr">
+          <a href={safeHref(f.url)} target="_blank" rel="noreferrer" className="block max-w-[320px] truncate text-xs text-slate-500 hover:text-brand-700" dir="ltr">
             {f.url}
           </a>
         </div>

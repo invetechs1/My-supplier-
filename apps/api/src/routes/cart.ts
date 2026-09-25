@@ -152,13 +152,23 @@ router.post("/checkout", asyncHandler(async (req, res) => {
     contactPhone = address.phone;
   }
 
-  const { orders, total } = await createDirectOrders({
-    userId, groups: groupBySupplier(cart.items),
-    deliveryCity: deliveryCity!, deliveryAddress: deliveryAddress!, contactPhone: contactPhone!,
-    paymentMethod: body.paymentMethod, notes: body.notes, addressId: body.addressId, poNumber: body.poNumber || undefined,
-    couponCode: body.couponCode, carrierBySupplier: body.carrierBySupplier,
-  });
-  await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+  // Claim the cart lines first (only one concurrent submit can delete them), then create the orders from the
+  // captured snapshot; if order creation fails the lines are put back so the buyer can retry.
+  const claimed = await prisma.cartItem.deleteMany({ where: { cartId: cart.id, id: { in: cart.items.map((i) => i.id) } } });
+  if (claimed.count !== cart.items.length) throw badRequest("Your cart changed while checking out. Please review it and try again.");
+  let result;
+  try {
+    result = await createDirectOrders({
+      userId, groups: groupBySupplier(cart.items),
+      deliveryCity: deliveryCity!, deliveryAddress: deliveryAddress!, contactPhone: contactPhone!,
+      paymentMethod: body.paymentMethod, notes: body.notes, addressId: body.addressId, poNumber: body.poNumber || undefined,
+      couponCode: body.couponCode, carrierBySupplier: body.carrierBySupplier,
+    });
+  } catch (err) {
+    await prisma.cartItem.createMany({ data: cart.items.map((i) => ({ cartId: cart.id, listingId: i.listingId, quantity: i.quantity })), skipDuplicates: true }).catch(() => undefined);
+    throw err;
+  }
+  const { orders, total } = result;
   await notify({
     userIds: [userId], type: "ORDER_UPDATE", title: `Order${orders.length > 1 ? "s" : ""} placed`,
     body: `${orders.length} order(s) sent to ${orders.length} supplier(s).${body.paymentMethod === "CREDIT" ? " Payment is due on your credit terms." : ""}`, link: `/dashboard/orders`,

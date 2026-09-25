@@ -7,7 +7,7 @@ import type { Material, PriceListing, Product, Review, SupplierPublicProfile } f
 import { api, fileUrl } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
-import { formatDate, formatSar, timeAgo } from "@/lib/format";
+import { formatDate, formatSar, safeHref, timeAgo } from "@/lib/format";
 import { Alert, Badge, Card, CardBody, CardHeader, EmptyState, LoadingBlock, Pagination, Stars, StatTile, Table, VerificationBadge, type Column } from "@/components/ui";
 import { ProductCard } from "@/components/shop/ProductCard";
 
@@ -135,7 +135,7 @@ export default function SupplierProfilePage() {
             <dl className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
               {c.phone && (<><dt className="text-slate-500">Phone</dt><dd className="font-medium text-slate-900" dir="ltr">{c.phone}</dd></>)}
               {c.email && (<><dt className="text-slate-500">Email</dt><dd><a href={`mailto:${c.email}`} className="font-medium text-brand-700 hover:underline" dir="ltr">{c.email}</a></dd></>)}
-              {c.website && (<><dt className="text-slate-500">Website</dt><dd><a href={c.website} target="_blank" rel="noreferrer" className="font-medium text-brand-700 hover:underline" dir="ltr">{c.website.replace(/^https?:\/\//, "")}</a></dd></>)}
+              {c.website && safeHref(c.website) && (<><dt className="text-slate-500">Website</dt><dd><a href={safeHref(c.website)} target="_blank" rel="noreferrer" className="font-medium text-brand-700 hover:underline" dir="ltr">{c.website.replace(/^https?:\/\//, "")}</a></dd></>)}
               {c.workingHours && (<><dt className="text-slate-500">Hours</dt><dd className="font-medium text-slate-900">{c.workingHours}</dd></>)}
               {c.crNumber && (<><dt className="text-slate-500">CR</dt><dd className="font-medium text-slate-900" dir="ltr">{c.crNumber}</dd></>)}
               {c.vatNumber && (<><dt className="text-slate-500">VAT</dt><dd className="font-medium text-slate-900" dir="ltr">{c.vatNumber}</dd></>)}

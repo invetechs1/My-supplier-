@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import React, { Suspense, useState } from "react";
 import type { InventoryItem, StockMovement } from "@mysupplier/shared";
-import { api, errorMessage, inventoryExportUrl, type StockMovementPayload } from "@/lib/api";
+import { api, errorMessage, inventoryExportPath, openDownload, type StockMovementPayload } from "@/lib/api";
 import { useAsync, useDebounce, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { cn, formatDateTime, formatNumber, formatSar, timeAgo } from "@/lib/format";
@@ -153,9 +153,9 @@ function InventoryInner() {
         action={
           <>
             <LinkButton href="/supplier/imports" variant="outline">Import from PDF / Excel</LinkButton>
-            <a href={inventoryExportUrl()} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <button type="button" onClick={() => void openDownload(inventoryExportPath())} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">
               Export CSV
-            </a>
+            </button>
           </>
         }
       />

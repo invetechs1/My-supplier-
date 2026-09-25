@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import type { Branch, CompanyDocument, DocumentStatus, TeamMember, VerificationStatus } from "@mysupplier/shared";
-import { adminDocumentFileUrl, api, errorMessage, fileUrl, type AdminCompanyDetail } from "@/lib/api";
+import { adminDocumentFilePath, api, errorMessage, fileUrl, openDownload, type AdminCompanyDetail } from "@/lib/api";
 import { supplierCommerceApi } from "@/lib/api/supplierCommerce";
 import { COMPANY_ROLE_LABEL } from "@/lib/auth";
 import { useAsync, useFlash } from "@/lib/hooks";
@@ -34,7 +34,7 @@ function DocumentRow({ doc, companyId, onUpdated, onError }: { doc: CompanyDocum
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone="slate">{DOC_LABEL[doc.type] ?? doc.type}</Badge>
-          <a href={adminDocumentFileUrl(companyId, doc.id)} target="_blank" rel="noreferrer" title="Private document — opens with your admin session token" className="truncate text-sm font-medium text-brand-700 hover:underline" dir="ltr">{doc.fileName}</a>
+          <a href="#" onClick={(e) => { e.preventDefault(); void openDownload(adminDocumentFilePath(companyId, doc.id)); }} title="Private document — opens with a short-lived download link" className="truncate text-sm font-medium text-brand-700 hover:underline" dir="ltr">{doc.fileName}</a>
           <StatusBadge status={doc.status} />
           <span className="text-xs text-slate-400">{formatDateTime(doc.createdAt)}</span>
         </div>

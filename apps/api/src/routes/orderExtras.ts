@@ -4,7 +4,8 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
 import { asyncHandler } from "../middleware/errorHandler";
-import { userFromToken, requireAuth, type AuthUser } from "../middleware/auth";
+import { userFromToken, requireAuth, downloadPathOf, type AuthUser } from "../middleware/auth";
+import { htmlPage } from "../lib/htmlPage";
 import { badRequest, forbidden, notFound, unauthorized } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import { companyUserIds, notify } from "../services/notifications";
@@ -64,21 +65,22 @@ router.get(
   "/orders/:id/delivery-note.html",
   asyncHandler(async (req, res) => {
     const token = typeof req.query.token === "string" ? req.query.token : "";
-    const user = await userFromToken(token);
+    const user = await userFromToken(token, { downloadPath: downloadPathOf(req.originalUrl.split("?")[0]) });
     if (!user) throw unauthorized("Invalid or expired token");
     const o = await accessibleOrder(req.params.id, user);
     const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
     const rows = o.items.map((i, idx) => `<tr><td>${idx + 1}</td><td>${esc(i.name)}<div class="muted">${esc(i.material?.sku ?? "")}</div></td><td>${esc(i.unit)}</td><td class="r">${i.quantity}</td><td class="chk"></td></tr>`).join("");
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    const { nonce } = htmlPage(res);
     res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Delivery note ${esc(o.reference)}</title>
 <style>body{font-family:Inter,Arial,sans-serif;color:#111827;max-width:900px;margin:0 auto;padding:32px}h1{color:#0B6E4F;margin:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:24px 0}.box{border:1px solid #e5e7eb;border-radius:12px;padding:16px}.muted{color:#6b7280;font-size:12px}table{width:100%;border-collapse:collapse}th,td{padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:left;font-size:14px}th{background:#f4f6f5;font-size:12px;text-transform:uppercase}.r{text-align:right}.chk{width:60px;border-left:1px solid #e5e7eb}.sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px}.sig div{border-top:1px solid #111;padding-top:8px;font-size:13px}@media print{.noprint{display:none}}</style></head>
-<body><div class="noprint" style="text-align:right"><button onclick="window.print()" style="background:#0B6E4F;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-weight:600">Print</button></div>
+<body><div class="noprint" style="text-align:right"><button id="print" style="background:#0B6E4F;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-weight:600">Print</button></div>
 <div style="display:flex;justify-content:space-between"><div><div style="font-weight:700;color:#0B6E4F">MySupplier <span style="font-weight:600;color:#D18F00;font-size:12px">· Build for less · البناء بأقل تكلفة</span></div><h1>Delivery Note · سند تسليم</h1><div class="muted">MySupplier · Build for less</div></div><div style="text-align:right"><div style="font-size:20px;font-weight:700">${esc(o.reference)}</div><div class="muted">${esc(o.createdAt.toISOString().slice(0, 10))} · ${esc(o.status)}</div></div></div>
 <div class="grid"><div class="box"><div class="muted">From / المورد</div><strong>${esc(o.company.name)}</strong><div>${esc(o.company.city)} · ${esc(o.company.phone ?? "")}</div></div>
 <div class="box"><div class="muted">Deliver to / التسليم إلى</div><strong>${esc(o.buyer.company?.name ?? o.buyer.name)}</strong><div>${esc(o.buyer.name)} · ${esc(o.contactPhone ?? o.buyer.phone ?? "")}</div><div>${esc(o.deliveryAddress ?? "")}${o.deliveryCity ? `, ${esc(o.deliveryCity)}` : ""}</div>${o.notes ? `<div class="muted">Notes: ${esc(o.notes)}</div>` : ""}</div></div>
 <table><thead><tr><th>#</th><th>Item</th><th>Unit</th><th class="r">Qty</th><th>Received ✓</th></tr></thead><tbody>${rows}</tbody></table>
 <div class="sig"><div>Delivered by (name, signature, date)</div><div>Received by (name, signature, stamp, date)</div></div>
-<p class="muted" style="margin-top:32px">Prices are on the tax invoice. Report shortages or damage within 24 hours via the order messages on MySupplier.</p></body></html>`);
+<p class="muted" style="margin-top:32px">Prices are on the tax invoice. Report shortages or damage within 24 hours via the order messages on MySupplier.</p>
+<script nonce="${nonce}">document.getElementById('print').addEventListener('click',function(){window.print()});</script></body></html>`);
   }),
 );
 

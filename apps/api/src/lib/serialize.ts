@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 /** Fields that must never leave the API unless the caller owns the record (or is an admin). */
-const PRIVATE_KEYS = new Set(["passwordHash", "iban", "bankName", "beneficiary", "commissionPct", "verificationNotes", "tokenHash", "codeHash", "rawText", "keyHash", "secret"]);
+const PRIVATE_KEYS = new Set(["passwordHash", "iban", "bankName", "beneficiary", "commissionPct", "verificationNotes", "tokenHash", "codeHash", "rawText", "keyHash", "secret", "creditLimit", "creditUsed", "creditTermsDays"]);
 
 /**
  * Recursively converts Prisma Decimal -> number and Date -> ISO string so that

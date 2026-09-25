@@ -227,13 +227,16 @@ router.post("/orders/:id/returns", requireAuth("BUYER", "ADMIN"), asyncHandler(a
   const claimed = new Map<string, number>();
   for (const r of prior) for (const l of returnLines(r.items)) claimed.set(l.orderItemId, (claimed.get(l.orderItemId) ?? 0) + l.quantity);
 
+  // Aggregate the request per order line first so duplicated lines cannot multiply the returnable quantity.
+  const wanted = new Map<string, number>();
+  for (const it of body.items) wanted.set(it.orderItemId, (wanted.get(it.orderItemId) ?? 0) + it.quantity);
   const lines: ReturnLine[] = [];
-  for (const it of body.items) {
-    const item = order.items.find((i) => i.id === it.orderItemId);
-    if (!item) throw badRequest(`Item ${it.orderItemId} does not belong to this order`);
+  for (const [orderItemId, quantity] of wanted) {
+    const item = order.items.find((i) => i.id === orderItemId);
+    if (!item) throw badRequest(`Item ${orderItemId} does not belong to this order`);
     const remaining = item.quantity - (claimed.get(item.id) ?? 0);
-    if (it.quantity > remaining + 1e-9) throw badRequest(`Only ${remaining} ${item.unit} of "${item.name}" can still be returned`);
-    lines.push({ orderItemId: item.id, name: item.name, unit: item.unit, quantity: it.quantity, unitPrice: Number(item.unitPrice) });
+    if (quantity > remaining + 1e-9) throw badRequest(`Only ${remaining} ${item.unit} of "${item.name}" can still be returned`);
+    lines.push({ orderItemId: item.id, name: item.name, unit: item.unit, quantity, unitPrice: Number(item.unitPrice) });
   }
   const reference = await nextCommerceReference("RET");
   const ret = await prisma.return.create({
@@ -314,6 +317,7 @@ router.patch("/returns/:id", auth, asyncHandler(async (req, res) => {
     }
     data.refundAmount = refundAmount;
     const alreadyRefunded = order.payments.reduce((s, p) => s + Math.abs(Number(p.amount)), 0);
+    if (round2(alreadyRefunded + refundAmount) > Number(order.total) + 0.01) throw badRequest(`Refund would exceed the amount paid for this order (SAR ${Number(order.total).toLocaleString("en-US")}, already refunded SAR ${alreadyRefunded.toLocaleString("en-US")})`);
     const full = round2(alreadyRefunded + refundAmount) >= Number(order.total) - 0.01;
     payment = await prisma.$transaction(async (tx) => {
       const p = await tx.payment.create({ data: { orderId: order.id, provider: "MANUAL", amount: -refundAmount!, status: "REFUNDED", raw: { returnId: ret.id, reference: ret.reference, by: user.id } as Prisma.InputJsonValue } });

@@ -9,7 +9,7 @@ import { asPriced, bestTier, fileUrl, isOnSale, marketplaceApi, nextTierFor, sav
 import { clampQty, isPurchasable, minQtyFor, useCart } from "@/lib/cart";
 import { useAsync, usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
-import { cn, formatDate, formatSar } from "@/lib/format";
+import { cn, formatDate, formatSar, safeHref } from "@/lib/format";
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, LoadingBlock, SourceBadge, Stars, Table, VerifiedBadge, type Column } from "@/components/ui";
 import { PriceHistoryChart } from "@/components/PriceHistoryChart";
 import { ProductBadges, ProductRail, RatingLine, SectionHeading, StockPill } from "@/components/shop/ProductCard";
@@ -304,7 +304,7 @@ export default function ShopProductPage() {
           {(datasheet || embed || videoFile) && (
             <div className="mt-4 flex flex-wrap gap-2">
               {datasheet && (
-                <a href={datasheet} target="_blank" rel="noopener noreferrer" download className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                <a href={safeHref(datasheet)} target="_blank" rel="noopener noreferrer" download className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
                   <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-slate-500" aria-hidden>
                     <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
                     <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />

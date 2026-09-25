@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { SAUDI_CITIES, type CompanyType, type RegisterPayload } from "@mysupplier/shared";
 import { Screen, Button, TextField, PickerField, PickerModal } from "@/components";
-import { useAuth } from "@/lib/auth";
+import { safeRedirect, useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { getErrorMessage } from "@/lib/api";
 import { colors, radius, spacing, typography } from "@/theme";
@@ -22,7 +22,8 @@ const CITY_OPTIONS = SAUDI_CITIES.map((c) => ({ value: c, label: c }));
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
+  const { redirect: rawRedirect } = useLocalSearchParams<{ redirect?: string }>();
+  const redirect = safeRedirect(rawRedirect);
   const { register } = useAuth();
   const { t } = useI18n();
 

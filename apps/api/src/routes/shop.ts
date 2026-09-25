@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/errorHandler";
 import { notFound } from "../lib/errors";
+import { anonCache } from "../lib/anonCache";
 import { serialize } from "../lib/serialize";
 import { paged, paginate } from "../lib/pagination";
 import { activeListingWhere, platformStats } from "../services/catalog";
@@ -41,6 +42,7 @@ router.get(
 // ------------------------------------------------------------------ suggestions & brands
 router.get(
   "/shop/suggest",
+  anonCache(60_000),
   asyncHandler(async (req, res) => {
     const { q } = z.object({ q: z.string().trim().max(80).default("") }).parse(req.query);
     res.json(await suggest(q));
@@ -82,6 +84,7 @@ const listQuery = z.object({
 
 router.get(
   "/shop/products",
+  anonCache(60_000),
   asyncHandler(async (req, res) => {
     const qy = listQuery.parse(req.query);
     const specFilters = parseSpecFilters(req.query as Record<string, unknown>);

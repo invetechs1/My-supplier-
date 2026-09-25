@@ -88,7 +88,7 @@ router.post(
       prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => undefined);
     }
     await prisma.otpCode.update({ where: { id: rec.id }, data: { usedAt: new Date() } });
-    const token = signToken({ id: user.id, email: user.email, role: user.role, companyId: user.companyId, name: user.name });
+    const token = signToken({ id: user.id, email: user.email, role: user.role, companyId: user.companyId, name: user.name, tokenVersion: user.tokenVersion });
     res.json({ token, user: serialize(user) });
   }),
 );

@@ -137,19 +137,28 @@ export async function setStoredToken(token: string | null): Promise<void> {
   else await storage.deleteItem(TOKEN_KEY);
 }
 
-/** Printable invoice URL (token in the query because browsers can't send headers on navigation). */
-export function invoiceHtmlUrl(orderId: string, token: string): string {
-  return `${API_URL}/orders/${encodeURIComponent(orderId)}/invoice.html?token=${encodeURIComponent(token)}`;
+/**
+ * Short-lived, single-purpose download token for one API path (the browser can't send headers on
+ * navigation and the session JWT must never travel in a URL). `path` has no `/api/v1` prefix or query.
+ */
+export async function downloadUrl(path: string): Promise<string> {
+  const { token } = await request<{ token: string; expiresIn: number }>("/auth/download-token", { method: "POST", body: { path } });
+  return `${API_URL}${path}?token=${encodeURIComponent(token)}`;
 }
 
-/** Printable delivery note / packing slip (token in the query, like the invoice). */
-export function deliveryNoteUrl(orderId: string, token: string): string {
-  return `${API_URL}/orders/${encodeURIComponent(orderId)}/delivery-note.html?token=${encodeURIComponent(token)}`;
+/** Printable invoice URL carrying a short-lived download token. */
+export function invoiceHtmlUrl(orderId: string): Promise<string> {
+  return downloadUrl(`/orders/${encodeURIComponent(orderId)}/invoice.html`);
 }
 
-/** Hosted card-payment page served by the API (Moyasar form); redirects back to `mysupplier://payment`. */
-export function paymentPageUrl(orderId: string, token: string): string {
-  return `${API_URL}/payments/${encodeURIComponent(orderId)}/page?token=${encodeURIComponent(token)}`;
+/** Printable delivery note / packing slip URL carrying a short-lived download token. */
+export function deliveryNoteUrl(orderId: string): Promise<string> {
+  return downloadUrl(`/orders/${encodeURIComponent(orderId)}/delivery-note.html`);
+}
+
+/** Hosted card-payment page served by the API (Moyasar form); redirects back to `mysupplier://payment`. Uses a 60 s single-path token, never the session. */
+export function paymentPageUrl(orderId: string): Promise<string> {
+  return downloadUrl(`/payments/${encodeURIComponent(orderId)}/page`);
 }
 
 type Query = Record<string, string | number | boolean | undefined | null>;

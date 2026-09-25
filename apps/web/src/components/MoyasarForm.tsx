@@ -94,7 +94,7 @@ export function MoyasarForm({ orderId, intent, onCompleted, className }: Moyasar
 
   return (
     <div className={className}>
-      <Script src={MOYASAR_SCRIPT} strategy="afterInteractive" onReady={() => setScriptReady(true)} onError={() => setInitError("The payment provider script could not be loaded. Check your connection and refresh.")} />
+      <Script src={MOYASAR_SCRIPT} strategy="afterInteractive" crossOrigin="anonymous" onReady={() => setScriptReady(true)} onError={() => setInitError("The payment provider script could not be loaded. Check your connection and refresh.")} />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
         <div>
           <p className="font-medium text-slate-900">{intent.description}</p>

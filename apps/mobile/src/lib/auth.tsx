@@ -27,6 +27,14 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 /** `companyRole` is only present on newer API responses; older ones are treated as OWNER. */
+/** Only accept an in-app relative route as a post-login `redirect` param (no absolute / protocol-relative URLs). */
+export function safeRedirect(raw: string | string[] | null | undefined): string | null {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value || typeof value !== "string") return null;
+  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return null;
+  return value;
+}
+
 export function companyRoleOf(user: User | null | undefined): CompanyRole {
   const role = (user as (User & { companyRole?: CompanyRole | null }) | null | undefined)?.companyRole;
   return role ?? "OWNER";

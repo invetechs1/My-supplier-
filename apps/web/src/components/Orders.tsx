@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { OrderEvent, OrderExtended, OrderItem, OrderMessage, OrderStatus, PaymentMethod, PaymentStatus, ReturnReason, ReturnRequest, Review } from "@mysupplier/shared";
-import { api, deliveryNoteHtmlUrl, errorMessage, invoiceHtmlUrl } from "@/lib/api";
+import { api, deliveryNoteHtmlPath, errorMessage, invoiceHtmlPath, openDownload } from "@/lib/api";
 import { RETURN_REASONS, canRequestReturn, commerceApi, formatAddressLine, returnReasonLabel, returnStatusTone, type OrderWithCommerce } from "@/lib/api/commerce";
 import { canManageCompany, companyRoleOf, useAuth } from "@/lib/auth";
 import { useCart } from "@/lib/cart";
@@ -167,7 +167,7 @@ export function BankTransferInstructions({ order }: { order: OrderExtended }) {
 export function InvoicePreview({ orderId }: { orderId: string }) {
   const { lang } = useI18n();
   const invoice = useAsync(() => api.invoice(orderId), [orderId]);
-  const openInvoice = () => window.open(invoiceHtmlUrl(orderId), "_blank", "noopener,noreferrer");
+  const openInvoice = () => void openDownload(invoiceHtmlPath(orderId));
 
   return (
     <Card>
@@ -796,11 +796,11 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
           <>
             <StatusBadge status={o.status} />
             <PaymentStatusBadge status={o.paymentStatus} />
-            <Button variant="outline" onClick={() => window.open(invoiceHtmlUrl(o.id), "_blank", "noopener,noreferrer")}>
+            <Button variant="outline" onClick={() => void openDownload(invoiceHtmlPath(o.id))}>
               View invoice
             </Button>
             {canPrintDeliveryNote && (
-              <Button variant="outline" onClick={() => window.open(deliveryNoteHtmlUrl(o.id), "_blank", "noopener,noreferrer")} title="Printable packing slip for the driver">
+              <Button variant="outline" onClick={() => void openDownload(deliveryNoteHtmlPath(o.id))} title="Printable packing slip for the driver">
                 {t("order.deliveryNote")}
               </Button>
             )}

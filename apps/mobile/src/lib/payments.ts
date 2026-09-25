@@ -33,9 +33,9 @@ export function parsePaymentRedirect(url: string): { orderId?: string; paymentId
  * app/payment.tsx handles (verify + result screen). On web the page opens in a
  * new tab and the result lands on /payment through the browser redirect.
  */
-export async function startCardPayment(orderId: string, jwt: string): Promise<CardPaymentOutcome> {
+export async function startCardPayment(orderId: string, _jwt?: string): Promise<CardPaymentOutcome> {
   await api.createPaymentIntent(orderId);
-  const payUrl = paymentPageUrl(orderId, jwt);
+  const payUrl = await paymentPageUrl(orderId);
 
   if (Platform.OS === "web") {
     await WebBrowser.openBrowserAsync(payUrl);
@@ -44,7 +44,7 @@ export async function startCardPayment(orderId: string, jwt: string): Promise<Ca
 
   const redirectUrl = Linking.createURL("payment");
   const result = await WebBrowser.openAuthSessionAsync(payUrl, redirectUrl || PAYMENT_REDIRECT_URL, {
-    preferEphemeralSession: false,
+    preferEphemeralSession: true,
     showInRecents: true,
   });
   if (result.type === "success" && "url" in result && result.url) {

@@ -69,6 +69,9 @@ export function toDateTimeLocal(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** Only http(s) URLs may be used as an anchor href from user/data-supplied strings (blocks `javascript:` / `data:`). */
+export const safeHref = (u?: string | null) => (u && /^https?:\/\//i.test(u) ? u : undefined);
+
 export function cn(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(" ");
 }

@@ -10,7 +10,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import rateLimit from "express-rate-limit";
 import { prisma } from "../lib/prisma";
-import { forbidden, unauthorized } from "../lib/errors";
+import { badRequest, forbidden, unauthorized } from "../lib/errors";
 import { extractApiKey, hasScope, hashApiKey, isApiKeyFormat, type ApiScope } from "../services/integrations";
 
 export interface ApiKeyContext {
@@ -77,12 +77,14 @@ export async function authenticateApiKey(req: Request): Promise<ApiKeyContext | 
   if (!key.createdBy.active) throw unauthorized("The user who created this API key is disabled");
 
   const ctx: ApiKeyContext = { id: key.id, name: key.name, companyId: key.companyId, scopes: key.scopes as ApiScope[] };
+  // A key always acts as its COMPANY (supplier or buyer), never as the platform admin who may have minted it.
+  const company = await prisma.company.findUnique({ where: { id: key.companyId }, select: { type: true } });
   req.apiKey = ctx;
   req.user = {
     id: key.createdById,
     email: key.createdBy.email,
     name: `${key.createdBy.name} (API key: ${key.name})`,
-    role: key.createdBy.role,
+    role: company?.type === "SUPPLIER" ? "SUPPLIER" : "BUYER",
     companyId: key.companyId,
     companyRole: "MANAGER",
     apiKeyId: key.id,
@@ -96,7 +98,14 @@ export async function authenticateApiKey(req: Request): Promise<ApiKeyContext | 
 export function apiKeyAuth(): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
     authenticateApiKey(req)
-      .then((ctx) => (ctx ? keyLimiter(req, res, next) : next()))
+      .then((ctx) => {
+        if (!ctx) return next();
+        // One principal per request: a key and a bearer token together would split identity between them.
+        if (typeof req.headers.authorization === "string" && req.headers.authorization.trim()) return next(badRequest("Send either an API key or a bearer token, not both"));
+        // Keys are integration credentials: they never reach the interactive API (scopes only exist under /integrations).
+        if (!/^\/api\/v1\/integrations(\/|$)/.test(req.path)) return next(forbidden("API keys may only call /api/v1/integrations endpoints; use a user session for everything else"));
+        return keyLimiter(req, res, next);
+      })
       .catch(next);
   };
 }

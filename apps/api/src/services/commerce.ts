@@ -227,6 +227,12 @@ export async function createDirectOrders(input: CreateDirectOrdersInput) {
   if (couponCheck && !couponCheck.ok) throw badRequest(couponCheck.reason);
   const discounts = splitDiscount(couponCheck?.ok ? couponCheck.discount : 0, groupSubtotals);
   const couponCode = couponCheck?.ok ? couponCheck.coupon.code : null;
+  // Reserve the coupon use atomically (conditional UPDATE) so a usage limit holds under concurrent checkouts.
+  if (couponCode) {
+    const reserved = await prisma.$executeRaw`UPDATE "Coupon" SET "usedCount" = "usedCount" + 1 WHERE "code" = ${couponCode} AND "active" = true AND ("usageLimit" IS NULL OR "usedCount" < "usageLimit")`;
+    if (!reserved) throw badRequest("This coupon has reached its usage limit");
+  }
+  const releaseCoupon = async () => { if (couponCode) await prisma.coupon.update({ where: { code: couponCode }, data: { usedCount: { decrement: 1 } } }).catch(() => undefined); };
 
   const quotes = await quotesForGroups(groups, input.deliveryCity, carrierBySupplier);
   const totals = priced.map((g, gi) => {
@@ -249,54 +255,56 @@ export async function createDirectOrders(input: CreateDirectOrdersInput) {
   }
 
   const orders: DirectOrder[] = [];
+  try {
   for (const [gi, g] of priced.entries()) {
-    const reference = await nextOrderReference();
-    const { subtotal, discount, vat, fee, quote, total } = totals[gi];
-    const order = await prisma.$transaction(async (tx) => {
-      const created = await tx.order.create({
-        data: {
-          reference, type: "DIRECT", buyerId: input.userId, companyId: g.companyId, subtotal, vat, deliveryFee: fee, total, discount, couponCode,
-          paymentMethod: input.paymentMethod, deliveryCity: input.deliveryCity, deliveryAddress: input.deliveryAddress,
-          contactPhone: input.contactPhone, notes: input.notes ?? undefined,
-          addressId: input.addressId ?? undefined, poNumber: input.poNumber ?? undefined, recurringOrderId: input.recurringOrderId ?? undefined,
-          dueDate: input.paymentMethod === "CREDIT" ? creditDueDate(termsDays, now) : undefined,
-          items: {
-            create: g.lines.map((l) => ({
-              materialId: l.listing.materialId, listingId: l.listing.id, name: l.listing.material.name, unit: l.listing.material.unit,
-              unitPrice: l.unitPrice, quantity: l.quantity, lineTotal: l.lineTotal,
-            })),
+      const reference = await nextOrderReference();
+      const { subtotal, discount, vat, fee, quote, total } = totals[gi];
+      const order = await prisma.$transaction(async (tx) => {
+        const created = await tx.order.create({
+          data: {
+            reference, type: "DIRECT", buyerId: input.userId, companyId: g.companyId, subtotal, vat, deliveryFee: fee, total, discount, couponCode,
+            paymentMethod: input.paymentMethod, deliveryCity: input.deliveryCity, deliveryAddress: input.deliveryAddress,
+            contactPhone: input.contactPhone, notes: input.notes ?? undefined,
+            addressId: input.addressId ?? undefined, poNumber: input.poNumber ?? undefined, recurringOrderId: input.recurringOrderId ?? undefined,
+            dueDate: input.paymentMethod === "CREDIT" ? creditDueDate(termsDays, now) : undefined,
+            items: {
+              create: g.lines.map((l) => ({
+                materialId: l.listing.materialId, listingId: l.listing.id, name: l.listing.material.name, unit: l.listing.material.unit,
+                unitPrice: l.unitPrice, quantity: l.quantity, lineTotal: l.lineTotal,
+              })),
+            },
           },
-        },
-        include: directOrderInclude,
+          include: directOrderInclude,
+        });
+        for (const l of g.lines) {
+          await applyStockMovement(l.listing.id, "OUT", l.quantity, { reason: `Order ${reference}`, orderId: created.id, userId: input.userId, tx });
+          await tx.material.update({ where: { id: l.listing.materialId }, data: { popularity: { increment: 5 } } });
+        }
+        if (input.paymentMethod === "CREDIT" && buyer.companyId) {
+          // Conditional UPDATE: the reservation and the limit check are one statement, so concurrent checkouts cannot overshoot.
+          const reserved = await tx.$executeRaw`UPDATE "Company" SET "creditUsed" = "creditUsed" + ${total} WHERE "id" = ${buyer.companyId} AND "creditApproved" = true AND "creditLimit" IS NOT NULL AND "creditUsed" + ${total} <= "creditLimit"`;
+          if (!reserved) throw badRequest("Not enough available credit for this order; pay another way or ask MySupplier to raise your limit");
+        }
+        const via = input.recurringOrderId ? " · recurring order" : "";
+        const po = input.poNumber ? ` · PO ${input.poNumber}` : "";
+        await tx.orderEvent.create({ data: { orderId: created.id, type: "CREATED", status: "PENDING", message: `Order placed · ${input.paymentMethod.replace("_", " ").toLowerCase()}${input.paymentMethod === "CREDIT" ? ` (net ${termsDays} days)` : ""}${po}${via}`, userId: input.userId } });
+        await tx.shipment.create({ data: { orderId: created.id, carrier: quote?.carrier ?? "SUPPLIER", carrierName: carrierName(quote?.carrier ?? "SUPPLIER"), service: quote?.service, cost: fee, weightKg: quote?.weightKg, volumeM3: quote?.volumeM3, status: "PENDING", events: { create: { status: "PENDING", description: quote ? `${quote.carrierName} · ${quote.service} · ETA ${quote.etaDays} day(s)` : "Awaiting supplier booking" } } } });
+        return created;
       });
-      for (const l of g.lines) {
-        await applyStockMovement(l.listing.id, "OUT", l.quantity, { reason: `Order ${reference}`, orderId: created.id, userId: input.userId, tx });
-        await tx.material.update({ where: { id: l.listing.materialId }, data: { popularity: { increment: 5 } } });
-      }
-      if (input.paymentMethod === "CREDIT" && buyer.companyId) {
-        // Re-check inside the transaction so concurrent checkouts cannot overshoot the limit.
-        const fresh = await tx.company.findUniqueOrThrow({ where: { id: buyer.companyId }, select: { creditApproved: true, creditLimit: true, creditTermsDays: true, creditUsed: true } });
-        const check = canUseCredit(fresh, total);
-        if (!check.ok) throw badRequest(check.reason);
-        await tx.company.update({ where: { id: buyer.companyId }, data: { creditUsed: { increment: total } } });
-      }
-      const via = input.recurringOrderId ? " · recurring order" : "";
-      const po = input.poNumber ? ` · PO ${input.poNumber}` : "";
-      await tx.orderEvent.create({ data: { orderId: created.id, type: "CREATED", status: "PENDING", message: `Order placed · ${input.paymentMethod.replace("_", " ").toLowerCase()}${input.paymentMethod === "CREDIT" ? ` (net ${termsDays} days)` : ""}${po}${via}`, userId: input.userId } });
-      await tx.shipment.create({ data: { orderId: created.id, carrier: quote?.carrier ?? "SUPPLIER", carrierName: carrierName(quote?.carrier ?? "SUPPLIER"), service: quote?.service, cost: fee, weightKg: quote?.weightKg, volumeM3: quote?.volumeM3, status: "PENDING", events: { create: { status: "PENDING", description: quote ? `${quote.carrierName} · ${quote.service} · ETA ${quote.etaDays} day(s)` : "Awaiting supplier booking" } } } });
-      return created;
-    });
-    orders.push(order);
-    void emitOrderWebhook("order.created", order.id);
-    await notify({
-      userIds: await companyUserIds([g.companyId]),
-      type: "ORDER_UPDATE",
-      title: `New order ${reference}`,
-      body: `${g.lines.length} item(s), SAR ${total.toLocaleString("en-US")} incl. VAT, deliver to ${input.deliveryCity}.${input.poNumber ? ` PO ${input.poNumber}.` : ""} Please confirm.`,
-      link: `/supplier/orders/${order.id}`,
-    });
+      orders.push(order);
+      void emitOrderWebhook("order.created", order.id);
+      await notify({
+        userIds: await companyUserIds([g.companyId]),
+        type: "ORDER_UPDATE",
+        title: `New order ${reference}`,
+        body: `${g.lines.length} item(s), SAR ${total.toLocaleString("en-US")} incl. VAT, deliver to ${input.deliveryCity}.${input.poNumber ? ` PO ${input.poNumber}.` : ""} Please confirm.`,
+        link: `/supplier/orders/${order.id}`,
+      });
+    }
+  } catch (err) {
+    if (!orders.length) await releaseCoupon();
+    throw err;
   }
-  if (couponCode) await prisma.coupon.update({ where: { code: couponCode }, data: { usedCount: { increment: 1 } } });
   return { orders, total: grandTotal, couponCode };
 }
 
@@ -315,11 +323,14 @@ export function computeRefund(order: RefundOrder, returned: Array<{ orderItemId:
   const subtotal = Number(order.subtotal);
   const discount = Number(order.discount ?? 0);
   const factor = subtotal > 0 ? Math.max(0, (subtotal - discount) / subtotal) : 1;
+  // Aggregate per order line and clamp to the quantity bought, so duplicate lines never inflate the refund.
+  const perItem = new Map<string, number>();
+  for (const r of returned) perItem.set(r.orderItemId, (perItem.get(r.orderItemId) ?? 0) + r.quantity);
   let goods = 0;
-  for (const r of returned) {
-    const item = order.items.find((i) => i.id === r.orderItemId);
+  for (const [orderItemId, qty] of perItem) {
+    const item = order.items.find((i) => i.id === orderItemId);
     if (!item) continue;
-    goods += Number(item.unitPrice) * Math.min(r.quantity, item.quantity);
+    goods += Number(item.unitPrice) * Math.min(qty, item.quantity);
   }
   return round2(goods * factor * (1 + vatRate));
 }

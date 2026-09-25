@@ -213,8 +213,10 @@ export function bestTier(offer: PricedOffer | null | undefined): { minQty: numbe
 /** Absolute URL for an uploaded file path (`/uploads/...`) or an already absolute URL. */
 export function fileUrl(path: string | null | undefined): string | null {
   if (!path) return null;
-  if (/^https?:\/\//i.test(path) || path.startsWith("data:")) return path;
-  return `${API_ORIGIN}${path.startsWith("/") ? "" : "/"}${path}`;
+  if (/^https?:\/\//i.test(path)) return path;
+  // Only API-relative paths (`/uploads/...`) are accepted; `data:`, `javascript:` and other schemes are dropped.
+  if (path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\")) return `${API_ORIGIN}${path}`;
+  return null;
 }
 
 /** Embed URL for YouTube / Vimeo links (null for a plain video file). */

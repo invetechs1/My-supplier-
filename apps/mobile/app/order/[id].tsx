@@ -489,9 +489,13 @@ function OrderDetailContent() {
     }
   };
 
-  const openInvoice = () => {
+  const openInvoice = async () => {
     if (!token) return;
-    WebBrowser.openBrowserAsync(invoiceHtmlUrl(order.id, token)).catch(() => undefined);
+    try {
+      await WebBrowser.openBrowserAsync(await invoiceHtmlUrl(order.id));
+    } catch (err) {
+      Alert.alert(t("invoice"), getErrorMessage(err));
+    }
   };
 
   const canReturn = isBuyer && (order.status === "IN_TRANSIT" || order.status === "DELIVERED") && items.length > 0;
@@ -516,9 +520,13 @@ function OrderDetailContent() {
     }
   };
 
-  const openDeliveryNote = () => {
+  const openDeliveryNote = async () => {
     if (!token) return;
-    WebBrowser.openBrowserAsync(deliveryNoteUrl(order.id, token)).catch(() => undefined);
+    try {
+      await WebBrowser.openBrowserAsync(await deliveryNoteUrl(order.id));
+    } catch (err) {
+      Alert.alert(t("deliveryNote"), getErrorMessage(err));
+    }
   };
 
   return (

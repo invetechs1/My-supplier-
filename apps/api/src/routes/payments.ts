@@ -6,7 +6,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
 import { asyncHandler } from "../middleware/errorHandler";
-import { userFromToken, requireAuth } from "../middleware/auth";
+import { downloadPathOf, userFromToken, requireAuth } from "../middleware/auth";
+import { htmlPage } from "../lib/htmlPage";
 import { badRequest, forbidden, notFound, unauthorized } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import { audit } from "../lib/audit";
@@ -155,22 +156,22 @@ router.get(
   "/payments/:orderId/page",
   asyncHandler(async (req, res) => {
     const token = typeof req.query.token === "string" ? req.query.token : "";
-    const user = await userFromToken(token);
+    const user = await userFromToken(token, { downloadPath: downloadPathOf(req.originalUrl.split("?")[0]) });
     if (!user) throw unauthorized("Invalid or expired token");
     const order = await prisma.order.findUnique({ where: { id: req.params.orderId }, include: orderInclude });
     if (!order || order.buyerId !== user.id) throw notFound("Order not found");
     const intent = intentFor(order);
     const redirect = `${env.appScheme}://payment?order=${order.id}`;
     const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    const { nonce } = htmlPage(res, { scriptSrc: ["https://cdn.moyasar.com", "https://api.moyasar.com", "https://applepay.cdn-apple.com"], styleSrc: ["https://cdn.moyasar.com"], connectSrc: ["https://api.moyasar.com", "https://cdn.moyasar.com"], frameSrc: ["https://api.moyasar.com", "https://*.moyasar.com"], formAction: ["https://api.moyasar.com", `${env.appScheme}:`] });
     if (!cardPaymentsEnabled()) {
       return res.send(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:Inter,Arial;padding:24px"><h2>Card payments are not enabled yet</h2><p>Please pay on delivery or by bank transfer.</p><a href="${redirect}&status=disabled">Back to app</a></body>`);
     }
     res.send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pay ${esc(order.reference)}</title>
-<link rel="stylesheet" href="https://cdn.moyasar.com/mpf/1.14.0/moyasar.css"><script src="https://cdn.moyasar.com/mpf/1.14.0/moyasar.js"></script>
+<link rel="stylesheet" href="https://cdn.moyasar.com/mpf/1.14.0/moyasar.css"><script nonce="${nonce}" src="https://cdn.moyasar.com/mpf/1.14.0/moyasar.js"></script>
 <style>body{font-family:Inter,Arial,sans-serif;margin:0;background:#f4f6f5}.wrap{max-width:480px;margin:0 auto;padding:20px}.card{background:#fff;border-radius:16px;padding:20px;border:1px solid #e5e7eb}h1{font-size:18px;margin:0 0 4px;color:#0B6E4F}.t{font-size:26px;font-weight:700;margin:8px 0 16px}</style></head>
 <body><div class="wrap"><div class="card"><h1>MySupplier</h1><div>Order ${esc(order.reference)} · ${esc(order.company.name)}</div><div class="t">SAR ${Number(order.total).toLocaleString("en-US", { minimumFractionDigits: 2 })}</div><div class="mysr-form"></div></div></div>
-<script>Moyasar.init({element:'.mysr-form',amount:${intent.amountHalalas},currency:'SAR',description:${jsonForScript(intent.description)},publishable_api_key:${jsonForScript(intent.publishableKey)},callback_url:${jsonForScript(redirect)},methods:['creditcard','applepay'],metadata:{order_id:${jsonForScript(order.id)}},on_completed:function(p){window.location.href=${jsonForScript(redirect)}+'&id='+encodeURIComponent(p.id)+'&status='+encodeURIComponent(p.status);}});</script></body></html>`);
+<script nonce="${nonce}">Moyasar.init({element:'.mysr-form',amount:${intent.amountHalalas},currency:'SAR',description:${jsonForScript(intent.description)},publishable_api_key:${jsonForScript(intent.publishableKey)},callback_url:${jsonForScript(redirect)},methods:['creditcard','applepay'],metadata:{order_id:${jsonForScript(order.id)}},on_completed:function(p){window.location.href=${jsonForScript(redirect)}+'&id='+encodeURIComponent(p.id)+'&status='+encodeURIComponent(p.status);}});</script></body></html>`);
   }),
 );
 

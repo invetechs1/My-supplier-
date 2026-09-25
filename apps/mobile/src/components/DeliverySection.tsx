@@ -51,9 +51,10 @@ interface Props {
   t: (k: TKey) => string;
 }
 
+/** Tracking URLs come from the carrier / supplier – only ever open http(s) links. */
 function openUrl(url: string) {
-  if (/^https?:/i.test(url)) WebBrowser.openBrowserAsync(url).catch(() => Linking.openURL(url).catch(() => undefined));
-  else Linking.openURL(url).catch(() => undefined);
+  if (!/^https?:\/\//i.test(url)) return;
+  WebBrowser.openBrowserAsync(url).catch(() => Linking.openURL(url).catch(() => undefined));
 }
 
 function callPhone(phone: string) {

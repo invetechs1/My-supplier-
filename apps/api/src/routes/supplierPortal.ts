@@ -15,7 +15,7 @@ import { escapeHtml, layout, sendMail } from "../services/mailer";
 import { notify } from "../services/notifications";
 import { activeListingWhere } from "../services/catalog";
 import { round2 } from "../services/pricing";
-import { csvCell } from "../lib/security";
+import { csvCell, httpUrl } from "../lib/security";
 import {
   applyStockMovement, commissionFor, companyCommissionPct, dayKey, getSettings, lastNDays, requireCompanyRole, requireManager,
   reservedByListing, saveSettings, slugify, soldLast30dByListing,
@@ -108,7 +108,7 @@ const profileSchema = z.object({
   citiesServed: z.array(z.string()).max(30).optional(), minOrderValue: z.coerce.number().nonnegative().nullable().optional(),
   deliveryFee: z.coerce.number().nonnegative().nullable().optional(), deliveryDays: z.coerce.number().int().min(0).nullable().optional(),
   workingHours: z.string().max(200).nullable().optional(), phone: z.string().nullable().optional(), email: z.string().email().nullable().optional(),
-  website: z.string().url().nullable().optional(), bankName: z.string().nullable().optional(), iban: z.string().nullable().optional(), beneficiary: z.string().nullable().optional(),
+  website: httpUrl.nullable().optional(), bankName: z.string().nullable().optional(), iban: z.string().nullable().optional(), beneficiary: z.string().nullable().optional(),
   lowStockThreshold: z.coerce.number().int().min(0).optional(), city: z.string().optional(), crNumber: z.string().nullable().optional(), vatNumber: z.string().nullable().optional(),
 });
 

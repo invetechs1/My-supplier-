@@ -6,7 +6,7 @@ import type { OutreachChannel, OutreachRequestResult, OutreachSupplier } from "@
 import { api, errorMessage } from "@/lib/api";
 import { useAsync, useDebounce, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
-import { cn, formatDateTime, timeAgo } from "@/lib/format";
+import { cn, formatDateTime, safeHref, timeAgo } from "@/lib/format";
 import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, FlashMessage, Input, LoadingBlock, PageHeader, Textarea, VerifiedBadge } from "@/components/ui";
 
 function StaleDays({ days }: { days: number | null }) {
@@ -229,7 +229,7 @@ export default function AdminOutreachPage() {
                 </Button>
                 {r.whatsappUrl && (
                   <a
-                    href={r.whatsappUrl}
+                    href={safeHref(r.whatsappUrl)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-medium text-white hover:bg-emerald-700"

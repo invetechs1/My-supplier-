@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { httpUrl } from "../lib/security";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/errorHandler";
@@ -54,7 +55,7 @@ router.patch(
   "/admin/users/:id",
   asyncHandler(async (req, res) => {
     const data = z.object({ role: z.enum(["BUYER", "SUPPLIER", "ADMIN"]).optional(), active: z.boolean().optional() }).parse(req.body);
-    const user = await prisma.user.update({ where: { id: req.params.id }, data, include: { company: true } });
+    const user = await prisma.user.update({ where: { id: req.params.id }, data: { ...data, ...(data.role !== undefined || data.active === false ? { tokenVersion: { increment: 1 } } : {}) }, include: { company: true } });
     await audit(req, "user.update", "User", user.id, data);
     res.json(serialize(user));
   }),
@@ -107,7 +108,7 @@ const materialSchema = z.object({
   brand: z.string().optional().nullable(),
   specs: z.record(z.union([z.string(), z.number()])).optional().nullable(),
   description: z.string().optional().nullable(),
-  imageUrl: z.string().url().optional().nullable(),
+  imageUrl: httpUrl.optional().nullable(),
   active: z.boolean().optional(),
   weightKg: z.coerce.number().nonnegative().optional().nullable(),
   volumeM3: z.coerce.number().nonnegative().optional().nullable(),

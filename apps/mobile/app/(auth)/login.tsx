@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { SAUDI_CITIES, type CompanyType, type OtpRequestResult, type OtpVerifyPayload, type User } from "@mysupplier/shared";
 import { Screen, Button, TextField, PickerField, PickerModal } from "@/components";
-import { useAuth } from "@/lib/auth";
+import { safeRedirect, useAuth } from "@/lib/auth";
 import { api, ApiRequestError, getErrorMessage } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { normalizeSaudiMobile, formatSaudiMobile } from "@/lib/phone";
@@ -31,7 +31,8 @@ function isNewPhoneError(err: unknown): boolean {
 export default function LoginScreen() {
   const router = useRouter();
   const { t } = useI18n();
-  const { redirect, mode: initialMode } = useLocalSearchParams<{ redirect?: string; mode?: string }>();
+  const { redirect: rawRedirect, mode: initialMode } = useLocalSearchParams<{ redirect?: string; mode?: string }>();
+  const redirect = safeRedirect(rawRedirect);
   const { login, loginWithToken } = useAuth();
   const [mode, setMode] = useState<Mode>(initialMode === "phone" ? "phone" : "email");
 

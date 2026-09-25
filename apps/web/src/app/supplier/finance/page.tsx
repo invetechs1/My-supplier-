@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { Payout, StatementLine } from "@mysupplier/shared";
-import { api, financeStatementCsvUrl } from "@/lib/api";
+import { api, financeStatementCsvPath, openDownload } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatDate, formatDateTime, formatSar } from "@/lib/format";
@@ -81,9 +81,9 @@ function FinanceInner() {
               <Input label="From" name="from" type="date" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} dir="ltr" />
               <Input label="To" name="to" type="date" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} dir="ltr" />
               <Button type="submit" variant="outline">Apply</Button>
-              <a href={financeStatementCsvUrl({ from: applied.from || undefined, to: applied.to || undefined })} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700">
+              <button type="button" onClick={() => void openDownload(financeStatementCsvPath(), "_blank", { from: applied.from || undefined, to: applied.to || undefined })} className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700">
                 Download CSV
-              </a>
+              </button>
             </form>
           }
         />

@@ -818,52 +818,74 @@ export const api = {
     request<CompanyDocument>(`/admin/companies/${encodeURIComponent(companyId)}/documents/${encodeURIComponent(docId)}`, { method: "PATCH", body }),
 };
 
-/** Printable invoice URL; the JWT travels in the query because browsers can't send headers on navigation. */
-export function invoiceHtmlUrl(orderId: string): string {
-  const token = getToken();
-  return `${API_URL}/orders/${encodeURIComponent(orderId)}/invoice.html${token ? `?token=${encodeURIComponent(token)}` : ""}`;
-}
-
-/** Printable delivery note / packing slip (supplier); token in the query like the invoice. */
-export function deliveryNoteHtmlUrl(orderId: string): string {
-  const token = getToken();
-  return `${API_URL}/orders/${encodeURIComponent(orderId)}/delivery-note.html${token ? `?token=${encodeURIComponent(token)}` : ""}`;
-}
-
-/** UBL 2.1 e-invoice XML (token in the query). */
-export function einvoiceXmlUrl(orderId: string): string {
-  const token = getToken();
-  return `${API_URL}/orders/${encodeURIComponent(orderId)}/einvoice.xml${token ? `?token=${encodeURIComponent(token)}` : ""}`;
-}
-
-/** Private verification document for the supplier's own company (owner/manager). */
-export function supplierDocumentFileUrl(docId: string): string {
-  const token = getToken();
-  return `${API_URL}/supplier/company/documents/${encodeURIComponent(docId)}/file${token ? `?token=${encodeURIComponent(token)}` : ""}`;
-}
-
-/** Private verification document opened by an admin. */
-export function adminDocumentFileUrl(companyId: string, docId: string): string {
-  const token = getToken();
-  return `${API_URL}/admin/companies/${encodeURIComponent(companyId)}/documents/${encodeURIComponent(docId)}/file${token ? `?token=${encodeURIComponent(token)}` : ""}`;
-}
-
-/** CSV export of all listings with stock (opens as a download; token in the query). */
-export function inventoryExportUrl(): string {
-  const token = getToken();
-  return `${API_URL}/supplier/inventory/export.csv${token ? `?token=${encodeURIComponent(token)}` : ""}`;
-}
-
-/** CSV export of the finance statement for a date range (token in the query). */
-export function financeStatementCsvUrl(query: { from?: string; to?: string } = {}): string {
-  const token = getToken();
+/**
+ * Short-lived, single-purpose download token for one API path (browsers can't send headers on
+ * navigation, and the session JWT must never end up in a URL / history / server log).
+ * `path` is the API path without the `/api/v1` prefix and without a query string.
+ */
+export async function downloadUrl(path: string, query: Query = {}): Promise<string> {
+  const { token } = await request<{ token: string; expiresIn: number }>("/auth/download-token", { method: "POST", body: { path } });
   const params = new URLSearchParams();
-  if (query.from) params.set("from", query.from);
-  if (query.to) params.set("to", query.to);
-  if (token) params.set("token", token);
-  const qs = params.toString();
-  return `${API_URL}/supplier/finance/statement.csv${qs ? `?${qs}` : ""}`;
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    params.set(key, String(value));
+  });
+  params.set("token", token);
+  return `${API_URL}${path}?${params.toString()}`;
 }
+
+/**
+ * Open an authenticated API document in a new tab. The tab is opened synchronously (inside the click
+ * gesture so popup blockers allow it) and navigated once the download token arrives; its `opener` is
+ * severed before navigation. Falls back to navigating the current tab when a popup is not possible.
+ */
+export async function openDownload(path: string, target = "_blank", query: Query = {}): Promise<void> {
+  if (typeof window === "undefined") return;
+  const popup = target === "_self" ? null : window.open("about:blank", target);
+  try {
+    const url = await downloadUrl(path, query);
+    if (popup && !popup.closed) {
+      popup.opener = null;
+      popup.location.replace(url);
+    } else {
+      window.location.assign(url);
+    }
+  } catch (err) {
+    popup?.close();
+    window.alert(errorMessage(err, "Could not open the document. Please try again."));
+  }
+}
+
+/** Printable invoice (HTML) – path for `openDownload` / `downloadUrl`. */
+export const invoiceHtmlPath = (orderId: string) => `/orders/${encodeURIComponent(orderId)}/invoice.html`;
+/** Printable delivery note / packing slip (supplier). */
+export const deliveryNoteHtmlPath = (orderId: string) => `/orders/${encodeURIComponent(orderId)}/delivery-note.html`;
+/** UBL 2.1 e-invoice XML. */
+export const einvoiceXmlPath = (orderId: string) => `/orders/${encodeURIComponent(orderId)}/einvoice.xml`;
+/** Private verification document for the supplier's own company (owner/manager). */
+export const supplierDocumentFilePath = (docId: string) => `/supplier/company/documents/${encodeURIComponent(docId)}/file`;
+/** Private verification document opened by an admin. */
+export const adminDocumentFilePath = (companyId: string, docId: string) =>
+  `/admin/companies/${encodeURIComponent(companyId)}/documents/${encodeURIComponent(docId)}/file`;
+/** CSV export of all listings with stock. */
+export const inventoryExportPath = () => "/supplier/inventory/export.csv";
+/** CSV export of the finance statement (date range goes in the query). */
+export const financeStatementCsvPath = () => "/supplier/finance/statement.csv";
+
+/** Printable invoice URL carrying a short-lived download token. */
+export const invoiceHtmlUrl = (orderId: string) => downloadUrl(invoiceHtmlPath(orderId));
+/** Printable delivery note URL carrying a short-lived download token. */
+export const deliveryNoteHtmlUrl = (orderId: string) => downloadUrl(deliveryNoteHtmlPath(orderId));
+/** UBL 2.1 e-invoice XML URL carrying a short-lived download token. */
+export const einvoiceXmlUrl = (orderId: string) => downloadUrl(einvoiceXmlPath(orderId));
+/** Supplier's own verification document URL carrying a short-lived download token. */
+export const supplierDocumentFileUrl = (docId: string) => downloadUrl(supplierDocumentFilePath(docId));
+/** Admin view of a company document URL carrying a short-lived download token. */
+export const adminDocumentFileUrl = (companyId: string, docId: string) => downloadUrl(adminDocumentFilePath(companyId, docId));
+/** Inventory CSV export URL carrying a short-lived download token. */
+export const inventoryExportUrl = () => downloadUrl(inventoryExportPath());
+/** Finance statement CSV URL for a date range, carrying a short-lived download token. */
+export const financeStatementCsvUrl = (query: { from?: string; to?: string } = {}) => downloadUrl(financeStatementCsvPath(), query);
 
 /** Turn a loose import error row into a readable string. */
 export function importErrorText(err: ImportRowError): string {

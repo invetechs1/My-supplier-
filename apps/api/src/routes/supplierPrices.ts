@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { httpUrl } from "../lib/security";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/errorHandler";
 import { requireAuth, requireCompany } from "../middleware/auth";
@@ -9,6 +10,7 @@ import { paged, paginate } from "../lib/pagination";
 import { snapshotHistory } from "../services/catalog";
 import { importCatalog, type ImportRow } from "../services/catalogImport";
 import { validateTiers } from "../services/commerce";
+import { applyStockMovement } from "../services/portal";
 
 const router = Router();
 
@@ -123,9 +125,12 @@ router.patch(
       const err = validateTiers(listing.tiers.map((t) => ({ minQty: t.minQty, price: Number(t.price) })), data.price);
       if (err) throw badRequest(`New price conflicts with volume tiers: ${err}`);
     }
+    const { stock, ...rest } = data;
+    // Stock changes go through the movement ledger (audit trail + low-stock alerts); clearing tracking (null) is a plain write.
+    if (stock !== undefined && stock !== null && stock !== listing.stock) await applyStockMovement(listing.id, "ADJUST", stock, { reason: "Edited in price list", userId: req.user!.id });
     const updated = await prisma.priceListing.update({
       where: { id: listing.id },
-      data: { ...data, ...(data.salePrice === null ? { saleEndsAt: null } : {}) },
+      data: { ...rest, ...(stock === null ? { stock: null } : {}), ...(data.salePrice === null ? { saleEndsAt: null } : {}) },
       include: listingInclude,
     });
     if (data.price !== undefined) await snapshotHistory([listing.materialId]);
@@ -156,7 +161,7 @@ router.put(
 
 const catalogItem = z.object({
   sku: z.string().optional(), name: z.string().min(2), nameAr: z.string().optional(), categorySlug: z.string().min(2), unit: z.string().min(1),
-  brand: z.string().optional(), description: z.string().optional(), imageUrl: z.string().url().optional(), price: z.coerce.number().positive(),
+  brand: z.string().optional(), description: z.string().optional(), imageUrl: httpUrl.optional(), price: z.coerce.number().positive(),
   city: z.string().min(2), stock: z.coerce.number().int().nonnegative().optional(), minQty: z.coerce.number().positive().optional(), leadTimeDays: z.coerce.number().int().min(0).optional(),
 });
 

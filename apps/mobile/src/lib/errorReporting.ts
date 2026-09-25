@@ -32,6 +32,15 @@ function platform(): ClientErrorReport["platform"] {
   return "web";
 }
 
+/** Origin + pathname only (never the query string), with secret path segments masked. */
+function maskedLocation(): string | undefined {
+  if (typeof location === "undefined") return undefined;
+  const path = String(location.pathname || "/")
+    .replace(/^\/update-prices\/[^/]+/, "/update-prices/[token]")
+    .replace(/^\/reset-password\/[^/]+/, "/reset-password/[token]");
+  return `${location.origin}${path}`;
+}
+
 function toReport(error: unknown, context?: string): ClientErrorReport | null {
   let message: string;
   let stack: string | undefined;
@@ -57,7 +66,8 @@ function toReport(error: unknown, context?: string): ClientErrorReport | null {
   try {
     if (Platform.OS === "web" && typeof navigator !== "undefined") {
       report.userAgent = navigator.userAgent;
-      if (typeof location !== "undefined") report.url = location.href;
+      const url = maskedLocation();
+      if (url) report.url = url;
     } else {
       report.userAgent = `mysupplier-mobile/${Platform.OS} ${String(Platform.Version ?? "")}`.trim();
     }

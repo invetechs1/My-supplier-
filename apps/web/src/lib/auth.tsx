@@ -28,6 +28,26 @@ export function homeForRole(role: Role | undefined | null): string {
   }
 }
 
+/**
+ * Accept a `next` / `redirect` query value only when it is a same-origin relative path
+ * (`/dashboard?x=1#y`). Absolute URLs, protocol-relative `//host`, `/\host` and `javascript:` are rejected.
+ */
+export function safeNext(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== "string") return null;
+  const value = raw.trim();
+  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return null;
+  try {
+    const url = new URL(value, "http://x");
+    if (url.origin !== "http://x") return null;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Per-user browser state cleared on logout (keys owned by lib/cart.tsx, app/boq, components/shop/ProductReviews.tsx). */
+const USER_STORAGE_KEYS = ["ms_cart", "ms_boq_draft", "ms_helpful_reviews", "ms_delivery_city"] as const;
+
 export const COMPANY_ROLES: CompanyRole[] = ["OWNER", "MANAGER", "SALES", "WAREHOUSE"];
 
 export const COMPANY_ROLE_LABEL: Record<CompanyRole, string> = {
@@ -121,6 +141,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     persistToken(null);
     setTokenState(null);
     setUser(null);
+    try {
+      USER_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
+    } catch {
+      /* ignore storage failures */
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(

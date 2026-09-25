@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import type { EInvoiceRecord, EInvoiceStatus, OrderExtended, PaymentRecord, RefundResult } from "@mysupplier/shared";
-import { api, einvoiceXmlUrl, errorMessage } from "@/lib/api";
+import { api, einvoiceXmlPath, errorMessage, openDownload } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatDateTime, formatSar } from "@/lib/format";
@@ -181,9 +181,9 @@ export function EInvoiceCard({ orderId, isAdmin, onToast }: { orderId: string; i
           </dl>
           {record.status === "PENDING_CONFIG" && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">ZATCA credentials not configured yet. The invoice is valid and stored; it will be reported once the platform is onboarded with ZATCA.</p>}
           <div className="flex flex-wrap items-center gap-2">
-            <a href={einvoiceXmlUrl(orderId)} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50">
+            <button type="button" onClick={() => void openDownload(einvoiceXmlPath(orderId))} className="inline-flex h-8 items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50">
               Download XML ↗
-            </a>
+            </button>
             {isAdmin && (record.status === "GENERATED" || record.status === "PENDING_CONFIG" || record.status === "REJECTED") && (
               <Button size="sm" onClick={() => report(record)} loading={reporting}>Report to ZATCA</Button>
             )}

@@ -17,7 +17,7 @@ const router = Router();
 
 const rfqInclude = {
   items: { include: { material: { include: { category: true } } } },
-  buyer: { select: { id: true, name: true, company: true } },
+  buyer: { select: { id: true, name: true, company: { select: { id: true, name: true, nameAr: true, type: true, city: true, verified: true } } } },
   _count: { select: { bids: { where: { status: { in: ["SUBMITTED", "ACCEPTED"] } } } } },
 } satisfies Prisma.RfqInclude;
 

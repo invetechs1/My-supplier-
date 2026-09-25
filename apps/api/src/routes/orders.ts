@@ -20,7 +20,7 @@ const orderInclude = {
   review: { include: { buyer: { select: { id: true, name: true, company: { select: { id: true, name: true } } } } } },
   rfq: { include: { items: { include: { material: true } } } },
   bid: { include: { items: true } },
-  buyer: { select: { id: true, name: true, email: true, phone: true, company: true } },
+  buyer: { select: { id: true, name: true, email: true, phone: true, company: { select: { id: true, name: true, nameAr: true, type: true, city: true, vatNumber: true, crNumber: true, verified: true } } } },
   address: true,
   returns: { select: { id: true, reference: true, status: true, refundAmount: true, createdAt: true } },
 } satisfies Prisma.OrderInclude;

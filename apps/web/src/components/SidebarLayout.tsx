@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { CompanyRole, Role } from "@mysupplier/shared";
-import { canAccessArea, companyRoleOf, homeForRole, useAuth, COMPANY_ROLE_LABEL, type SupplierArea } from "@/lib/auth";
+import { canAccessArea, companyRoleOf, homeForRole, safeNext, useAuth, COMPANY_ROLE_LABEL, type SupplierArea } from "@/lib/auth";
 import { fileUrl } from "@/lib/api";
 import { usePageTitle } from "@/lib/hooks";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
@@ -168,7 +168,8 @@ export function SidebarLayout({ items: allItems, allow, title, children }: Sideb
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      // `pathname` comes from the router, but only ever forward an internal path.
+      router.replace(`/login?next=${encodeURIComponent(safeNext(pathname) ?? "/")}`);
     } else if (!permitted) {
       router.replace(homeForRole(user.role));
     }

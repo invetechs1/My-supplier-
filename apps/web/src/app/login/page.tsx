@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { api, errorMessage } from "@/lib/api";
-import { homeForRole, useAuth } from "@/lib/auth";
+import { homeForRole, safeNext, useAuth } from "@/lib/auth";
 import { usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/format";
@@ -19,7 +19,8 @@ function LoginInner() {
   const { user, login, loading } = useAuth();
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || params.get("redirect");
+  // Only same-origin relative paths survive; anything else falls back to the role home.
+  const next = safeNext(params.get("next") || params.get("redirect"));
   usePageTitle(t("auth.login"));
 
   const [method, setMethod] = useState<Method>(() => (params.get("method") === "phone" || params.get("tab") === "phone" ? "phone" : "email"));

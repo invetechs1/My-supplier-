@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import type { OrderExtended, PaymentRecord } from "@mysupplier/shared";
 import { api, errorMessage } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { safeNext, useAuth } from "@/lib/auth";
 import { usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatSar } from "@/lib/format";
@@ -61,7 +61,7 @@ function CallbackInner() {
         <Card className="p-8">
           <h1 className="text-xl font-semibold text-slate-900">Sign in to confirm your payment</h1>
           <p className="mt-2 text-sm text-slate-500">Your session expired during the payment. Sign in and we will verify it with the gateway.</p>
-          <LinkButton href={`/login?next=${encodeURIComponent(next)}`} className="mt-6">Sign in</LinkButton>
+          <LinkButton href={`/login?next=${encodeURIComponent(safeNext(next) ?? "/payments/callback")}`} className="mt-6">Sign in</LinkButton>
         </Card>
       </div>
     );

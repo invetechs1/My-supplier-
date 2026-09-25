@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/errorHandler";
-import { requireAuth, signToken } from "../middleware/auth";
+import { requireAuth, revokeUserTokens, signDownloadToken, DOWNLOAD_TOKEN_TTL_SECONDS, signToken } from "../middleware/auth";
 import { badRequest, conflict, forbidden, unauthorized } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import crypto from "crypto";
@@ -63,7 +63,7 @@ router.post(
       },
       include: userInclude,
     });
-    const token = signToken({ id: user.id, email: user.email, role: user.role, companyId: user.companyId, name: user.name });
+    const token = signToken({ id: user.id, email: user.email, role: user.role, companyId: user.companyId, name: user.name, tokenVersion: user.tokenVersion });
     res.status(201).json({ token, user: serialize(user) });
   }),
 );
@@ -78,7 +78,7 @@ router.post(
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw unauthorized("Invalid email or password");
     prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => undefined);
-    const token = signToken({ id: user.id, email: user.email, role: user.role, companyId: user.companyId, name: user.name });
+    const token = signToken({ id: user.id, email: user.email, role: user.role, companyId: user.companyId, name: user.name, tokenVersion: user.tokenVersion });
     res.json({ token, user: serialize(user) });
   }),
 );
@@ -136,7 +136,7 @@ router.post(
     }
     await prisma.companyInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
     const full = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, include: userInclude });
-    const jwtToken = signToken({ id: full.id, email: full.email, role: full.role, companyId: full.companyId, name: full.name });
+    const jwtToken = signToken({ id: full.id, email: full.email, role: full.role, companyId: full.companyId, name: full.name, tokenVersion: full.tokenVersion });
     res.status(201).json({ token: jwtToken, user: serialize(full) });
   }),
 );
@@ -165,7 +165,7 @@ router.post(
     const record = await prisma.passwordResetToken.findUnique({ where: { tokenHash: hashToken(token) } });
     if (!record || record.usedAt || record.expiresAt.getTime() < Date.now()) throw badRequest("This reset link is invalid or has expired");
     await prisma.$transaction([
-      prisma.user.update({ where: { id: record.userId }, data: { passwordHash: await bcrypt.hash(password, 10) } }),
+      prisma.user.update({ where: { id: record.userId }, data: { passwordHash: await bcrypt.hash(password, 10), tokenVersion: { increment: 1 } } }),
       prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
     ]);
     res.json({ ok: true });
@@ -179,7 +179,7 @@ router.post(
     const { currentPassword, newPassword } = z.object({ currentPassword: z.string(), newPassword: z.string().min(8) }).parse(req.body);
     const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id } });
     if (!(await bcrypt.compare(currentPassword, user.passwordHash))) throw unauthorized("Current password is incorrect");
-    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } });
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10), tokenVersion: { increment: 1 } } });
     res.json({ ok: true });
   }),
 );
@@ -194,6 +194,28 @@ router.delete(
       prisma.device.deleteMany({ where: { userId: id } }),
       prisma.user.update({ where: { id }, data: { active: false, email: `deleted-${id}@deleted.mysupplier.sa`, name: "Deleted user", phone: null } }),
     ]);
+    res.json({ ok: true });
+  }),
+);
+
+
+/** 60-second, path-bound token for links that cannot send an Authorization header (invoices, exports, files). */
+router.post(
+  "/download-token",
+  requireAuth(),
+  asyncHandler(async (req, res) => {
+    const { path } = z.object({ path: z.string().min(2).max(300).regex(/^\/[A-Za-z0-9._\-\/]+$/, "Invalid path") }).parse(req.body);
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { tokenVersion: true } });
+    res.json({ token: signDownloadToken(req.user!.id, path, user.tokenVersion), expiresIn: DOWNLOAD_TOKEN_TTL_SECONDS });
+  }),
+);
+
+/** Logout everywhere: bumps the token version so every issued session token is rejected from now on. */
+router.post(
+  "/logout",
+  requireAuth(),
+  asyncHandler(async (req, res) => {
+    await revokeUserTokens(req.user!.id);
     res.json({ ok: true });
   }),
 );

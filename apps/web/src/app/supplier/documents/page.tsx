@@ -3,7 +3,7 @@
 import Link from "next/link";
 import React, { useRef, useState } from "react";
 import type { CompanyDocument, DocumentType, VerificationStatus } from "@mysupplier/shared";
-import { api, errorMessage, supplierDocumentFileUrl } from "@/lib/api";
+import { api, errorMessage, openDownload, supplierDocumentFilePath } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
@@ -117,7 +117,7 @@ function DocumentCard({ def, docs, onUploaded, onDeleted, onError }: { def: (typ
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
             {docs.map((d) => (
               <li key={d.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-sm">
-                <a href={supplierDocumentFileUrl(d.id)} target="_blank" rel="noreferrer" title="Opens securely with your session token" className="min-w-0 flex-1 truncate font-medium text-brand-700 hover:underline" dir="ltr">{d.fileName}</a>
+                <a href="#" onClick={(e) => { e.preventDefault(); void openDownload(supplierDocumentFilePath(d.id)); }} title="Opens securely with a short-lived download link" className="min-w-0 flex-1 truncate font-medium text-brand-700 hover:underline" dir="ltr">{d.fileName}</a>
                 <StatusBadge status={d.status} />
                 <span className="text-xs text-slate-400">{formatDateTime(d.createdAt)}</span>
                 {d.status === "PENDING" && (
