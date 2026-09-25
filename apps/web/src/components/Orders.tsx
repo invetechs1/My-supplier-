@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import React, { useEffect, useRef, useState } from "react";
-import type { OrderEvent, OrderExtended, OrderMessage, OrderStatus, PaymentMethod, PaymentStatus, Review } from "@mysupplier/shared";
+import { useRouter } from "next/navigation";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import type { OrderEvent, OrderExtended, OrderItem, OrderMessage, OrderStatus, PaymentMethod, PaymentStatus, ReturnReason, ReturnRequest, Review } from "@mysupplier/shared";
 import { api, deliveryNoteHtmlUrl, errorMessage, invoiceHtmlUrl } from "@/lib/api";
+import { RETURN_REASONS, canRequestReturn, commerceApi, formatAddressLine, returnReasonLabel, returnStatusTone, type OrderWithCommerce } from "@/lib/api/commerce";
 import { canManageCompany, companyRoleOf, useAuth } from "@/lib/auth";
+import { useCart } from "@/lib/cart";
 import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { BANK_TRANSFER_DETAILS, usePaymentConfig } from "@/lib/payments";
 import { cn, formatDate, formatDateTime, formatSar, timeAgo } from "@/lib/format";
-import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, FlashMessage, LinkButton, LoadingBlock, PageHeader, Pagination, Select, Stars, StatusBadge, Table, Textarea, type Column } from "./ui";
+import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, FlashMessage, Input, LinkButton, LoadingBlock, Modal, PageHeader, Pagination, Select, Stars, StatusBadge, Table, Textarea, type Column } from "./ui";
 import { OrderShipments } from "./OrderShipments";
 import { EInvoiceCard, PaymentsList, RefundButton } from "./OrderPayments";
 
@@ -475,6 +478,186 @@ export function OrderReview({ order, perspective, review, onChange }: { order: O
 }
 
 /** Reviews may be embedded on the order by newer API builds; tolerate both `review` and `reviews[0]`. */
+// ---------------------------------------------------------------------------
+// Returns (RMA)
+// ---------------------------------------------------------------------------
+
+export function ReturnStatusBadge({ status }: { status: string }) {
+  return <Badge tone={returnStatusTone(status)}>{status.replace(/_/g, " ")}</Badge>;
+}
+
+function returnHref(perspective: OrderPerspective, id: string): string | null {
+  if (perspective === "buyer") return `/dashboard/returns/${id}`;
+  if (perspective === "supplier") return `/supplier/returns/${id}`;
+  return null;
+}
+
+/** Existing return requests on an order, for every perspective (the API scopes the list). */
+export function OrderReturns({ orderId, perspective, refreshKey = 0, onLoaded }: { orderId: string; perspective: OrderPerspective; refreshKey?: number; onLoaded?: (returns: ReturnRequest[]) => void }) {
+  const { lang } = useI18n();
+  const state = useAsync(() => commerceApi.returns({ orderId }), [orderId, refreshKey]);
+  const rows = useMemo(() => state.data?.data ?? [], [state.data]);
+  useEffect(() => {
+    if (state.data) onLoaded?.(rows);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.data]);
+  if (state.loading && !state.data) return null;
+  if (state.error) return null;
+  if (rows.length === 0) return null;
+  return (
+    <Card>
+      <CardHeader title="Returns" subtitle={`${rows.length} ${rows.length === 1 ? "request" : "requests"} on this order`} />
+      <ul className="divide-y divide-slate-100">
+        {rows.map((r) => {
+          const href = returnHref(perspective, r.id);
+          const qty = r.items.reduce((s, i) => s + i.quantity, 0);
+          return (
+            <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm">
+              <div className="min-w-0">
+                <p className="font-medium text-slate-900">
+                  {href ? <Link href={href} className="text-brand-700 hover:underline">{r.reference}</Link> : r.reference}
+                  <span className="ms-2 text-xs text-slate-500">{formatDate(r.createdAt, lang)}</span>
+                </p>
+                <p className="truncate text-xs text-slate-500">
+                  {returnReasonLabel(r.reason)} · {r.items.length} {r.items.length === 1 ? "line" : "lines"} · {qty} units
+                  {typeof r.refundAmount === "number" ? ` · refund ${formatSar(r.refundAmount, lang)}` : ""}
+                </p>
+              </div>
+              <ReturnStatusBadge status={r.status} />
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+/** Buyer modal: pick the lines and quantities to send back. */
+export function ReturnRequestModal({ order, open, onClose, existing, onCreated }: { order: OrderExtended; open: boolean; onClose: () => void; existing: ReturnRequest[]; onCreated: (r: ReturnRequest) => void }) {
+  const { lang } = useI18n();
+  const [reason, setReason] = useState<ReturnReason | "">("");
+  const [details, setDetails] = useState("");
+  const [qty, setQty] = useState<Record<string, number>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Quantities already claimed by open or accepted returns cannot be requested again.
+  const claimed = useMemo(() => {
+    const map = new Map<string, number>();
+    existing
+      .filter((r) => r.status !== "REJECTED" && r.status !== "CANCELLED")
+      .forEach((r) => r.items.forEach((i) => map.set(i.orderItemId, (map.get(i.orderItemId) ?? 0) + i.quantity)));
+    return map;
+  }, [existing]);
+  const lines = (order.items ?? []).map((it: OrderItem) => ({ item: it, remaining: Math.max(0, it.quantity - (claimed.get(it.id) ?? 0)) }));
+  const selected = lines.filter((l) => (qty[l.item.id] ?? 0) > 0);
+  const estimate = selected.reduce((s, l) => s + (qty[l.item.id] ?? 0) * l.item.unitPrice, 0);
+
+  useEffect(() => {
+    if (!open) {
+      setReason("");
+      setDetails("");
+      setQty({});
+      setError(null);
+    }
+  }, [open]);
+
+  const submit = async () => {
+    setError(null);
+    if (!reason) return setError("Choose a reason for the return.");
+    if (selected.length === 0) return setError("Select at least one item and quantity to return.");
+    if (reason === "OTHER" && details.trim().length < 5) return setError("Please describe the problem.");
+    setSubmitting(true);
+    try {
+      const created = await commerceApi.createReturn(order.id, {
+        reason,
+        details: details.trim() || undefined,
+        items: selected.map((l) => ({ orderItemId: l.item.id, quantity: qty[l.item.id] })),
+      });
+      onCreated(created);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Request a return · ${order.reference}`}
+      wide
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button onClick={submit} loading={submitting} disabled={selected.length === 0 || !reason}>Submit request</Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-slate-600">Returns can be requested within 14 days of delivery. The supplier reviews the request; refunds are issued once the goods are received.</p>
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-3 py-2 text-start">Item</th>
+                <th className="px-3 py-2 text-end">Ordered</th>
+                <th className="px-3 py-2 text-end">Returnable</th>
+                <th className="px-3 py-2 text-end">Return qty</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {lines.map(({ item, remaining }) => (
+                <tr key={item.id} className={cn(remaining <= 0 && "opacity-50")}>
+                  <td className="px-3 py-2">
+                    <p className="font-medium text-slate-900">{item.name}</p>
+                    <p className="text-xs text-slate-500">{formatSar(item.unitPrice, lang)} / {item.unit}</p>
+                  </td>
+                  <td className="px-3 py-2 text-end tabular-nums">{item.quantity}</td>
+                  <td className="px-3 py-2 text-end tabular-nums">{remaining}</td>
+                  <td className="px-3 py-2 text-end">
+                    <div className="inline-flex items-center gap-1" dir="ltr">
+                      <Input
+                        type="number"
+                        name={`return-${item.id}`}
+                        aria-label={`Quantity of ${item.name} to return`}
+                        min={0}
+                        max={remaining}
+                        step="any"
+                        value={qty[item.id] ?? 0}
+                        disabled={remaining <= 0}
+                        onChange={(e) => {
+                          const v = Math.max(0, Math.min(remaining, Number(e.target.value) || 0));
+                          setQty((q) => ({ ...q, [item.id]: v }));
+                        }}
+                        className="w-24"
+                      />
+                      <button type="button" className="text-xs font-medium text-brand-700 hover:underline disabled:opacity-40" disabled={remaining <= 0} onClick={() => setQty((q) => ({ ...q, [item.id]: remaining }))}>
+                        All
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Select label="Reason" name="returnReason" value={reason} onChange={(e) => setReason(e.target.value as ReturnReason)} placeholder="Select a reason" options={RETURN_REASONS.map((r) => ({ value: r.value, label: r.label }))} required />
+          <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm">
+            <p className="text-slate-500">Estimated refund (excl. VAT)</p>
+            <p className="text-lg font-semibold tabular-nums text-slate-900">{formatSar(estimate, lang)}</p>
+            <p className="text-xs text-slate-500">Final amount is computed when the supplier receives the goods (VAT added, coupon discount pro-rated).</p>
+          </div>
+        </div>
+        <Textarea label="Details" name="returnDetails" value={details} onChange={(e) => setDetails(e.target.value)} rows={3} placeholder="What went wrong? Batch numbers, photos on request, how the goods were stored…" required={reason === "OTHER"} />
+        {error && <Alert>{error}</Alert>}
+      </div>
+    </Modal>
+  );
+}
+
 function embeddedReview(o: OrderExtended): Review | null {
   const anyOrder = o as OrderExtended & { review?: Review | null; reviews?: Review[] };
   if (anyOrder.review) return anyOrder.review;
@@ -485,14 +668,44 @@ function embeddedReview(o: OrderExtended): Review | null {
 export function OrderDetail({ id, perspective, backHref }: { id: string; perspective: OrderPerspective; backHref: string }) {
   const { t, lang } = useI18n();
   const { user } = useAuth();
+  const router = useRouter();
+  const { reload: reloadCart } = useCart();
   const state = useAsync(() => api.order(id), [id]);
   const [paymentsKey, setPaymentsKey] = useState(0);
   const { config: paymentConfig } = usePaymentConfig();
-  const [flash, setFlash] = useFlash();
-  const [busy, setBusy] = useState<OrderStatus | "PAID" | null>(null);
+  const [flash, setFlash] = useFlash(6000);
+  const [busy, setBusy] = useState<OrderStatus | "PAID" | "REORDER" | null>(null);
   const [activityKey, setActivityKey] = useState(0);
   const [review, setReview] = useState<Review | null | undefined>(undefined);
+  const [returnsKey, setReturnsKey] = useState(0);
+  const [orderReturns, setOrderReturns] = useState<ReturnRequest[]>([]);
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [createdReturn, setCreatedReturn] = useState<ReturnRequest | null>(null);
   const bumpActivity = () => setActivityKey((k) => k + 1);
+
+  const reorder = async () => {
+    setBusy("REORDER");
+    try {
+      const result = await commerceApi.reorder(id);
+      reloadCart();
+      const replaced = result.skipped.filter((sk) => /instead/i.test(sk.reason));
+      const dropped = result.skipped.filter((sk) => !/instead/i.test(sk.reason));
+      if (result.added === 0) {
+        setFlash({ kind: "error", message: `Nothing could be added to the cart: ${dropped.map((sk) => `${sk.name} (${sk.reason})`).join("; ") || "no purchasable lines"}.` });
+      } else {
+        const notes = [
+          replaced.length > 0 ? `${replaced.length} ${replaced.length === 1 ? "line" : "lines"} switched to another supplier` : "",
+          dropped.length > 0 ? `${dropped.length} skipped: ${dropped.map((sk) => sk.name).join(", ")}` : "",
+        ].filter(Boolean);
+        setFlash({ kind: "success", message: `${result.added} ${result.added === 1 ? "line" : "lines"} added to your cart${notes.length ? ` · ${notes.join(" · ")}` : ""}.` });
+        if (dropped.length === 0) router.push("/cart");
+      }
+    } catch (err) {
+      setFlash({ kind: "error", message: errorMessage(err) });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const setStatus = async (status: OrderStatus) => {
     if (status === "CANCELLED" && !window.confirm("Cancel this order?")) return;
@@ -537,8 +750,10 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
 
   if (state.loading) return <LoadingBlock />;
   if (state.error || !state.data) return <Alert onRetry={state.reload}>{state.error ?? "Order not found"}</Alert>;
-  const o = state.data;
+  const o = state.data as OrderWithCommerce;
   const type = orderType(o);
+  const canReorder = perspective === "buyer" && (o.items?.length ?? 0) > 0;
+  const canReturn = perspective === "buyer" && canRequestReturn(o.status) && (o.items?.length ?? 0) > 0;
   const isAdminUser = user?.role === "ADMIN";
   const canRefund = o.paymentStatus === "PAID" && (perspective === "admin" ? isAdminUser : perspective === "supplier" && (isAdminUser || canManageCompany(companyRoleOf(user))));
   const canManageShipments = perspective === "supplier" && user?.role === "SUPPLIER";
@@ -620,10 +835,40 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
                 Cancel order
               </Button>
             )}
+            {canReturn && (
+              <Button variant="outline" onClick={() => setReturnOpen(true)}>
+                Request a return
+              </Button>
+            )}
+            {canReorder && (
+              <Button variant="secondary" onClick={reorder} loading={busy === "REORDER"} title="Add every line of this order to your cart">
+                Reorder
+              </Button>
+            )}
           </>
         }
       />
       <FlashMessage flash={flash} className="mb-4" />
+      {createdReturn && (
+        <Alert kind="success" className="mb-4">
+          Return <span className="font-semibold">{createdReturn.reference}</span> requested. The supplier has been notified.{" "}
+          <Link href={`/dashboard/returns/${createdReturn.id}`} className="font-semibold underline underline-offset-2">Track it in My returns</Link>
+        </Alert>
+      )}
+      {canReturn && (
+        <ReturnRequestModal
+          order={o}
+          open={returnOpen}
+          existing={orderReturns}
+          onClose={() => setReturnOpen(false)}
+          onCreated={(r) => {
+            setReturnOpen(false);
+            setCreatedReturn(r);
+            setReturnsKey((k) => k + 1);
+            bumpActivity();
+          }}
+        />
+      )}
 
       <Card className="p-5">
         <OrderStatusTimeline status={o.status} />
@@ -749,7 +994,15 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
           <Card>
             <CardHeader title="Payment" />
             <dl className="space-y-2 px-5 py-4 text-sm">
-              <div><dt className="text-slate-500">Method</dt><dd className="font-medium text-slate-900">{o.paymentMethod ? PAYMENT_LABEL[o.paymentMethod] ?? o.paymentMethod : type === "RFQ" ? "As agreed in bid" : "—"}</dd></div>
+              <div>
+                <dt className="text-slate-500">Method</dt>
+                <dd className="font-medium text-slate-900">
+                  {o.paymentMethod === "CREDIT" && o.dueDate
+                    ? <>Credit terms · due {formatDate(o.dueDate, lang)}{o.paymentStatus === "UNPAID" && new Date(o.dueDate).getTime() < Date.now() && <Badge tone="red" className="ms-2">Overdue</Badge>}</>
+                    : o.paymentMethod ? PAYMENT_LABEL[o.paymentMethod] ?? o.paymentMethod : type === "RFQ" ? "As agreed in bid" : "—"}
+                </dd>
+              </div>
+              {o.poNumber && <div><dt className="text-slate-500">PO number</dt><dd className="font-medium text-slate-900" dir="ltr">{o.poNumber}</dd></div>}
               <div><dt className="text-slate-500">Status</dt><dd className="mt-0.5 flex items-center gap-2"><PaymentStatusBadge status={o.paymentStatus} />{o.paymentStatus === "REFUNDED" && <span className="text-xs text-slate-500">Refund recorded below</span>}</dd></div>
               <div>
                 <dt className="mb-1 text-slate-500">Payment records</dt>
@@ -762,6 +1015,15 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
           <Card>
             <CardHeader title="Delivery" />
             <dl className="space-y-2 px-5 py-4 text-sm">
+              {o.address && (
+                <div>
+                  <dt className="text-slate-500">Saved address</dt>
+                  <dd className="font-medium text-slate-900">
+                    {o.address.label}
+                    <span className="block text-xs font-normal text-slate-500">{o.address.recipient} · {formatAddressLine(o.address)}</span>
+                  </dd>
+                </div>
+              )}
               <div><dt className="text-slate-500">City</dt><dd className="font-medium text-slate-900">{deliveryCity ?? "—"}</dd></div>
               <div><dt className="text-slate-500">Address</dt><dd className="font-medium text-slate-900">{deliveryAddress ?? "—"}</dd></div>
               {perspective === "buyer" && o.contactPhone && <div><dt className="text-slate-500">Contact phone</dt><dd className="font-medium text-slate-900" dir="ltr">{o.contactPhone}</dd></div>}
@@ -779,6 +1041,10 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
           <OrderShipments orderId={o.id} canManage={canManageShipments && o.status !== "DELIVERED"} onDelivered={() => void refreshOrder()} onChanged={bumpActivity} />
         </div>
       )}
+
+      <div className="mt-6 empty:hidden">
+        <OrderReturns orderId={o.id} perspective={perspective} refreshKey={returnsKey} onLoaded={setOrderReturns} />
+      </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

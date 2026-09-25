@@ -12,6 +12,8 @@ import { formatSar } from "@/lib/format";
 import { Alert, Button, Card, CardHeader, EmptyState, LinkButton, LoadingBlock, PageHeader, Select, VerifiedBadge } from "@/components/ui";
 import { ProductImage, StockPill } from "@/components/shop/ProductCard";
 import { QuoteLine } from "@/components/shop/DeliveryOptions";
+import type { CartLine, CommerceCart } from "@/lib/api/commerce";
+import { LineBadges, LineUnitPrice, NextTierHint } from "./LinePricing";
 
 interface Group {
   key: string;
@@ -67,7 +69,10 @@ export default function CartPage() {
   usePageTitle(t("cart.title"));
   const router = useRouter();
   const { user } = useAuth();
-  const { cart, items, quotes, deliveryCity, setDeliveryCity, loading, busy, error, isGuest, update, remove, clear, reload } = useCart();
+  const { cart: rawCart, items, quotes, deliveryCity, setDeliveryCity, loading, busy, error, isGuest, update, remove, clear, reload } = useCart();
+  // The server cart carries tier/sale pricing per line plus total savings; guest carts do not.
+  const cart = rawCart as CommerceCart | null;
+  const savings = cart?.savings ?? 0;
   const [rowBusy, setRowBusy] = useState<string | null>(null);
 
   const groups = useMemo<Group[]>(() => {
@@ -162,6 +167,7 @@ export default function CartPage() {
                 />
                 <ul className="divide-y divide-slate-100">
                   {g.items.map((it) => {
+                    const line = it as CartLine;
                     const m = it.material;
                     const name = lang === "ar" ? m.nameAr || m.name : m.name;
                     const disabled = busy || rowBusy === it.id;
@@ -174,13 +180,16 @@ export default function CartPage() {
                           <Link href={`/shop/products/${m.id}`} className="line-clamp-2 text-sm font-semibold text-slate-900 hover:text-brand-700">
                             {name}
                           </Link>
-                          <p className="text-xs text-slate-500">
-                            {m.brand ? `${m.brand} · ` : ""}
-                            {formatSar(it.offer.price, lang)} / {m.unit}
-                            {it.offer.minQty > 1 ? ` · min ${it.offer.minQty}` : ""}
-                            {" · lead "}
-                            {it.offer.leadTimeDays} d
+                          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                            {m.brand && <span>{m.brand}</span>}
+                            <LineUnitPrice line={line} />
+                            <LineBadges line={line} />
                           </p>
+                          <p className="text-xs text-slate-500">
+                            {it.offer.minQty > 1 ? `min ${it.offer.minQty} · ` : ""}
+                            lead {it.offer.leadTimeDays} d
+                          </p>
+                          <NextTierHint line={line} className="mt-1" />
                           <div className="mt-1">
                             <StockPill offer={it.offer} />
                           </div>
@@ -233,6 +242,18 @@ export default function CartPage() {
                   <dt className="text-slate-500">Subtotal</dt>
                   <dd className="tabular-nums text-slate-900">{formatSar(cart?.subtotal, lang)}</dd>
                 </div>
+                {savings > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <dt>Savings <span className="text-xs text-emerald-600">(volume tiers &amp; sales)</span></dt>
+                    <dd className="tabular-nums">− {formatSar(savings, lang)}</dd>
+                  </div>
+                )}
+                {(cart?.discount ?? 0) > 0 && cart?.coupon && (
+                  <div className="flex justify-between text-brand-700">
+                    <dt>Coupon {cart.coupon.code}</dt>
+                    <dd className="tabular-nums">− {formatSar(cart.discount, lang)}</dd>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <dt className="text-slate-500">VAT (15%)</dt>
                   <dd className="tabular-nums text-slate-900">{formatSar(cart?.vat, lang)}</dd>
@@ -257,6 +278,12 @@ export default function CartPage() {
                   {t("cart.checkout")}
                 </Button>
                 {isGuest && <p className="mt-2 text-center text-xs text-slate-500">You will be asked to log in or create an account.</p>}
+                {savings > 0 && <p className="mt-2 text-center text-xs font-medium text-emerald-700">You are saving {formatSar(savings, lang)} with volume pricing.</p>}
+                {cart?.credit?.approved && (
+                  <p className="mt-2 text-center text-xs text-slate-500">
+                    Credit terms available: {formatSar(cart.credit.available, lang)} of {formatSar(cart.credit.limit, lang)} (net {cart.credit.termsDays} days).
+                  </p>
+                )}
                 <p className="mt-3 text-center text-xs text-slate-400">One order is created per supplier. Prices exclude VAT until checkout.</p>
               </div>
             </Card>
