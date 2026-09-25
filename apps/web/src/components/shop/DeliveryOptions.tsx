@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { CarrierCode, CartItem, DeliveryQuote } from "@mysupplier/shared";
 import { api, errorMessage } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { cn, formatSar } from "@/lib/format";
 import { Alert, Badge, Button, Spinner } from "../ui";
 
@@ -15,15 +15,24 @@ export function etaLabel(days: number): string {
   return `${days} days`;
 }
 
+const ZONE_KEYS: Record<DeliveryQuote["zone"], TranslationKey> = { SAME_CITY: "checkout.zoneSameCity", SAME_REGION: "checkout.zoneSameRegion", NATIONAL: "checkout.zoneNational" };
+
+/** Translated ETA text (same rules as `etaLabel`). */
+function etaText(days: number, t: (key: TranslationKey) => string): string {
+  if (days <= 0) return t("checkout.sameDay");
+  if (days === 1) return t("checkout.nextDay");
+  return `${days} ${t("product.days")}`;
+}
+
 /** One-line description of a carrier quote, or the "Delivery by supplier" fallback. */
 export function QuoteLine({ quote, className }: { quote: DeliveryQuote | null | undefined; className?: string }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   if (!quote) {
     return (
       <span className={cn("inline-flex flex-wrap items-center gap-2 text-sm text-slate-600", className)}>
         <TruckIcon />
-        <span className="font-medium text-slate-900">Delivery by supplier</span>
-        <span className="text-xs text-slate-500">Own fleet · supplier&apos;s standard fee</span>
+        <span className="font-medium text-slate-900">{t("checkout.deliveryBySupplier")}</span>
+        <span className="text-xs text-slate-500">{t("checkout.ownFleet")}</span>
       </span>
     );
   }
@@ -32,7 +41,7 @@ export function QuoteLine({ quote, className }: { quote: DeliveryQuote | null | 
       <TruckIcon />
       <span className="font-medium text-slate-900">{quote.carrierName}</span>
       <span>· {quote.service}</span>
-      <span>· ETA {etaLabel(quote.etaDays)}</span>
+      <span>· {t("checkout.eta")} {etaText(quote.etaDays, t)}</span>
       <span className="font-semibold tabular-nums text-slate-900">· {formatSar(quote.price, lang)}</span>
     </span>
   );
@@ -48,7 +57,7 @@ function TruckIcon() {
 
 /** Radio-style list of carrier quotes for one supplier group. */
 export function QuoteOptionList({ quotes, selected, onSelect, includeSupplierFallback }: { quotes: DeliveryQuote[]; selected: CarrierCode | null; onSelect: (carrier: CarrierCode | null) => void; includeSupplierFallback?: boolean }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const cheapest = quotes[0]?.price;
   return (
     <ul className="space-y-2">
@@ -61,11 +70,11 @@ export function QuoteOptionList({ quotes, selected, onSelect, includeSupplierFal
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
                   {q.carrierName}
-                  {q.price === cheapest && <Badge tone="green">Cheapest</Badge>}
-                  {q.etaDays <= 1 && <Badge tone="blue">Fast</Badge>}
+                  {q.price === cheapest && <Badge tone="green">{t("checkout.cheapest")}</Badge>}
+                  {q.etaDays <= 1 && <Badge tone="blue">{t("checkout.fast")}</Badge>}
                 </span>
                 <span className="block text-xs text-slate-500">
-                  {q.service} · ETA {etaLabel(q.etaDays)} · {ZONE_LABEL[q.zone] ?? q.zone}
+                  {q.service} · {t("checkout.eta")} {etaText(q.etaDays, t)} · {ZONE_KEYS[q.zone] ? t(ZONE_KEYS[q.zone]) : q.zone}
                   {q.weightKg > 0 ? ` · ${Math.round(q.weightKg)} kg` : ""}
                   {q.volumeM3 > 0 ? ` · ${q.volumeM3.toFixed(2)} m³` : ""}
                 </span>
@@ -81,8 +90,8 @@ export function QuoteOptionList({ quotes, selected, onSelect, includeSupplierFal
           <label className={cn("flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition", selected === null ? "border-brand-600 bg-brand-50/60 ring-1 ring-brand-600" : "border-slate-200 hover:bg-slate-50")}>
             <input type="radio" name="carrier-supplier" checked={selected === null} onChange={() => onSelect(null)} className="mt-1 h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-600" />
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-slate-900">Delivery by supplier</span>
-              <span className="block text-xs text-slate-500">The supplier arranges delivery with its own fleet at its standard fee.</span>
+              <span className="block text-sm font-semibold text-slate-900">{t("checkout.deliveryBySupplier")}</span>
+              <span className="block text-xs text-slate-500">{t("checkout.supplierArranges")}</span>
             </span>
           </label>
         </li>
@@ -110,6 +119,7 @@ export function SupplierDeliveryChooser({
   selected: DeliveryQuote | null;
   onSelect: (quote: DeliveryQuote | null) => void;
 }) {
+  const { t } = useI18n();
   const [options, setOptions] = useState<DeliveryQuote[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,19 +131,19 @@ export function SupplierDeliveryChooser({
       const res = await api.shippingQuote({ supplierCompanyId: supplierId, deliveryCity, items: items.map((it) => ({ materialId: it.material.id, quantity: it.quantity })) });
       setOptions(res);
     } catch (err) {
-      setError(errorMessage(err, "Could not load delivery options."));
+      setError(errorMessage(err, t("checkout.couldNotLoadOptions")));
     } finally {
       setLoading(false);
     }
   };
 
-  if (!deliveryCity) return <p className="text-xs text-slate-500">Choose a delivery city to see carrier options and prices.</p>;
+  if (!deliveryCity) return <p className="text-xs text-slate-500">{t("checkout.chooseCityForCarriers")}</p>;
 
   if (options && options.length > 0) {
     return (
       <div className="space-y-2">
         <QuoteOptionList quotes={options} selected={selected?.carrier ?? null} onSelect={(code) => onSelect(options.find((q) => q.carrier === code) ?? null)} includeSupplierFallback={!defaultQuote} />
-        <p className="text-xs text-slate-400">Carrier prices exclude VAT. The chosen option becomes the order&apos;s delivery fee.</p>
+        <p className="text-xs text-slate-400">{t("checkout.carrierExclVat")}</p>
       </div>
     );
   }
@@ -143,10 +153,10 @@ export function SupplierDeliveryChooser({
       <QuoteLine quote={selected ?? defaultQuote} />
       <div className="flex items-center gap-2">
         {error && <span className="text-xs text-red-600">{error}</span>}
-        {options && options.length === 0 && <span className="text-xs text-slate-500">No other carriers serve this route.</span>}
+        {options && options.length === 0 && <span className="text-xs text-slate-500">{t("checkout.noOtherCarriers")}</span>}
         <Button type="button" size="sm" variant="outline" onClick={loadOptions} disabled={loading}>
           {loading ? <Spinner size="sm" /> : null}
-          {options ? "Refresh" : "Other options"}
+          {options ? t("common.refresh") : t("checkout.otherOptions")}
         </Button>
       </div>
     </div>
@@ -154,6 +164,7 @@ export function SupplierDeliveryChooser({
 }
 
 export function DeliveryCityHint({ city }: { city: string }) {
+  const { t } = useI18n();
   if (city) return null;
-  return <Alert kind="info" className="text-xs">Pick a delivery city to get exact carrier prices; otherwise each supplier&apos;s standard fee is used.</Alert>;
+  return <Alert kind="info" className="text-xs">{t("checkout.pickCityHint")}</Alert>;
 }

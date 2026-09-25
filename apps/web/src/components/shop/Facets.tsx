@@ -28,13 +28,13 @@ export interface ListingFilters {
 }
 
 export const SORT_OPTIONS = [
-  { value: "relevance", label: "Relevance" },
-  { value: "price_asc", label: "Price: low to high" },
-  { value: "price_desc", label: "Price: high to low" },
-  { value: "rating", label: "Top rated" },
-  { value: "newest", label: "Newest" },
-  { value: "popular", label: "Most popular" },
-];
+  { value: "relevance", labelKey: "shop.sortRelevance" },
+  { value: "price_asc", labelKey: "shop.sortPriceAsc" },
+  { value: "price_desc", labelKey: "shop.sortPriceDesc" },
+  { value: "rating", labelKey: "shop.sortRating" },
+  { value: "newest", labelKey: "shop.sortNewest" },
+  { value: "popular", labelKey: "shop.sortPopular" },
+] as const;
 
 export function parseFilters(params: URLSearchParams): ListingFilters {
   const specs: Record<string, string> = {};

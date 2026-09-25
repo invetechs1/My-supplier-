@@ -22,7 +22,7 @@ function BellIcon({ className }: { className?: string }) {
 /** "Price alert" button + modal: target price and/or back-in-stock notification for one product. */
 export function PriceAlertButton({ materialId, currentPrice, inStock, unit, className }: { materialId: string; currentPrice?: number | null; inStock?: boolean; unit?: string; className?: string }) {
   const { user } = useAuth();
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const { deliveryCity, notify } = useCart();
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState("");
@@ -44,11 +44,11 @@ export function PriceAlertButton({ materialId, currentPrice, inStock, unit, clas
   const submit = async () => {
     const price = target.trim() ? Number(target) : null;
     if (price !== null && (!Number.isFinite(price) || price <= 0)) {
-      setError("Enter a valid target price.");
+      setError(t("product.invalidTarget"));
       return;
     }
     if (price === null && !backInStock) {
-      setError("Set a target price or enable back-in-stock notifications.");
+      setError(t("product.alertNeedsCondition"));
       return;
     }
     setSaving(true);
@@ -56,9 +56,9 @@ export function PriceAlertButton({ materialId, currentPrice, inStock, unit, clas
     try {
       await marketplaceApi.createAlert({ materialId, targetPrice: price, notifyBackInStock: backInStock, city: city || null });
       setDone(true);
-      notify({ kind: "success", message: "Price alert saved", actionHref: "/dashboard/alerts", actionLabel: "My alerts" });
+      notify({ kind: "success", message: t("product.alertSaved"), actionHref: "/dashboard/alerts", actionLabel: t("product.myAlerts") });
     } catch (err) {
-      setError(errorMessage(err, "Could not save the alert."));
+      setError(errorMessage(err, t("product.couldNotSaveAlert")));
     } finally {
       setSaving(false);
     }
@@ -67,15 +67,15 @@ export function PriceAlertButton({ materialId, currentPrice, inStock, unit, clas
   const button = (
     <Button type="button" variant="outline" className={className} onClick={openModal} aria-haspopup="dialog">
       <BellIcon className="h-4 w-4" />
-      Price alert
+      {t("product.priceAlert")}
     </Button>
   );
 
   if (!user) {
     return (
-      <Link href="/login" className={cn("inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50", className)} title="Sign in to set a price alert">
+      <Link href="/login" className={cn("inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50", className)} title={t("product.signInForAlert")}>
         <BellIcon className="h-4 w-4" />
-        Price alert
+        {t("product.priceAlert")}
       </Link>
     );
   }
@@ -85,18 +85,18 @@ export function PriceAlertButton({ materialId, currentPrice, inStock, unit, clas
       {button}
       <Modal
         open={open}
-        title="Set a price alert"
+        title={t("product.setPriceAlert")}
         onClose={() => setOpen(false)}
         footer={
           done ? (
-            <Button onClick={() => setOpen(false)}>Done</Button>
+            <Button onClick={() => setOpen(false)}>{t("common.done")}</Button>
           ) : (
             <>
               <Button variant="ghost" onClick={() => setOpen(false)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button onClick={submit} loading={saving}>
-                Save alert
+                {t("product.saveAlert")}
               </Button>
             </>
           )
@@ -104,28 +104,28 @@ export function PriceAlertButton({ materialId, currentPrice, inStock, unit, clas
       >
         {done ? (
           <Alert kind="success">
-            We will notify you {target.trim() ? `when the best price drops to ${formatSar(Number(target), lang)}${unit ? ` / ${unit}` : ""}` : ""}
-            {target.trim() && backInStock ? " or " : ""}
-            {backInStock ? "when the product is back in stock" : ""}.
+            {t("product.willNotify")} {target.trim() ? `${t("product.whenPriceDrops")} ${formatSar(Number(target), lang)}${unit ? ` / ${unit}` : ""}` : ""}
+            {target.trim() && backInStock ? ` ${t("product.or")} ` : ""}
+            {backInStock ? t("product.whenBackInStock") : ""}.
           </Alert>
         ) : (
           <div className="space-y-4">
             {currentPrice ? (
               <p className="text-sm text-slate-600">
-                Current best price: <span className="font-semibold tabular-nums text-slate-900">{formatSar(currentPrice, lang)}</span>
+                {t("product.currentBestPrice")} <span className="font-semibold tabular-nums text-slate-900">{formatSar(currentPrice, lang)}</span>
                 {unit ? <span className="text-slate-500"> / {unit}</span> : null}
               </p>
             ) : (
-              <p className="text-sm text-slate-600">No offer is available right now — we can tell you when one appears.</p>
+              <p className="text-sm text-slate-600">{t("product.noOfferNow")}</p>
             )}
-            <Input name="targetPrice" type="number" inputMode="decimal" step="0.01" min={0} label="Notify me when the price is at or below (SAR)" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="e.g. 250" dir="ltr" />
+            <Input name="targetPrice" type="number" inputMode="decimal" step="0.01" min={0} label={t("product.notifyAtOrBelow")} value={target} onChange={(e) => setTarget(e.target.value)} placeholder={t("product.egPrice")} dir="ltr" />
             <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
-              <span>Also notify me when it is back in stock</span>
+              <span>{t("product.alsoBackInStock")}</span>
               <input type="checkbox" checked={backInStock} onChange={(e) => setBackInStock(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600" />
             </label>
-            <Select name="alertCity" label="Only offers deliverable to (optional)" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Any city" options={SAUDI_CITIES.map((c) => ({ value: c, label: c }))} />
+            <Select name="alertCity" label={t("product.onlyDeliverableTo")} value={city} onChange={(e) => setCity(e.target.value)} placeholder={t("product.anyCity")} options={SAUDI_CITIES.map((c) => ({ value: c, label: c }))} />
             {error && <Alert>{error}</Alert>}
-            <p className="text-xs text-slate-500">One alert per product. Saving again replaces your previous alert.</p>
+            <p className="text-xs text-slate-500">{t("product.oneAlertNote")}</p>
           </div>
         )}
       </Modal>

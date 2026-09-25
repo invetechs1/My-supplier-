@@ -105,7 +105,7 @@ export function ProductListing({
   const categoryList = categories.data ?? [];
   const selectedCategory = categoryList.find((c) => c.id === filters.categoryId);
   const categoryName = selectedCategory ? (lang === "ar" ? selectedCategory.nameAr : selectedCategory.name) : null;
-  const heading = title ?? categoryName ?? (filters.q ? `Results for “${filters.q}”` : t("shop.allProducts"));
+  const heading = title ?? categoryName ?? (filters.q ? `${t("shop.resultsFor")} “${filters.q}”` : t("shop.allProducts"));
   const activeCount = countActiveFilters(filters, !!fixedBrand);
   usePageTitle(typeof heading === "string" ? heading : fixedBrand ?? t("shop.allProducts"));
 
@@ -118,7 +118,7 @@ export function ProductListing({
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <nav className="mb-3 text-sm text-slate-500" aria-label="Breadcrumb">
+      <nav className="mb-3 text-sm text-slate-500" aria-label={t("common.breadcrumb")}>
         <Link href="/shop" className="hover:text-brand-700">
           {t("nav.shop")}
         </Link>
@@ -144,7 +144,7 @@ export function ProductListing({
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{heading}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {subtitle ?? (products.loading && !products.data ? "Searching…" : `${total} ${t("materials.results")}`)}
+            {subtitle ?? (products.loading && !products.data ? t("shop.searching") : `${total} ${t("materials.results")}`)}
           </p>
         </div>
         {showSearchBox && (
@@ -181,27 +181,27 @@ export function ProductListing({
 
           {facets?.fuzzy && filters.q && (
             <Alert kind="info" className="mb-4">
-              No exact matches for <strong>“{filters.q}”</strong> — showing similar results instead.
+              {t("shop.noExactMatches")} <strong>“{filters.q}”</strong> {t("shop.showingSimilar")}
             </Alert>
           )}
-          {facets?.truncated && <p className="mb-2 text-xs text-slate-400">Large result set: filter counts are approximate.</p>}
+          {facets?.truncated && <p className="mb-2 text-xs text-slate-400">{t("shop.largeResultSet")}</p>}
 
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-card">
             <span className="text-sm text-slate-600" role="status">
-              {products.loading ? "Loading…" : products.data ? `${total} ${t("materials.results")}` : ""}
+              {products.loading ? t("common.loading") : products.data ? `${total} ${t("materials.results")}` : ""}
             </span>
             <div className="flex items-center gap-2">
               <label htmlFor="shop-sort" className="text-sm text-slate-500">
                 {t("materials.sort")}
               </label>
-              <Select id="shop-sort" name="sort" value={filters.sort} onChange={(e) => update({ sort: e.target.value })} options={SORT_OPTIONS} className="w-44" />
-              <div className="ms-1 inline-flex overflow-hidden rounded-lg border border-slate-200" role="group" aria-label="Layout">
-                <button type="button" onClick={() => setView("grid")} aria-pressed={view === "grid"} aria-label="Grid view" className={cn("p-2", view === "grid" ? "bg-brand-50 text-brand-700" : "text-slate-500 hover:bg-slate-50")}>
+              <Select id="shop-sort" name="sort" value={filters.sort} onChange={(e) => update({ sort: e.target.value })} options={SORT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))} className="w-44" />
+              <div className="ms-1 inline-flex overflow-hidden rounded-lg border border-slate-200" role="group" aria-label={t("shop.layout")}>
+                <button type="button" onClick={() => setView("grid")} aria-pressed={view === "grid"} aria-label={t("shop.gridView")} className={cn("p-2", view === "grid" ? "bg-brand-50 text-brand-700" : "text-slate-500 hover:bg-slate-50")}>
                   <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
                     <path d="M4.25 2A2.25 2.25 0 002 4.25v2.5A2.25 2.25 0 004.25 9h2.5A2.25 2.25 0 009 6.75v-2.5A2.25 2.25 0 006.75 2h-2.5zm0 9A2.25 2.25 0 002 13.25v2.5A2.25 2.25 0 004.25 18h2.5A2.25 2.25 0 009 15.75v-2.5A2.25 2.25 0 006.75 11h-2.5zm9-9A2.25 2.25 0 0011 4.25v2.5A2.25 2.25 0 0013.25 9h2.5A2.25 2.25 0 0018 6.75v-2.5A2.25 2.25 0 0015.75 2h-2.5zm0 9A2.25 2.25 0 0011 13.25v2.5A2.25 2.25 0 0013.25 18h2.5A2.25 2.25 0 0018 15.75v-2.5A2.25 2.25 0 0015.75 11h-2.5z" />
                   </svg>
                 </button>
-                <button type="button" onClick={() => setView("list")} aria-pressed={view === "list"} aria-label="List view" className={cn("p-2", view === "list" ? "bg-brand-50 text-brand-700" : "text-slate-500 hover:bg-slate-50")}>
+                <button type="button" onClick={() => setView("list")} aria-pressed={view === "list"} aria-label={t("shop.listView")} className={cn("p-2", view === "list" ? "bg-brand-50 text-brand-700" : "text-slate-500 hover:bg-slate-50")}>
                   <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
                     <path fillRule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z" clipRule="evenodd" />
                   </svg>
@@ -217,12 +217,12 @@ export function ProductListing({
           ) : list.length === 0 ? (
             <Card>
               <EmptyState
-                title="No products found"
-                description={filters.q ? `Nothing matches “${filters.q}”. Check the spelling or try a broader term.` : "Try a different search term or clear some filters."}
+                title={t("shop.noProducts")}
+                description={filters.q ? `${t("shop.nothingMatches")} “${filters.q}”. ${t("shop.checkSpelling")}` : t("shop.tryDifferent")}
                 action={
                   activeCount > 0 ? (
                     <Button variant="outline" onClick={clearAll}>
-                      Clear filters
+                      {t("shop.clearFilters")}
                     </Button>
                   ) : undefined
                 }

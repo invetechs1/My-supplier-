@@ -35,7 +35,7 @@ export interface MoyasarFormProps {
  * Only one instance should be mounted at a time — Moyasar mounts into the `.mysr-form` element.
  */
 export function MoyasarForm({ orderId, intent, onCompleted, className }: MoyasarFormProps) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const [scriptReady, setScriptReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -50,11 +50,11 @@ export function MoyasarForm({ orderId, intent, onCompleted, className }: Moyasar
     if (initialised.current === intent.orderId) return;
     const moyasar = typeof window !== "undefined" ? window.Moyasar : undefined;
     if (!moyasar) {
-      setInitError("The payment form could not be loaded. Please refresh the page and try again.");
+      setInitError(t("checkout.moyasarLoadFailed"));
       return;
     }
     if (!intent.publishableKey) {
-      setInitError("Card payments are not configured yet. Please choose another payment method.");
+      setInitError(t("checkout.cardNotConfigured"));
       return;
     }
     initialised.current = intent.orderId;
@@ -76,7 +76,7 @@ export function MoyasarForm({ orderId, intent, onCompleted, className }: Moyasar
             onCompletedRef.current?.(payment.id);
           } catch (err) {
             // The callback page re-verifies, so a transient failure here is not fatal.
-            setVerifyError(errorMessage(err, "We could not confirm the payment yet. It will be verified after the redirect."));
+            setVerifyError(errorMessage(err, t("checkout.paymentNotConfirmed")));
           } finally {
             setVerifying(false);
           }
@@ -84,9 +84,9 @@ export function MoyasarForm({ orderId, intent, onCompleted, className }: Moyasar
       });
     } catch (err) {
       initialised.current = null;
-      setInitError(errorMessage(err, "The payment form failed to initialise."));
+      setInitError(errorMessage(err, t("checkout.paymentInitFailed")));
     }
-  }, [intent, orderId]);
+  }, [intent, orderId, t]);
 
   useEffect(() => {
     if (scriptReady) init();
@@ -94,11 +94,11 @@ export function MoyasarForm({ orderId, intent, onCompleted, className }: Moyasar
 
   return (
     <div className={className}>
-      <Script src={MOYASAR_SCRIPT} strategy="afterInteractive" crossOrigin="anonymous" onReady={() => setScriptReady(true)} onError={() => setInitError("The payment provider script could not be loaded. Check your connection and refresh.")} />
+      <Script src={MOYASAR_SCRIPT} strategy="afterInteractive" crossOrigin="anonymous" onReady={() => setScriptReady(true)} onError={() => setInitError(t("checkout.paymentScriptFailed"))} />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
         <div>
           <p className="font-medium text-slate-900">{intent.description}</p>
-          <p className="text-xs text-slate-500">Reference {intent.reference} · secured by Moyasar</p>
+          <p className="text-xs text-slate-500">{t("checkout.reference")} {intent.reference} · {t("checkout.securedByMoyasar")}</p>
         </div>
         <p className="text-lg font-semibold tabular-nums text-brand-700">{formatSar(intent.amount, lang)}</p>
       </div>
@@ -106,16 +106,16 @@ export function MoyasarForm({ orderId, intent, onCompleted, className }: Moyasar
       {verifyError && <Alert kind="warning" className="mb-3">{verifyError}</Alert>}
       {verifying && (
         <div className="mb-3 flex items-center gap-2 text-sm text-slate-600">
-          <Spinner size="sm" /> Confirming your payment…
+          <Spinner size="sm" /> {t("checkout.confirmingPayment")}
         </div>
       )}
       {!scriptReady && !initError && (
         <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-500">
-          <Spinner size="sm" /> Loading secure payment form…
+          <Spinner size="sm" /> {t("checkout.loadingPaymentForm")}
         </div>
       )}
       <div className="mysr-form" dir="ltr" />
-      <p className="mt-3 text-center text-xs text-slate-400">Mada · Visa · Mastercard · Apple Pay. Card details are entered on Moyasar&apos;s PCI-DSS certified form and never touch our servers.</p>
+      <p className="mt-3 text-center text-xs text-slate-400">{t("checkout.cardFooter")}</p>
     </div>
   );
 }

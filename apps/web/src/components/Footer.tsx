@@ -11,6 +11,7 @@ type Health = "checking" | "ok" | "down";
 
 /** Small live status indicator fed by GET /health every 60s. */
 export function ApiStatusDot({ className }: { className?: string }) {
+  const { t } = useI18n();
   const [health, setHealth] = useState<Health>("checking");
   const [version, setVersion] = useState<string | null>(null);
 
@@ -35,14 +36,14 @@ export function ApiStatusDot({ className }: { className?: string }) {
     };
   }, []);
 
-  const label = health === "ok" ? "All systems operational" : health === "down" ? "Service disruption" : "Checking status…";
+  const label = health === "ok" ? t("footer.statusOk") : health === "down" ? t("footer.statusDown") : t("footer.statusChecking");
   return (
     <span className={cn("inline-flex items-center gap-2 text-xs text-slate-500", className)} title={version ? `API ${version}` : undefined} role="status" aria-live="polite">
       <span className="relative flex h-2.5 w-2.5">
         {health === "ok" && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />}
         <span className={cn("relative inline-flex h-2.5 w-2.5 rounded-full", health === "ok" ? "bg-emerald-500" : health === "down" ? "bg-red-500" : "bg-slate-300")} />
       </span>
-      <span className="font-medium">Live</span>
+      <span className="font-medium">{t("footer.live")}</span>
       <span className="hidden sm:inline">· {label}</span>
     </span>
   );
@@ -56,13 +57,13 @@ export function Footer() {
         <div className="md:col-span-2">
           <Logo />
           <p className="mt-3 max-w-sm text-sm text-slate-500">{t("footer.tagline")}</p>
-          <p className="mt-3 max-w-sm text-xs text-slate-400">Prices in SAR excl. VAT unless stated. VAT 15% itemised on every ZATCA-compliant invoice. Suppliers verified by CR and VAT registration.</p>
+          <p className="mt-3 max-w-sm text-xs text-slate-400">{t("footer.pricesNote")}</p>
           <div className="mt-4">
             <LangToggle />
           </div>
         </div>
         <div>
-          <h4 className="text-sm font-semibold text-slate-900">Marketplace</h4>
+          <h4 className="text-sm font-semibold text-slate-900">{t("footer.marketplace")}</h4>
           <ul className="mt-3 space-y-2 text-sm text-slate-600">
             <li><Link href="/shop" className="hover:text-brand-600">{t("nav.shop")}</Link></li>
             <li><Link href="/materials" className="hover:text-brand-600">{t("nav.materials")}</Link></li>
@@ -72,7 +73,7 @@ export function Footer() {
           </ul>
         </div>
         <div>
-          <h4 className="text-sm font-semibold text-slate-900">Account</h4>
+          <h4 className="text-sm font-semibold text-slate-900">{t("footer.account")}</h4>
           <ul className="mt-3 space-y-2 text-sm text-slate-600">
             <li><Link href="/login" className="hover:text-brand-600">{t("nav.login")}</Link></li>
             <li><Link href="/register" className="hover:text-brand-600">{t("nav.register")}</Link></li>
@@ -82,20 +83,20 @@ export function Footer() {
           </ul>
         </div>
         <div>
-          <h4 className="text-sm font-semibold text-slate-900">Company</h4>
+          <h4 className="text-sm font-semibold text-slate-900">{t("footer.company")}</h4>
           <ul className="mt-3 space-y-2 text-sm text-slate-600">
-            <li><Link href="/about" className="hover:text-brand-600">About</Link></li>
-            <li><Link href="/help" className="hover:text-brand-600">Help &amp; FAQ</Link></li>
-            <li><Link href="/contact" className="hover:text-brand-600">Contact</Link></li>
-            <li><Link href="/terms" className="hover:text-brand-600">Terms of Service</Link></li>
-            <li><Link href="/privacy" className="hover:text-brand-600">Privacy Policy</Link></li>
-            <li><Link href="/refund-policy" className="hover:text-brand-600">Refund &amp; Cancellation</Link></li>
+            <li><Link href="/about" className="hover:text-brand-600">{t("footer.about")}</Link></li>
+            <li><Link href="/help" className="hover:text-brand-600">{t("footer.help")}</Link></li>
+            <li><Link href="/contact" className="hover:text-brand-600">{t("footer.contact")}</Link></li>
+            <li><Link href="/terms" className="hover:text-brand-600">{t("footer.terms")}</Link></li>
+            <li><Link href="/privacy" className="hover:text-brand-600">{t("footer.privacy")}</Link></li>
+            <li><Link href="/refund-policy" className="hover:text-brand-600">{t("footer.refund")}</Link></li>
           </ul>
         </div>
       </div>
       <div className="border-t border-slate-100">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 py-4 text-xs text-slate-400 sm:flex-row sm:px-6 lg:px-8">
-          <p>© 2026 MySupplier · {t("brand.tagline")} · Riyadh, Saudi Arabia · Prices in SAR</p>
+          <p>© 2026 MySupplier · {t("brand.tagline")} · {t("footer.copyright")}</p>
           <ApiStatusDot />
         </div>
       </div>

@@ -21,13 +21,14 @@ export function LineUnitPrice({ line, className }: { line: CartLine; className?:
 
 /** "Tier: 50+ units" / "Sale" badges for a cart line. */
 export function LineBadges({ line }: { line: CartLine }) {
+  const { t } = useI18n();
   if (!line.saleApplied && !line.tierApplied) return null;
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
-      {line.saleApplied && <Badge tone="red">Sale</Badge>}
+      {line.saleApplied && <Badge tone="red">{t("product.sale")}</Badge>}
       {!line.saleApplied && line.tierApplied && (
         <Badge tone="green">
-          Tier: {line.tierApplied.minQty}+ {line.material.unit}
+          {t("cart.tier")}: {line.tierApplied.minQty}+ {line.material.unit}
         </Badge>
       )}
     </span>
@@ -36,7 +37,7 @@ export function LineBadges({ line }: { line: CartLine }) {
 
 /** Nudge towards the next volume break: "Add N more to pay SAR x/unit (save SAR y)". */
 export function NextTierHint({ line, className }: { line: CartLine; className?: string }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const next = line.nextTier;
   if (!next) return null;
   const more = Math.max(0, Math.ceil(next.minQty - line.quantity));
@@ -44,9 +45,9 @@ export function NextTierHint({ line, className }: { line: CartLine; className?: 
   const saveTotal = next.savePerUnit * next.minQty;
   return (
     <p className={cn("text-xs text-brand-700", className)}>
-      Add <span className="font-semibold">{more}</span> more to pay {formatSar(next.price, lang)}/{line.material.unit}{" "}
+      {t("cart.add")} <span className="font-semibold">{more}</span> {t("cart.moreToPay")} {formatSar(next.price, lang)}/{line.material.unit}{" "}
       <span className="text-slate-500">
-        (save {formatSar(next.savePerUnit, lang)}/{line.material.unit}, {formatSar(saveTotal, lang)} on {next.minQty})
+        ({t("cart.saveWord")} {formatSar(next.savePerUnit, lang)}/{line.material.unit}, {formatSar(saveTotal, lang)} {t("cart.on")} {next.minQty})
       </span>
     </p>
   );
@@ -54,16 +55,16 @@ export function NextTierHint({ line, className }: { line: CartLine; className?: 
 
 /** Compact one-line variant for order summaries. */
 export function LinePricingSummary({ line }: { line: CartLine }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const discounted = hasDiscount(line);
   if (!discounted && !line.nextTier) return null;
   return (
     <span className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px]">
-      {line.saleApplied && <Badge tone="red">Sale</Badge>}
-      {!line.saleApplied && line.tierApplied && <Badge tone="green">Tier {line.tierApplied.minQty}+</Badge>}
+      {line.saleApplied && <Badge tone="red">{t("product.sale")}</Badge>}
+      {!line.saleApplied && line.tierApplied && <Badge tone="green">{t("cart.tier")} {line.tierApplied.minQty}+</Badge>}
       {discounted && (
         <span className="text-emerald-700">
-          saving {formatSar((line.basePrice ?? 0) - (line.unitPrice ?? 0), lang)}/{line.material.unit}
+          {t("cart.saving")} {formatSar((line.basePrice ?? 0) - (line.unitPrice ?? 0), lang)}/{line.material.unit}
         </span>
       )}
       {!discounted && line.nextTier && (

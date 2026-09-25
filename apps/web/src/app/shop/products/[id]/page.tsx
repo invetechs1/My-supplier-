@@ -33,7 +33,7 @@ function OfferAddButton({ offer, product, size = "sm" }: { offer: PricedOffer; p
       variant={purchasable ? "outline" : "ghost"}
       disabled={!purchasable || busy}
       loading={adding}
-      title={purchasable ? undefined : "Reference price — not purchasable"}
+      title={purchasable ? undefined : t("product.referenceNotPurchasable")}
       onClick={async () => {
         setAdding(true);
         try {
@@ -43,14 +43,14 @@ function OfferAddButton({ offer, product, size = "sm" }: { offer: PricedOffer; p
         }
       }}
     >
-      {purchasable ? t("shop.addToCart") : "Reference"}
+      {purchasable ? t("shop.addToCart") : t("product.reference")}
     </Button>
   );
 }
 
 /** Price cell for the offers table: effective price, strike-through while on sale, cheapest tier hint. */
 function OfferPriceCell({ offer, unit }: { offer: PricedOffer; unit: string }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const sale = isOnSale(offer);
   const tier = bestTier(offer);
   return (
@@ -61,12 +61,12 @@ function OfferPriceCell({ offer, unit }: { offer: PricedOffer; unit: string }) {
       </div>
       {sale && (
         <span className="text-[11px] font-semibold text-red-600">
-          Sale{offer.saleEndsAt ? ` until ${formatDate(offer.saleEndsAt, lang)}` : ""}
+          {t("product.sale")}{offer.saleEndsAt ? ` ${t("product.until")} ${formatDate(offer.saleEndsAt, lang)}` : ""}
         </span>
       )}
       {!sale && tier && tier.price < offer.price && (
         <span className="block text-[11px] text-emerald-700">
-          {formatSar(tier.price, lang)} / {unit} for {tier.minQty}+
+          {formatSar(tier.price, lang)} / {unit} {t("product.for")} {tier.minQty}+
         </span>
       )}
     </div>
@@ -75,25 +75,25 @@ function OfferPriceCell({ offer, unit }: { offer: PricedOffer; unit: string }) {
 
 /** "Buy more, pay less" ladder for the buy box. */
 function TierTable({ offer, qty, unit }: { offer: PricedOffer; qty: number; unit: string }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   if (offer.tiers.length === 0) return null;
   const active = tierFor(offer, qty);
   const rows = [{ minQty: minQtyFor(offer), price: offer.price }, ...offer.tiers];
   const onSale = isOnSale(offer);
   return (
     <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/50">
-      <p className="border-b border-emerald-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-800">Buy more, pay less</p>
+      <p className="border-b border-emerald-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-800">{t("product.buyMorePayLess")}</p>
       <table className="w-full text-sm">
         <thead>
           <tr className="text-[11px] uppercase tracking-wide text-slate-500">
             <th scope="col" className="px-3 py-1.5 text-start font-medium">
-              Quantity
+              {t("product.quantity")}
             </th>
             <th scope="col" className="px-3 py-1.5 text-end font-medium">
-              Price / {unit}
+              {t("product.price")} / {unit}
             </th>
             <th scope="col" className="px-3 py-1.5 text-end font-medium">
-              Save
+              {t("product.save")}
             </th>
           </tr>
         </thead>
@@ -115,7 +115,7 @@ function TierTable({ offer, qty, unit }: { offer: PricedOffer; qty: number; unit
           })}
         </tbody>
       </table>
-      {onSale && <p className="px-3 pb-2 text-[11px] text-slate-500">The sale price applies while the sale is live; volume tiers resume afterwards.</p>}
+      {onSale && <p className="px-3 pb-2 text-[11px] text-slate-500">{t("product.saleTierNote")}</p>}
     </div>
   );
 }
@@ -146,7 +146,7 @@ export default function ShopProductPage() {
   if (state.error || !p)
     return (
       <div className="mx-auto max-w-3xl px-4 py-12">
-        <Alert onRetry={state.reload}>{state.error ?? "Product not found"}</Alert>
+        <Alert onRetry={state.reload}>{state.error ?? t("product.notFound")}</Alert>
       </div>
     );
 
@@ -180,7 +180,7 @@ export default function ShopProductPage() {
   const offerColumns: Column<PricedOffer>[] = [
     {
       key: "supplier",
-      header: "Supplier",
+      header: t("product.supplier"),
       render: (o) => (
         <div className="flex flex-wrap items-center gap-2">
           {o.companyId ? (
@@ -188,7 +188,7 @@ export default function ShopProductPage() {
               {o.companyName}
             </Link>
           ) : (
-            <span className="font-medium text-slate-700">{o.sourceName ?? o.companyName ?? "Market"}</span>
+            <span className="font-medium text-slate-700">{o.sourceName ?? o.companyName ?? t("product.market")}</span>
           )}
           <VerifiedBadge verified={o.verified} />
           {o.rating > 0 && <Stars value={o.rating} />}
@@ -196,17 +196,17 @@ export default function ShopProductPage() {
       ),
     },
     { key: "city", header: t("common.city"), render: (o) => o.city },
-    { key: "price", header: `Price / ${p.unit}`, align: "end", render: (o) => <OfferPriceCell offer={o} unit={p.unit} /> },
-    { key: "minQty", header: "Min qty", align: "end", render: (o) => `${o.minQty} ${p.unit}` },
-    { key: "lead", header: "Lead time", align: "end", render: (o) => `${o.leadTimeDays} d` },
-    { key: "stock", header: "Stock", render: (o) => <StockPill offer={o} /> },
-    { key: "source", header: "Source", render: (o) => <SourceBadge source={o.source} /> },
+    { key: "price", header: `${t("product.price")} / ${p.unit}`, align: "end", render: (o) => <OfferPriceCell offer={o} unit={p.unit} /> },
+    { key: "minQty", header: t("product.minQty"), align: "end", render: (o) => `${o.minQty} ${p.unit}` },
+    { key: "lead", header: t("product.leadTime"), align: "end", render: (o) => `${o.leadTimeDays} ${t("common.dayShort")}` },
+    { key: "stock", header: t("product.stock"), render: (o) => <StockPill offer={o} /> },
+    { key: "source", header: t("product.source"), render: (o) => <SourceBadge source={o.source} /> },
     { key: "action", header: "", align: "end", render: (o) => <OfferAddButton offer={o} product={p} /> },
   ];
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <nav className="mb-4 text-sm text-slate-500" aria-label="Breadcrumb">
+      <nav className="mb-4 text-sm text-slate-500" aria-label={t("common.breadcrumb")}>
         <Link href="/shop" className="hover:text-brand-700">
           {t("nav.shop")}
         </Link>
@@ -239,36 +239,36 @@ export default function ShopProductPage() {
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             {p.brand && (
               <Link href={`/brands/${encodeURIComponent(p.brand)}`} className="font-medium text-brand-700 hover:underline">
-                Brand: {p.brand}
+                {t("product.brand")}: {p.brand}
               </Link>
             )}
             {summary.count > 0 ? (
               <a href="#reviews" className="inline-flex items-center gap-1 hover:underline">
                 <RatingLine average={summary.average} count={summary.count} size="md" />
-                <span className="text-xs text-slate-500">· {summary.count === 1 ? "1 review" : `${summary.count} reviews`}</span>
+                <span className="text-xs text-slate-500">· {summary.count} {summary.count === 1 ? t("reviews.one") : t("reviews.many")}</span>
               </a>
             ) : (
               <a href="#reviews" className="text-xs text-slate-500 hover:underline">
-                No reviews yet
+                {t("reviews.none")}
               </a>
             )}
             {p.questionsCount > 0 && (
               <a href="#questions" className="text-xs text-slate-500 hover:underline">
-                {p.questionsCount} answered {p.questionsCount === 1 ? "question" : "questions"}
+                {p.questionsCount} {p.questionsCount === 1 ? t("questions.answeredOne") : t("questions.answeredMany")}
               </a>
             )}
           </div>
           <div className="mt-3 flex flex-wrap gap-2 text-sm">
-            <Badge tone="slate">SKU {p.sku}</Badge>
-            <Badge tone="slate">Unit: {p.unit}</Badge>
+            <Badge tone="slate">{t("product.sku")} {p.sku}</Badge>
+            <Badge tone="slate">{t("product.unit")}: {p.unit}</Badge>
             {p.category && <Badge tone="slate">{lang === "ar" ? p.category.nameAr : p.category.name}</Badge>}
-            {logistics.hazardous && <Badge tone="red">Hazardous</Badge>}
+            {logistics.hazardous && <Badge tone="red">{t("product.hazardous")}</Badge>}
           </div>
           {(logistics.weightKg || logistics.volumeM3) && (
             <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
               {logistics.weightKg ? (
                 <div>
-                  <dt className="inline text-slate-500">Weight per unit: </dt>
+                  <dt className="inline text-slate-500">{t("product.weightPerUnit")}: </dt>
                   <dd className="inline font-medium tabular-nums text-slate-900">
                     {logistics.weightKg} kg / {p.unit}
                   </dd>
@@ -276,7 +276,7 @@ export default function ShopProductPage() {
               ) : null}
               {logistics.volumeM3 ? (
                 <div>
-                  <dt className="inline text-slate-500">Volume per unit: </dt>
+                  <dt className="inline text-slate-500">{t("product.volumePerUnit")}: </dt>
                   <dd className="inline font-medium tabular-nums text-slate-900">
                     {logistics.volumeM3} m³ / {p.unit}
                   </dd>
@@ -309,21 +309,21 @@ export default function ShopProductPage() {
                     <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
                     <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
                   </svg>
-                  Datasheet (PDF)
+                  {t("product.datasheet")}
                 </a>
               )}
               {(embed || videoFile) && (
                 <a href="#product-video" className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                  ▶ Watch video
+                  ▶ {t("product.watchVideo")}
                 </a>
               )}
             </div>
           )}
 
           <p className="mt-6 text-sm text-slate-500">
-            Need a large quantity or a project price?{" "}
+            {t("product.needLargeQty")}{" "}
             <Link href={`/dashboard/rfqs/new?materialId=${p.id}`} className="font-semibold text-brand-700 hover:underline">
-              Request quotes instead →
+              {t("product.requestQuotesInstead")}
             </Link>
           </p>
         </div>
@@ -333,8 +333,8 @@ export default function ShopProductPage() {
           {best ? (
             <>
               <div className="flex items-start justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Best offer</p>
-                {sale && <Badge tone="red">Sale{best.saleEndsAt ? ` · ends ${formatDate(best.saleEndsAt, lang)}` : ""}</Badge>}
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("product.bestOffer")}</p>
+                {sale && <Badge tone="red">{t("product.sale")}{best.saleEndsAt ? ` · ${t("product.ends")} ${formatDate(best.saleEndsAt, lang)}` : ""}</Badge>}
               </div>
               <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
                 <span className={cn("text-3xl font-bold tabular-nums", sale ? "text-red-600" : "text-brand-700")}>{formatSar(unitPrice, lang)}</span>
@@ -342,20 +342,20 @@ export default function ShopProductPage() {
                 {savePct !== null && (sale || unitPrice < best.price) && (
                   <span className="flex items-baseline gap-1.5">
                     <s className="text-sm tabular-nums text-slate-400">{formatSar(sale ? best.compareAtPrice ?? best.price : best.price, lang)}</s>
-                    <Badge tone="green">Save {savePct}%</Badge>
+                    <Badge tone="green">{t("product.saveBadge")} {savePct}%</Badge>
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500">Excl. 15% VAT · VAT invoice issued at checkout</p>
+              <p className="text-xs text-slate-500">{t("product.vatNote")}</p>
               {nextTier && (
                 <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs text-emerald-800">
-                  Order <span className="font-semibold">{nextTier.minQty}+</span> to pay <span className="font-semibold tabular-nums">{formatSar(nextTier.price, lang)}</span> / {p.unit} (save {formatSar(nextTier.savePerUnit, lang)} each)
+                  {t("product.order")} <span className="font-semibold">{nextTier.minQty}+</span> {t("product.toPay")} <span className="font-semibold tabular-nums">{formatSar(nextTier.price, lang)}</span> / {p.unit} ({t("product.saveWord")} {formatSar(nextTier.savePerUnit, lang)} {t("product.each")})
                 </p>
               )}
 
               <dl className="mt-4 space-y-2 text-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="text-slate-500">Sold by</dt>
+                  <dt className="text-slate-500">{t("product.soldBy")}</dt>
                   <dd className="flex items-center gap-1.5 text-end font-medium text-slate-900">
                     {best.companyId ? (
                       <Link href={`/suppliers/${best.companyId}`} className="hover:text-brand-700">
@@ -369,29 +369,29 @@ export default function ShopProductPage() {
                 </div>
                 {best.rating > 0 && (
                   <div className="flex items-center justify-between gap-2">
-                    <dt className="text-slate-500">Supplier rating</dt>
+                    <dt className="text-slate-500">{t("product.supplierRating")}</dt>
                     <dd>
                       <Stars value={best.rating} />
                     </dd>
                   </div>
                 )}
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="text-slate-500">Ships from</dt>
+                  <dt className="text-slate-500">{t("product.shipsFrom")}</dt>
                   <dd className="font-medium text-slate-900">{best.city}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="text-slate-500">Lead time</dt>
-                  <dd className="font-medium text-slate-900">{best.leadTimeDays} days</dd>
+                  <dt className="text-slate-500">{t("product.leadTime")}</dt>
+                  <dd className="font-medium text-slate-900">{best.leadTimeDays} {t("product.days")}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="text-slate-500">Availability</dt>
+                  <dt className="text-slate-500">{t("product.availability")}</dt>
                   <dd>
                     <StockPill offer={best} />
                     {typeof best.stock === "number" && <span className="ms-1 text-xs text-slate-500">({best.stock})</span>}
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="text-slate-500">Min order</dt>
+                  <dt className="text-slate-500">{t("product.minOrder")}</dt>
                   <dd className="font-medium text-slate-900">
                     {best.minQty} {p.unit}
                   </dd>
@@ -404,10 +404,10 @@ export default function ShopProductPage() {
                 <>
                   <div className="mt-5">
                     <label htmlFor="qty" className="mb-1 block text-sm font-medium text-slate-700">
-                      Quantity ({p.unit})
+                      {t("product.quantity")} ({p.unit})
                     </label>
                     <div className="flex items-center gap-2">
-                      <Button type="button" variant="outline" size="sm" aria-label="Decrease" disabled={qty <= minQtyFor(best)} onClick={() => setQty((v) => clampQty(best, v - 1))}>
+                      <Button type="button" variant="outline" size="sm" aria-label={t("common.decrease")} disabled={qty <= minQtyFor(best)} onClick={() => setQty((v) => clampQty(best, v - 1))}>
                         −
                       </Button>
                       <input
@@ -422,23 +422,23 @@ export default function ShopProductPage() {
                         className="h-9 w-24 rounded-lg border border-slate-300 px-2 text-center text-sm tabular-nums focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
                         dir="ltr"
                       />
-                      <Button type="button" variant="outline" size="sm" aria-label="Increase" disabled={stockCap !== null && qty >= stockCap} onClick={() => setQty((v) => clampQty(best, v + 1))}>
+                      <Button type="button" variant="outline" size="sm" aria-label={t("common.increase")} disabled={stockCap !== null && qty >= stockCap} onClick={() => setQty((v) => clampQty(best, v + 1))}>
                         +
                       </Button>
                     </div>
                     {best.minQty > 1 && (
                       <p className="mt-1 text-xs text-slate-500">
-                        Minimum {best.minQty} {p.unit}
+                        {t("product.minimum")} {best.minQty} {p.unit}
                       </p>
                     )}
                   </div>
                   <div className="mt-4 space-y-1 border-t border-slate-100 pt-3 text-sm">
                     <div className="flex items-baseline justify-between">
-                      <span className="text-slate-500">Unit price</span>
+                      <span className="text-slate-500">{t("product.unitPrice")}</span>
                       <span className="tabular-nums text-slate-700">{formatSar(unitPrice, lang)}</span>
                     </div>
                     <div className="flex items-baseline justify-between">
-                      <span className="text-slate-500">Line total</span>
+                      <span className="text-slate-500">{t("product.lineTotal")}</span>
                       <span className="text-lg font-semibold tabular-nums text-slate-900">{formatSar(lineTotal, lang)}</span>
                     </div>
                   </div>
@@ -453,7 +453,7 @@ export default function ShopProductPage() {
                 </>
               ) : (
                 <Alert kind="info" className="mt-5">
-                  This is a market reference price and cannot be ordered directly. Choose a supplier offer below or request quotes.
+                  {t("product.referenceInfo")}
                 </Alert>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
@@ -463,7 +463,7 @@ export default function ShopProductPage() {
             </>
           ) : (
             <>
-              <EmptyState title="No offers yet" description="No supplier has listed this product. Request quotes or set an alert to hear when it is available." action={<Link href={`/dashboard/rfqs/new?materialId=${p.id}`} className="text-sm font-semibold text-brand-700 hover:underline">Request quotes →</Link>} />
+              <EmptyState title={t("product.noOffers")} description={t("product.noOffersDesc")} action={<Link href={`/dashboard/rfqs/new?materialId=${p.id}`} className="text-sm font-semibold text-brand-700 hover:underline">{t("product.requestQuotes")}</Link>} />
               <div className="flex flex-wrap gap-2">
                 <WishlistButton key={p.id} materialId={p.id} />
                 <PriceAlertButton materialId={p.id} inStock={false} unit={p.unit} className="flex-1" />
@@ -481,10 +481,10 @@ export default function ShopProductPage() {
             <SpecTable specs={p.specs} attributes={p.attributes} />
             {(embed || videoFile) && (
               <Card id="product-video" className="scroll-mt-24 overflow-hidden">
-                <CardHeader title="Product video" />
+                <CardHeader title={t("product.video")} />
                 <div className="aspect-video bg-black">
                   {embed ? (
-                    <iframe src={embed} title={`${name} video`} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen loading="lazy" />
+                    <iframe src={embed} title={`${name} · ${t("product.video")}`} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen loading="lazy" />
                   ) : (
                     <video src={videoFile ?? undefined} controls className="h-full w-full" preload="metadata" />
                   )}
@@ -493,7 +493,7 @@ export default function ShopProductPage() {
             )}
           </div>
           <Card>
-            <CardHeader title={t("material.history")} subtitle="Average market price over time" />
+            <CardHeader title={t("material.history")} subtitle={t("product.historySubtitle")} />
             <div className="p-4">
               <PriceHistoryChart points={p.history ?? []} lang={lang} />
             </div>
@@ -501,8 +501,8 @@ export default function ShopProductPage() {
         </div>
 
         <Card>
-          <CardHeader title={`${t("shop.otherSellers")} (${others.length})`} subtitle="All offers sorted by effective price. Market rows are reference prices only." />
-          <Table columns={offerColumns} rows={others} rowKey={(o) => o.listingId} empty={<EmptyState title="No other sellers" description="Only one offer is available for this product right now." />} />
+          <CardHeader title={`${t("shop.otherSellers")} (${others.length})`} subtitle={t("product.otherSellersSubtitle")} />
+          <Table columns={offerColumns} rows={others} rowKey={(o) => o.listingId} empty={<EmptyState title={t("product.noOtherSellers")} description={t("product.noOtherSellersDesc")} />} />
         </Card>
 
         <ProductReviews key={p.id} productId={p.id} initialSummary={p.reviewSummary} onSummaryChange={setReviewSummary} />
@@ -511,7 +511,7 @@ export default function ShopProductPage() {
 
       <section className="mt-12">
         <SectionHeading title={t("shop.related")} href={p.category ? `/shop/products?categoryId=${p.category.id}` : "/shop/products"} />
-        <ProductRail products={p.related ?? []} emptyText="No related products." />
+        <ProductRail products={p.related ?? []} emptyText={t("product.noRelated")} />
       </section>
 
       <div className="mt-12">

@@ -11,7 +11,7 @@ import { ProductImage } from "./ProductCard";
 
 /** "Frequently bought together" strip: the current product plus up to 3 companions, with one "Add all" action. */
 export function FrequentlyBought({ product, items }: { product: ShopProduct; items: ShopProduct[] }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const { add, busy, notify } = useCart();
   const candidates = useMemo(() => items.filter((p) => p.id !== product.id && isPurchasable(p.bestOffer)).slice(0, 3), [items, product.id]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(candidates.map((p) => p.id)));
@@ -32,7 +32,7 @@ export function FrequentlyBought({ product, items }: { product: ShopProduct; ite
         const offer = p.bestOffer!;
         if (await add(offer.listingId, minQtyFor(offer), { offer, material: p })) ok += 1;
       }
-      if (ok > 0) notify({ kind: "success", message: `Added ${ok} ${ok === 1 ? "item" : "items"} to your cart`, actionHref: "/cart", actionLabel: "View cart" });
+      if (ok > 0) notify({ kind: "success", message: `${t("product.added")} ${ok} ${ok === 1 ? t("cart.itemOne") : t("cart.itemMany")} ${t("product.toYourCart")}`, actionHref: "/cart", actionLabel: t("cart.viewCart") });
     } finally {
       setAdding(false);
     }
@@ -56,14 +56,14 @@ export function FrequentlyBought({ product, items }: { product: ShopProduct; ite
                   else next.delete(p.id);
                   setSelected(next);
                 }}
-                aria-label={`Include ${name}`}
+                aria-label={`${t("product.include")} ${name}`}
                 className="absolute start-1 top-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600"
               />
             )}
           </span>
         </label>
         <Link href={`/shop/products/${p.id}`} className="mt-2 line-clamp-2 text-xs font-medium text-slate-800 hover:text-brand-700">
-          {isCurrent ? <span className="text-slate-500">This item: </span> : null}
+          {isCurrent ? <span className="text-slate-500">{t("product.thisItem")} </span> : null}
           {name}
         </Link>
         {o && (
@@ -78,7 +78,7 @@ export function FrequentlyBought({ product, items }: { product: ShopProduct; ite
 
   return (
     <Card>
-      <CardHeader title="Frequently bought together" subtitle="Based on what other contractors order with this product." />
+      <CardHeader title={t("product.fbt")} subtitle={t("product.fbtSubtitle")} />
       <div className="flex flex-col gap-6 px-5 py-5 lg:flex-row lg:items-center">
         <div className="flex items-start gap-3 overflow-x-auto pb-2">
           {tile(product, true)}
@@ -93,12 +93,12 @@ export function FrequentlyBought({ product, items }: { product: ShopProduct; ite
         </div>
         <div className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 p-4 lg:w-60">
           <p className="text-xs uppercase tracking-wide text-slate-500">
-            Total for {bundle.length} {bundle.length === 1 ? "item" : "items"}
+            {t("product.totalFor")} {bundle.length} {bundle.length === 1 ? t("cart.itemOne") : t("cart.itemMany")}
           </p>
           <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatSar(total, lang)}</p>
-          <p className="text-[11px] text-slate-400">At each offer&apos;s minimum quantity, excl. VAT</p>
+          <p className="text-[11px] text-slate-400">{t("product.fbtNote")}</p>
           <Button className="mt-3 w-full" variant="accent" onClick={addAll} loading={adding} disabled={busy || bundle.length === 0}>
-            Add all to cart
+            {t("product.addAllToCart")}
           </Button>
         </div>
       </div>

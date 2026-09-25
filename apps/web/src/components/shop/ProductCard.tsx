@@ -56,7 +56,7 @@ export function StockPill({ offer, inStock }: { offer?: ShopOffer | null; inStoc
   const tracked = offer ? typeof offer.stock === "number" : inStock !== undefined;
   const available = offer ? (typeof offer.stock === "number" ? offer.stock > 0 : inStock ?? true) : inStock ?? false;
   if (!tracked && !offer) return null;
-  if (!available && tracked) return <Badge tone="red">Out of stock</Badge>;
+  if (!available && tracked) return <Badge tone="red">{t("shop.outOfStock")}</Badge>;
   return <Badge tone={tracked ? "green" : "slate"}>{tracked ? t("shop.inStock") : t("shop.onRequest")}</Badge>;
 }
 
@@ -82,7 +82,7 @@ export function ProductBadges({ product: p, className }: { product: ShopProduct;
   return (
     <div className={cn("flex flex-col items-start gap-1", className)}>
       {sale ? (
-        <span className="rounded-md bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">Sale{salePct !== null ? ` −${salePct}%` : ""}</span>
+        <span className="rounded-md bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">{t("product.sale")}{salePct !== null ? ` −${salePct}%` : ""}</span>
       ) : (
         (p.isDeal || pct !== null) && (
           <span className="rounded-md bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-slate-900 shadow-sm">
@@ -101,7 +101,7 @@ export function CardPrice({ product: p, large }: { product: ShopProduct; large?:
   const { t, lang } = useI18n();
   const offer = asPriced(p.bestOffer);
   const tier = bestTier(offer);
-  if (!offer) return <span className="text-sm text-slate-400">No offers yet</span>;
+  if (!offer) return <span className="text-sm text-slate-400">{t("product.noOffers")}</span>;
   const sale = isOnSale(offer);
   return (
     <div>
@@ -113,7 +113,7 @@ export function CardPrice({ product: p, large }: { product: ShopProduct; large?:
       </div>
       {tier && tier.price < offer.effectivePrice && (
         <p className="text-xs text-emerald-700">
-          {t("shop.from")} <span className="font-semibold tabular-nums">{formatSar(tier.price, lang)}</span> for {tier.minQty}+
+          {t("shop.from")} <span className="font-semibold tabular-nums">{formatSar(tier.price, lang)}</span> {t("product.for")} {tier.minQty}+
         </p>
       )}
       {!tier && p.avgPrice !== null && p.avgPrice !== undefined && (
@@ -134,10 +134,10 @@ function SellerLine({ product: p }: { product: ShopProduct }) {
     <span className="inline-flex flex-wrap items-center gap-1.5">
       {sellers > 1 ? (
         <span>
-          Cheapest of {sellers} {t("shop.sellers")}
+          {t("shop.cheapestOf")} {sellers} {t("shop.sellers")}
         </span>
       ) : (
-        <span>1 seller</span>
+        <span>{t("shop.oneSeller")}</span>
       )}
       {offer?.verified && <VerifiedBadge verified />}
     </span>
@@ -171,7 +171,7 @@ export function ProductCard({ product: p, className, layout = "grid" }: { produc
       onClick={onAdd}
       loading={adding}
       disabled={!purchasable || busy}
-      title={!offer ? "No purchasable offer" : !purchasable ? "Reference price — not purchasable" : undefined}
+      title={!offer ? t("shop.noPurchasableOffer") : !purchasable ? t("product.referenceNotPurchasable") : undefined}
     >
       {t("shop.addToCart")}
     </Button>
@@ -200,7 +200,7 @@ export function ProductCard({ product: p, className, layout = "grid" }: { produc
                     {" · "}
                   </>
                 ) : null}
-                SKU {p.sku} · per {p.unit}
+                {t("product.sku")} {p.sku} · {t("shop.per")} {p.unit}
               </p>
             </div>
             <StockPill offer={offer} inStock={p.inStock} />
@@ -234,7 +234,7 @@ export function ProductCard({ product: p, className, layout = "grid" }: { produc
         </Link>
         {altName && <p className="mt-0.5 truncate text-xs text-slate-500">{altName}</p>}
         <p className="mt-1 truncate text-xs text-slate-400">
-          {p.brand ? `${p.brand} · ` : ""}per {p.unit}
+          {p.brand ? `${p.brand} · ` : ""}{t("shop.per")} {p.unit}
         </p>
         <RatingLine average={p.ratingAvg} count={p.ratingCount} className="mt-1" />
         <div className="mt-3">
@@ -250,8 +250,9 @@ export function ProductCard({ product: p, className, layout = "grid" }: { produc
 }
 
 /** Horizontal, scroll-snapping rail of product cards. */
-export function ProductRail({ products, emptyText = "Nothing here yet." }: { products: ShopProduct[]; emptyText?: string }) {
-  if (products.length === 0) return <p className="py-8 text-center text-sm text-slate-500">{emptyText}</p>;
+export function ProductRail({ products, emptyText }: { products: ShopProduct[]; emptyText?: string }) {
+  const { t } = useI18n();
+  if (products.length === 0) return <p className="py-8 text-center text-sm text-slate-500">{emptyText ?? t("shop.nothingHere")}</p>;
   return (
     <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
       <div className="flex snap-x snap-mandatory gap-4">
@@ -265,7 +266,8 @@ export function ProductRail({ products, emptyText = "Nothing here yet." }: { pro
   );
 }
 
-export function SectionHeading({ title, subtitle, href, linkLabel = "View all" }: { title: React.ReactNode; subtitle?: React.ReactNode; href?: string; linkLabel?: string }) {
+export function SectionHeading({ title, subtitle, href, linkLabel }: { title: React.ReactNode; subtitle?: React.ReactNode; href?: string; linkLabel?: string }) {
+  const { t } = useI18n();
   return (
     <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
       <div>
@@ -274,7 +276,7 @@ export function SectionHeading({ title, subtitle, href, linkLabel = "View all" }
       </div>
       {href && (
         <Link href={href} className="text-sm font-semibold text-brand-700 hover:underline">
-          {linkLabel} →
+          {linkLabel ?? t("common.viewAll")} →
         </Link>
       )}
     </div>

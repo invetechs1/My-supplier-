@@ -7,6 +7,7 @@ import { errorMessage } from "@/lib/api";
 import { marketplaceApi, removeMaterialFromLists } from "@/lib/api/marketplace";
 import { useAuth } from "@/lib/auth";
 import { useCart } from "@/lib/cart";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/format";
 import { Button, Input, Spinner } from "@/components/ui";
 
@@ -27,6 +28,7 @@ function HeartIcon({ filled, className }: { filled: boolean; className?: string 
  * Guests get a link to sign in.
  */
 export function WishlistButton({ materialId, listingId, quantity, className }: { materialId: string; listingId?: string | null; quantity?: number; className?: string }) {
+  const { t } = useI18n();
   const { user } = useAuth();
   const { notify } = useCart();
   const [saved, setSaved] = useState(false);
@@ -74,7 +76,7 @@ export function WishlistButton({ materialId, listingId, quantity, className }: {
     try {
       setLists(await marketplaceApi.wishlists());
     } catch (err) {
-      setListsError(errorMessage(err, "Could not load your lists."));
+      setListsError(errorMessage(err, t("product.couldNotLoadLists")));
     }
   };
 
@@ -86,15 +88,15 @@ export function WishlistButton({ materialId, listingId, quantity, className }: {
         await removeMaterialFromLists(materialId, listIds);
         setSaved(false);
         setListIds([]);
-        notify({ kind: "info", message: "Removed from your lists" });
+        notify({ kind: "info", message: t("product.removedFromLists") });
       } else {
         await marketplaceApi.addWishlistItem("default", { materialId, listingId: listingId ?? undefined, quantity: quantity && quantity > 0 ? quantity : undefined });
         setSaved(true);
-        notify({ kind: "success", message: "Saved to your list", actionHref: "/dashboard/lists", actionLabel: "View lists" });
+        notify({ kind: "success", message: t("product.savedToList"), actionHref: "/dashboard/lists", actionLabel: t("product.viewLists") });
         void refresh();
       }
     } catch (err) {
-      notify({ kind: "error", message: errorMessage(err, "Could not update your list.") });
+      notify({ kind: "error", message: errorMessage(err, t("product.couldNotUpdateList")) });
     } finally {
       setBusy(false);
     }
@@ -106,10 +108,10 @@ export function WishlistButton({ materialId, listingId, quantity, className }: {
       await marketplaceApi.addWishlistItem(listId, { materialId, listingId: listingId ?? undefined, quantity: quantity && quantity > 0 ? quantity : undefined });
       setSaved(true);
       setMenuOpen(false);
-      notify({ kind: "success", message: `Saved to “${name}”`, actionHref: "/dashboard/lists", actionLabel: "View lists" });
+      notify({ kind: "success", message: `${t("product.savedTo")} “${name}”`, actionHref: "/dashboard/lists", actionLabel: t("product.viewLists") });
       void refresh();
     } catch (err) {
-      notify({ kind: "error", message: errorMessage(err, "Could not save to this list.") });
+      notify({ kind: "error", message: errorMessage(err, t("product.couldNotSaveToList")) });
     } finally {
       setBusy(false);
     }
@@ -125,16 +127,16 @@ export function WishlistButton({ materialId, listingId, quantity, className }: {
       setLists((prev) => [...(prev ?? []), list]);
       await saveTo(list.id, list.name);
     } catch (err) {
-      notify({ kind: "error", message: errorMessage(err, "Could not create the list.") });
+      notify({ kind: "error", message: errorMessage(err, t("product.couldNotCreateList")) });
       setBusy(false);
     }
   };
 
   if (!user) {
     return (
-      <Link href="/login" className={cn("inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50", className)} title="Sign in to save products">
+      <Link href="/login" className={cn("inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50", className)} title={t("product.signInToSave")}>
         <HeartIcon filled={false} />
-        Save
+        {t("product.saveItem")}
       </Link>
     );
   }
@@ -146,12 +148,12 @@ export function WishlistButton({ materialId, listingId, quantity, className }: {
         onClick={toggle}
         disabled={busy}
         aria-pressed={saved}
-        aria-label={saved ? "Remove from saved items" : "Save to your list"}
-        title={saved ? "Saved — click to remove" : "Save"}
+        aria-label={saved ? t("product.removeFromSaved") : t("product.saveToYourList")}
+        title={saved ? t("product.savedClickRemove") : t("product.saveItem")}
         className={cn("inline-flex h-10 items-center gap-2 rounded-s-xl border border-slate-300 bg-white px-3 text-sm font-medium transition hover:bg-slate-50 disabled:opacity-60", saved ? "text-red-600" : "text-slate-700")}
       >
         {busy ? <Spinner size="sm" className="text-current" /> : <HeartIcon filled={saved} />}
-        <span className="hidden sm:inline">{saved ? "Saved" : "Save"}</span>
+        <span className="hidden sm:inline">{saved ? t("product.saved") : t("product.saveItem")}</span>
       </button>
       <button
         type="button"
@@ -161,7 +163,7 @@ export function WishlistButton({ materialId, listingId, quantity, className }: {
         }}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
-        aria-label="Save to list…"
+        aria-label={t("product.saveToListMenu")}
         className="inline-flex h-10 items-center rounded-e-xl border border-s-0 border-slate-300 bg-white px-2 text-slate-600 hover:bg-slate-50"
       >
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
@@ -170,17 +172,17 @@ export function WishlistButton({ materialId, listingId, quantity, className }: {
       </button>
       {menuOpen && (
         <div role="menu" className="absolute end-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-          <p className="border-b border-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Save to list</p>
+          <p className="border-b border-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("product.saveToList")}</p>
           {!lists && !listsError && (
             <div className="flex items-center gap-2 px-4 py-3 text-sm text-slate-500">
-              <Spinner size="sm" /> Loading lists…
+              <Spinner size="sm" /> {t("product.loadingLists")}
             </div>
           )}
           {listsError && (
             <div className="px-4 py-3 text-sm text-red-600">
               {listsError}{" "}
               <button type="button" className="font-semibold underline" onClick={loadLists}>
-                Retry
+                {t("common.retry")}
               </button>
             </div>
           )}
@@ -193,9 +195,9 @@ export function WishlistButton({ materialId, listingId, quantity, className }: {
                     <button type="button" role="menuitem" disabled={busy} onClick={() => saveTo(l.id, l.name)} className="flex w-full items-center justify-between gap-2 px-4 py-2 text-start text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60">
                       <span className="truncate">
                         {l.name}
-                        {l.isDefault && <span className="ms-1 text-xs text-slate-400">(default)</span>}
+                        {l.isDefault && <span className="ms-1 text-xs text-slate-400">{t("product.defaultList")}</span>}
                       </span>
-                      <span className="shrink-0 text-xs text-slate-400">{inList ? "Saved" : `${l.itemCount ?? 0}`}</span>
+                      <span className="shrink-0 text-xs text-slate-400">{inList ? t("product.saved") : `${l.itemCount ?? 0}`}</span>
                     </button>
                   </li>
                 );
@@ -209,13 +211,13 @@ export function WishlistButton({ materialId, listingId, quantity, className }: {
               void createAndSave();
             }}
           >
-            <Input name="new-list" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New list name" aria-label="New list name" maxLength={80} className="flex-1" />
+            <Input name="new-list" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t("product.newListName")} aria-label={t("product.newListName")} maxLength={80} className="flex-1" />
             <Button type="submit" size="sm" disabled={busy || !newName.trim()}>
-              Create
+              {t("common.create")}
             </Button>
           </form>
           <Link href="/dashboard/lists" className="block border-t border-slate-100 px-4 py-2 text-xs font-semibold text-brand-700 hover:bg-slate-50" onClick={() => setMenuOpen(false)}>
-            Manage lists →
+            {t("product.manageLists")}
           </Link>
         </div>
       )}

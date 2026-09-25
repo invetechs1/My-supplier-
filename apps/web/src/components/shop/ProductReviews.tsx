@@ -7,7 +7,7 @@ import { errorMessage } from "@/lib/api";
 import { marketplaceApi, type ReviewSort } from "@/lib/api/marketplace";
 import { useAuth } from "@/lib/auth";
 import { useAsync } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { cn, formatDate } from "@/lib/format";
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, Input, LoadingBlock, Modal, Pagination, Select, Stars, Textarea } from "@/components/ui";
 
@@ -34,6 +34,7 @@ function rememberHelpful(id: string) {
 
 /** Average + distribution bars (5 → 1). Clicking a bar is purely visual; the list has its own sort. */
 export function RatingSummary({ summary, compact }: { summary: ProductReviewSummary; compact?: boolean }) {
+  const { t } = useI18n();
   const total = summary.count || 0;
   return (
     <div className={cn("flex gap-6", compact ? "flex-col" : "flex-col sm:flex-row sm:items-center")}>
@@ -41,17 +42,17 @@ export function RatingSummary({ summary, compact }: { summary: ProductReviewSumm
         <p className="text-4xl font-bold tabular-nums text-slate-900">{total ? summary.average.toFixed(1) : "—"}</p>
         <Stars value={summary.average} size="md" className="justify-center sm:justify-start" />
         <p className="mt-1 text-xs text-slate-500">
-          {total} {total === 1 ? "review" : "reviews"}
+          {total} {total === 1 ? t("reviews.one") : t("reviews.many")}
         </p>
       </div>
-      <ul className="flex-1 space-y-1.5" aria-label="Rating distribution">
+      <ul className="flex-1 space-y-1.5" aria-label={t("reviews.distribution")}>
         {([5, 4, 3, 2, 1] as const).map((star) => {
           const n = summary.distribution?.[star] ?? 0;
           const pct = total ? Math.round((n / total) * 100) : 0;
           return (
             <li key={star} className="flex items-center gap-2 text-xs text-slate-600">
               <span className="w-8 shrink-0 tabular-nums">{star}★</span>
-              <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`${star} stars: ${n} reviews`}>
+              <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`${star} ${t("reviews.stars")}: ${n} ${t("reviews.many")}`}>
                 <div className="h-full rounded-full bg-amber-500" style={{ width: `${pct}%` }} />
               </div>
               <span className="w-10 shrink-0 text-end tabular-nums text-slate-400">{pct}%</span>
@@ -64,8 +65,8 @@ export function RatingSummary({ summary, compact }: { summary: ProductReviewSumm
 }
 
 function ReviewItem({ review, onHelpful, voted }: { review: ProductReview; onHelpful: (id: string) => void; voted: boolean }) {
-  const { lang } = useI18n();
-  const author = review.user?.name ?? "Buyer";
+  const { t, lang } = useI18n();
+  const author = review.user?.name ?? t("reviews.buyer");
   return (
     <li className="py-5 first:pt-0 last:pb-0">
       <div className="flex flex-wrap items-center gap-2">
@@ -77,14 +78,14 @@ function ReviewItem({ review, onHelpful, voted }: { review: ProductReview; onHel
         {review.user?.companyName ? ` · ${review.user.companyName}` : ""} · {formatDate(review.createdAt, lang)}
         {review.verified && (
           <Badge tone="green" className="ms-2">
-            Verified purchase
+            {t("reviews.verifiedPurchase")}
           </Badge>
         )}
       </p>
       {review.body && <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700">{review.body}</p>}
       {review.supplierReply && (
         <div className="mt-3 rounded-lg border-s-4 border-brand-600 bg-brand-50/60 px-4 py-3 text-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Supplier reply</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">{t("reviews.supplierReply")}</p>
           <p className="mt-1 whitespace-pre-line text-slate-700">{review.supplierReply}</p>
         </div>
       )}
@@ -93,21 +94,22 @@ function ReviewItem({ review, onHelpful, voted }: { review: ProductReview; onHel
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
             <path d="M1 8.25a1.25 1.25 0 112.5 0v7.5a1.25 1.25 0 11-2.5 0v-7.5zM11 3V1.7c0-.268.14-.526.395-.607A2 2 0 0114 3c0 .995-.182 1.948-.514 2.826-.204.54.166 1.174.744 1.174h2.52c1.243 0 2.261 1.01 2.146 2.247a23.864 23.864 0 01-1.341 5.974C17.153 16.323 16.072 17 14.9 17h-3.192a3 3 0 01-1.341-.317l-2.734-1.366A3 3 0 006.292 15H5V8h.963c.685 0 1.258-.483 1.612-1.068a4.011 4.011 0 012.166-1.73c.432-.143.853-.386 1.011-.814.16-.432.248-.9.248-1.388z" />
           </svg>
-          Helpful{review.helpful > 0 ? ` (${review.helpful})` : ""}
+          {t("reviews.helpful")}{review.helpful > 0 ? ` (${review.helpful})` : ""}
         </button>
-        {voted && <span>Thanks for your feedback</span>}
+        {voted && <span>{t("reviews.thanksFeedback")}</span>}
       </div>
     </li>
   );
 }
 
-const REVIEW_SORTS: { value: ReviewSort; label: string }[] = [
-  { value: "recent", label: "Most recent" },
-  { value: "helpful", label: "Most helpful" },
-  { value: "rating", label: "Highest rating" },
+const REVIEW_SORTS: { value: ReviewSort; labelKey: TranslationKey }[] = [
+  { value: "recent", labelKey: "reviews.sortRecent" },
+  { value: "helpful", labelKey: "reviews.sortHelpful" },
+  { value: "rating", labelKey: "reviews.sortRating" },
 ];
 
 export function ProductReviews({ productId, initialSummary, onSummaryChange }: { productId: string; initialSummary: ProductReviewSummary; onSummaryChange?: (s: ProductReviewSummary) => void }) {
+  const { t } = useI18n();
   const { user } = useAuth();
   const [sort, setSort] = useState<ReviewSort>("recent");
   const [page, setPage] = useState(1);
@@ -148,7 +150,7 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
 
   const submitReview = async () => {
     if (rating < 1) {
-      setFormError("Pick a star rating.");
+      setFormError(t("reviews.pickRating"));
       return;
     }
     setSaving(true);
@@ -168,7 +170,7 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
       const fresh = await marketplaceApi.reviews(productId, { pageSize: 1 }).catch(() => null);
       if (fresh && onSummaryChange) onSummaryChange(fresh.summary);
     } catch (err) {
-      setFormError(errorMessage(err, "Could not post your review."));
+      setFormError(errorMessage(err, t("reviews.couldNotPost")));
     } finally {
       setSaving(false);
     }
@@ -177,16 +179,16 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
   return (
     <Card id="reviews" className="scroll-mt-24">
       <CardHeader
-        title={`Customer reviews${summary.count ? ` (${summary.count})` : ""}`}
-        subtitle="Only buyers can review; verified badges mark confirmed purchases."
+        title={`${t("reviews.title")}${summary.count ? ` (${summary.count})` : ""}`}
+        subtitle={t("reviews.subtitle")}
         action={
           canReview ? (
             <Button size="sm" variant={mine ? "outline" : "primary"} onClick={openWrite}>
-              {mine ? "Edit your review" : "Write a review"}
+              {mine ? t("reviews.edit") : t("reviews.write")}
             </Button>
           ) : !user ? (
             <Link href="/login" className="text-sm font-semibold text-brand-700 hover:underline">
-              Sign in to review
+              {t("reviews.signIn")}
             </Link>
           ) : null
         }
@@ -196,20 +198,20 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
           <RatingSummary summary={summary} compact />
           {posted && (
             <Alert kind="success" className="mt-4">
-              Thanks — your review is live.
+              {t("reviews.posted")}
             </Alert>
           )}
           {mine && !posted && (
             <p className="mt-4 text-xs text-slate-500">
-              You reviewed this product on {new Date(mine.createdAt).toLocaleDateString()} ({mine.rating}/5).{" "}
-              <button type="button" className="font-semibold text-brand-700 hover:underline" onClick={openWrite}>Edit</button>
+              {t("reviews.youReviewedOn")} {new Date(mine.createdAt).toLocaleDateString()} ({mine.rating}/5).{" "}
+              <button type="button" className="font-semibold text-brand-700 hover:underline" onClick={openWrite}>{t("common.edit")}</button>
             </p>
           )}
         </div>
         <div className="min-w-0">
           <div className="mb-3 flex items-center justify-end gap-2">
             <label htmlFor="review-sort" className="text-sm text-slate-500">
-              Sort
+              {t("materials.sort")}
             </label>
             <Select
               id="review-sort"
@@ -219,7 +221,7 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
                 setSort(e.target.value as ReviewSort);
                 setPage(1);
               }}
-              options={REVIEW_SORTS}
+              options={REVIEW_SORTS.map((s) => ({ value: s.value, label: t(s.labelKey) }))}
               className="w-44"
             />
           </div>
@@ -228,7 +230,7 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
           ) : reviews.error ? (
             <Alert onRetry={reviews.reload}>{reviews.error}</Alert>
           ) : (reviews.data?.data.length ?? 0) === 0 ? (
-            <EmptyState title="No reviews yet" description={canReview ? "Bought this product? Be the first to share how it performed." : "Reviews from buyers will appear here."} action={canReview ? <Button variant="outline" onClick={openWrite}>{mine ? "Edit your review" : "Write the first review"}</Button> : undefined} />
+            <EmptyState title={t("reviews.none")} description={canReview ? t("reviews.beFirst") : t("reviews.willAppear")} action={canReview ? <Button variant="outline" onClick={openWrite}>{mine ? t("reviews.edit") : t("reviews.writeFirst")}</Button> : undefined} />
           ) : (
             <>
               <ul className="divide-y divide-slate-100">
@@ -244,28 +246,28 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
 
       <Modal
         open={writeOpen}
-        title={mine ? "Edit your review" : "Write a review"}
+        title={mine ? t("reviews.edit") : t("reviews.write")}
         onClose={() => setWriteOpen(false)}
         footer={
           <>
             <Button variant="ghost" onClick={() => setWriteOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button onClick={submitReview} loading={saving}>
-              {mine ? "Save changes" : "Post review"}
+              {mine ? t("reviews.saveChanges") : t("reviews.post")}
             </Button>
           </>
         }
       >
         <div className="space-y-4">
           <div>
-            <p className="mb-1 block text-sm font-medium text-slate-700">Your rating</p>
+            <p className="mb-1 block text-sm font-medium text-slate-700">{t("reviews.yourRating")}</p>
             <Stars value={rating} onChange={setRating} size="lg" />
           </div>
-          <Input name="review-title" label="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="Sum it up in a few words" />
-          <Textarea name="review-body" label="Review (optional)" value={body} onChange={(e) => setBody(e.target.value)} maxLength={4000} placeholder="Quality, delivery, packaging, how it performed on site…" />
+          <Input name="review-title" label={t("reviews.titleOptional")} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder={t("reviews.titlePlaceholder")} />
+          <Textarea name="review-body" label={t("reviews.bodyOptional")} value={body} onChange={(e) => setBody(e.target.value)} maxLength={4000} placeholder={t("reviews.bodyPlaceholder")} />
           {formError && <Alert>{formError}</Alert>}
-          <p className="text-xs text-slate-500">One review per product. If you have ordered this product, your review is marked as a verified purchase.</p>
+          <p className="text-xs text-slate-500">{t("reviews.oneNote")}</p>
         </div>
       </Modal>
     </Card>
