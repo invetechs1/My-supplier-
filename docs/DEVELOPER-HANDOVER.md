@@ -16,7 +16,7 @@ Read this document top to bottom once, then work through section 6 in the order 
 
 | Area | Status | Notes |
 |---|---|---|
-| Public catalogue, price comparison, price history | **DONE** | 270 seeded materials incl. equipment and machinery, 23 demo suppliers, 32 categories |
+| Public catalogue, price comparison, price history | **DONE** | 1,305 seeded products across 62 categories (construction, MRO, facility, rental and services), 39 demo suppliers, 185 attribute definitions |
 | RFQ and bidding (buyer posts, suppliers bid, award creates order) | **DONE** | Notifications by in-app, push and email |
 | BOQ research (paste a bill of quantities, get prices per supplier) | **DONE** | Heuristic matcher plus optional AI extraction |
 | E-commerce storefront, cart, checkout, orders | **DONE** | Multi-supplier cart, VAT 15 percent, delivery fees, COD, bank transfer, card |
@@ -431,7 +431,7 @@ Work through these in order. Items A are required before anyone can pay you. Ite
 
 **Priority:** Medium    **Estimated effort:** 1 to 2 days
 
-**Why:** 270 materials and 32 categories (materials, equipment, machinery, safety, site facilities) cover the common items. Real supplier lists will contain items that need new materials or aliases so that BOQ matching stays accurate.
+**Why:** 1,305 products and 62 categories cover the sector broadly. Real supplier lists will contain items that need new materials or aliases so that BOQ matching stays accurate.
 
 **What to do:**
 
