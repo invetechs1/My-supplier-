@@ -208,7 +208,7 @@ function AdminAttributesInner() {
     { key: "filterable", header: "Filterable", render: (a) => <Toggle checked={a.filterable} onChange={() => toggleFilterable(a)} label={`${a.label} filterable`} /> },
     { key: "actions", header: "", align: "end", render: (a) => (
       <div className="flex justify-end gap-2">
-        <Button size="sm" variant="outline" onClick={() => openEdit(a)}>{t("common.edit")}</Button>
+        <Button size="sm" variant="outline" onClick={() => openEdit(a)}>Edit</Button>
         <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setDeleteTarget(a)}>{t("common.delete")}</Button>
       </div>
     ) },

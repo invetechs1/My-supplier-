@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import React, { Suspense, useEffect, useMemo, useState } from "react";
-import type { CompanyType } from "@mysupplier/shared";
 import { errorMessage } from "@/lib/api";
 import { supplierCommerceApi, type AdminCompanyRow } from "@/lib/api/supplierCommerce";
 import { useAsync, useFlash } from "@/lib/hooks";
@@ -251,4 +250,3 @@ export default function AdminCreditPage() {
   );
 }
 
-export type { CompanyType };

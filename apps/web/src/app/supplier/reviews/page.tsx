@@ -5,7 +5,7 @@ import React, { Suspense, useCallback, useEffect, useMemo, useState } from "reac
 import type { ProductQuestion, ProductReview, ProductReviewSummary } from "@mysupplier/shared";
 import { errorMessage } from "@/lib/api";
 import { supplierCommerceApi, type SupplierProductWithPricing } from "@/lib/api/supplierCommerce";
-import { useAsync, useFlash, type Flash } from "@/lib/hooks";
+import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { cn, formatDateTime, formatNumber, timeAgo } from "@/lib/format";
 import { Alert, Badge, Button, Card, EmptyState, FlashMessage, Input, LinkButton, LoadingBlock, PageHeader, Spinner, Stars, StatTile, Textarea, Toggle } from "@/components/ui";
@@ -347,8 +347,6 @@ function SupplierReviewsInner() {
   const weighted = rated.reduce((s, r) => s + (r.material.ratingAvg ?? 0) * (r.material.ratingCount ?? 0), 0);
   const ratedCount = rated.reduce((s, r) => s + (r.material.ratingCount ?? 0), 0);
   const catalogueAverage = ratedCount > 0 ? weighted / ratedCount : null;
-  const onFlash = (f: Flash) => setFlash(f);
-  void onFlash;
 
   return (
     <div>
