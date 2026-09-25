@@ -17,7 +17,7 @@ export type OrderPerspective = "buyer" | "supplier" | "admin";
 
 const FLOW: OrderStatus[] = ["PENDING", "CONFIRMED", "IN_TRANSIT", "DELIVERED"];
 
-const PAYMENT_LABEL: Record<PaymentMethod, string> = { COD: "Cash on delivery", BANK_TRANSFER: "Bank transfer", CARD: "Card" };
+const PAYMENT_LABEL: Record<PaymentMethod, string> = { COD: "Cash on delivery", BANK_TRANSFER: "Bank transfer", CARD: "Card", CREDIT: "Credit terms (net)" };
 
 /** Orders awarded from RFQs have no `type` on older API builds; infer it defensively. */
 export function orderType(o: OrderExtended): "RFQ" | "DIRECT" {

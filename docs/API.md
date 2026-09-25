@@ -269,3 +269,122 @@ Verification documents are now served only through `GET /supplier/company/docume
 | Admin | admin@mysupplier.sa | Admin123! |
 | Buyer | buyer@mysupplier.sa | Buyer123! |
 | Supplier | supplier@mysupplier.sa | Supplier123! |
+
+## B2B commerce
+Volume tiers & sales, address book, credit terms (net terms), reorder / buy again, returns (RMA) and recurring orders. Types live in `packages/shared/src/commerce.ts` (`CartItemPricing`, `Address`, `CreditInfo`, `ReturnRequest`, `RecurringOrder`, `FrequentlyOrderedItem`, `ReorderResult`, `CheckoutExtras`, …).
+
+### Pricing in the cart
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/cart` | Every item now carries `CartItemPricing`: `unitPrice` (effective), `basePrice`, `tierApplied { minQty, price } \| null`, `saleApplied`, `nextTier { minQty, price, savePerUnit } \| null` and the listing's `tiers`. Rule: live sale price wins, else the highest tier whose `minQty <= quantity`, else the base price. `lineTotal`/`subtotal` use the effective price; `savings` = total tier/sale saving; `credit` = `CreditInfo & { canCoverCart }` for the buyer's company (null without a company) |
+| POST | `/checkout` | `CheckoutPayload & CheckoutExtras`: `paymentMethod` now also `CREDIT`; `addressId` (saved address, fills `deliveryCity`/`deliveryAddress`/`contactPhone`, must belong to the buyer) and `poNumber` are stored on every order. Order items store the effective unit price. Coupon split, per-supplier shipments and stock reservation unchanged |
+
+### Supplier tiers & sales (role SUPPLIER)
+| Method | Path | Notes |
+|---|---|---|
+| PATCH | `/supplier/prices/:id` | also accepts `salePrice` (nullable, must be `< price`) and `saleEndsAt` (nullable date, future). Clearing `salePrice` clears `saleEndsAt`. Response includes `tiers` |
+| PUT | `/supplier/prices/:id/tiers` | `{ tiers: [{ minQty, price }] }` replaces the whole ladder; must be ascending `minQty > 1` with strictly decreasing prices below the base price (max 10). `[]` removes all tiers. -> listing with `tiers` |
+
+### Address book (any authenticated user)
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/addresses` | `Address[]` (default first) |
+| POST | `/addresses` | `AddressPayload` -> `Address` (first address becomes default) |
+| PATCH | `/addresses/:id` | partial `AddressPayload` |
+| DELETE | `/addresses/:id` | `{ ok: true }` (another address is promoted to default) |
+| POST | `/addresses/:id/default` | make default |
+
+### Credit terms (net terms)
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/me/credit` | `CreditInfo & { openOrders, overdue }` – `{ approved, limit, used, available, termsDays }` for the buyer's company |
+| GET | `/admin/companies/:id/credit` | `{ company, credit: CreditInfo, openOrders, overdue, settled }` |
+| PATCH | `/admin/companies/:id/credit` | `{ creditApproved?, creditLimit?, creditTermsDays? }` (audited, staff notified on approve/suspend) |
+| — | checkout with `paymentMethod: CREDIT` | allowed only when the buyer's company is `creditApproved` and `creditUsed + total <= creditLimit` (whole basket, re-checked inside the transaction). Orders get `paymentStatus UNPAID`, `dueDate = now + creditTermsDays`, and `Company.creditUsed` is incremented. `PATCH /orders/:id/payment { PAID }` (admin) and cancelling an unpaid credit order release the credit again; refunds on unpaid credit orders release the refunded amount |
+
+### Reorder / buy again
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/orders/:id/reorder` | buyer's own order: adds each line (original quantity) to the cart using the original listing or, when it is gone/unpurchasable, the cheapest current offer for the same material -> `ReorderResult { cart, added, skipped: [{ orderItemId, name, quantity, reason }] }` |
+| GET | `/orders/frequently-ordered?limit=20` | `FrequentlyOrderedItem[]`: top materials by quantity in the last 12 months with `orders`, `lastOrderedAt`, `lastUnitPrice` and the current `bestOffer` |
+
+### Returns / RMA
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/orders/:id/returns` | buyer, order `IN_TRANSIT` or `DELIVERED` within 14 days of delivery: `ReturnPayload { reason: DAMAGED\|DEFECTIVE\|WRONG_ITEM\|NOT_AS_DESCRIBED\|EXCESS\|OTHER, details?, items: [{ orderItemId, quantity }] }` (quantities net of earlier returns) -> `ReturnRequest` with reference `RET-YYYY-nnnnnn`; supplier notified, order event recorded |
+| GET | `/returns?status=&orderId=&page=` | `Paginated<ReturnRequest>` – buyer: own, supplier: company, admin: all |
+| GET | `/returns/:id` | `ReturnRequest & { estimatedRefund }` |
+| PATCH | `/returns/:id` | `ReturnUpdatePayload { status, resolution?, refundAmount? }`. Transitions: `REQUESTED -> APPROVED\|REJECTED\|CANCELLED`, `APPROVED -> RECEIVED\|REJECTED\|CANCELLED`, `RECEIVED -> REFUNDED`. Buyers may only `CANCELLED`. `RECEIVED` computes `refundAmount` (unit price × qty, minus pro-rata coupon discount, plus VAT; override may only lower it) and restocks the listing. `REFUNDED` (supplier or admin) records a `Payment` (`MANUAL`, `REFUNDED`, negative amount), sets the order `paymentStatus REFUNDED` when fully refunded, adds an order event and notifies the buyer |
+
+### Recurring orders (role BUYER, company profile required)
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/recurring` | `RecurringOrder[]` with `lastOrder` |
+| POST | `/recurring` | `RecurringOrderPayload { name, items: [{ listingId, quantity }], intervalDays 7..90, deliveryCity, deliveryAddress, contactPhone, paymentMethod: COD\|BANK_TRANSFER\|CREDIT, startAt? }` (lines validated against live offers; CREDIT requires approved terms). First run at `startAt` or now + interval |
+| PATCH | `/recurring/:id` | `RecurringOrderUpdatePayload` – edit any field, `active: false` pauses, `active: true` resumes (a missed schedule is moved to the next future slot), `nextRunAt` reschedules |
+| DELETE | `/recurring/:id` | `{ ok: true }` |
+| POST | `/recurring/:id/run-now` | places the orders immediately -> `RecurringRunResult & { total, recurringOrder }` |
+| — | scheduler | `runRecurringOrders(now)` (services/commerce.ts) creates one DIRECT order per supplier for every active due schedule exactly like checkout, skips lines no longer purchasable, sets `lastRunAt` / `lastOrderId` / `nextRunAt` and notifies the buyer (also on failure, e.g. credit exceeded) |
+
+## Product discovery
+Amazon-class search, browse and engagement on top of the shop. Offers everywhere (`bestOffer`, `offers[]`, cart) now carry `OfferPricing`: `salePrice` (live only: `saleEndsAt` null or in the future), `compareAtPrice` (list price while a sale is live), `effectivePrice` (what the buyer pays) and `tiers: [{ minQty, price }]` sorted by `minQty`. Product enrichment (`bestOffer`, `minPrice`, `avgPrice`, `isDeal`, price sorts/filters) uses effective prices. Shared types live in `packages/shared/src/marketplace.ts`.
+
+### Search, suggestions & brands (public)
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/shop/products?q=&categoryId=&city=&brand=&minPrice=&maxPrice=&inStock=1&rating=4&sort=relevance|price_asc|price_desc|rating|newest|popular&spec.<key>=value&page=` | `ProductSearchResponse`: paginated products + `facets` (`attributes` from the category's `CategoryAttribute`s with per-value counts for SELECT/TEXT/BOOLEAN and `min`/`max` for NUMBER, `brands`, `price` range, `cities`, `total`, `truncated`, `fuzzy`). `spec.<key>` matches `Material.specs` exactly (case-insensitive; repeat or comma-separate for OR), NUMBER keys accept `min..max`, `10..`, `..50`. `brand` may be comma separated; `rating` (alias `minRating`) is a >= filter. Filters and facet counts run in memory over a candidate set bounded to 5000 rows (`facets.truncated` flags the bound). When the exact ILIKE search returns fewer than 3 rows, pg_trgm similarity results are mixed in (`facets.fuzzy = true`), e.g. `q=cemnt` finds cement |
+| GET | `/shop/suggest?q=` | `ShopSuggestions`: up to 8 products `{ id, name, nameAr, sku, imageUrl, categoryName }` (prefix, then contains, then trigram fallback), up to 4 categories and 4 brands |
+| GET | `/shop/brands` | `BrandSummary[]`: `{ brand, productCount, imageUrl }` ordered by product count |
+| GET | `/shop/brands/:brand?page=&city=` | Paginated products of a brand (case-insensitive) + `brand: BrandSummary`; 404 when unknown |
+| GET | `/shop/products/:id?city=` | Now also returns `attributes` (`CategoryAttribute[]` for the spec table, category + parent), `reviewSummary { average, count, distribution }`, `questionsCount` and `frequentlyBoughtTogether` (top 6 materials co-ordered with it, padded with popular same-category items). Records `RecentlyViewed` for a logged-in user (last 50 kept) |
+| GET | `/shop/recommendations?city=` | `{ basis: "recently_viewed" | "popular", items: Product[] }`: logged in → popular items from the categories browsed recently (excluding already-viewed); public → popular |
+| GET | `/shop/recently-viewed?city=` | Auth. Last 24 viewed products (`viewedAt` added), newest first |
+
+### Category attributes (spec definitions)
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/categories/:slug/attributes` | Public. `CategoryAttribute[]` for the category (slug or id) plus inherited parent definitions |
+| GET/POST | `/admin/categories/:id/attributes` | Admin. `POST CategoryAttributePayload { key, label, labelAr, type: TEXT|NUMBER|SELECT|BOOLEAN, unit?, options[], filterable, sortOrder }`; `key` unique per category, SELECT requires options. Audited |
+| PATCH/DELETE | `/admin/attributes/:id` | Admin. Partial update / delete. Audited |
+
+### Product reviews
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/shop/products/:id/reviews?sort=recent|helpful|rating&page=` | Public. `ProductReviewsResponse` (hidden excluded) + `summary: ProductReviewSummary` |
+| POST | `/shop/products/:id/reviews` | BUYER. `ProductReviewPayload { rating 1..5, title?, body?, images? }`; one review per user per product (409 otherwise); `verified = true` when the buyer has a non-cancelled order containing the product. Recomputes `Material.ratingAvg/ratingCount` |
+| PATCH | `/shop/reviews/:id` | Author only: edit `rating/title/body/images` |
+| POST | `/shop/reviews/:id/helpful` | Public. Increments `helpful`, returns `{ id, helpful }` |
+| POST | `/supplier/reviews/:id/reply` | SUPPLIER whose company lists the product: `{ reply }` → `supplierReply`; the author is notified |
+| GET | `/admin/product-reviews?hidden=&q=&rating=&page=` | Admin moderation list + `summary { average, total, hidden }` |
+| PATCH/DELETE | `/admin/product-reviews/:id` | Admin. `PATCH { hidden }`; both recompute the product rating and are audited |
+
+### Product Q&A
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/shop/products/:id/questions?page=` | Public. `Paginated<ProductQuestion>` (hidden excluded; answered first) |
+| POST | `/shop/products/:id/questions` | Auth. `{ question }`; suppliers selling the product are notified |
+| POST | `/shop/questions/:id/answer` | SUPPLIER selling the product or ADMIN. `{ answer }`; the asker is notified (in-app, push, email) |
+| GET | `/admin/product-questions?hidden=&answered=&q=&page=` | Admin list |
+| PATCH/DELETE | `/admin/product-questions/:id` | Admin. `PATCH { hidden }`; audited |
+
+### Wishlists / project lists (auth)
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/wishlists` | `Wishlist[]` with `itemCount`; auto-creates the default "Saved items" list |
+| POST | `/wishlists` | `{ name }` (max 50 lists) |
+| GET | `/wishlists/contains?materialId=` | `WishlistContains { materialId, wishlistIds, saved }` for the heart icon |
+| GET | `/wishlists/:id?city=` | List with `items[]`, each `material` enriched with `bestOffer` |
+| PATCH/DELETE | `/wishlists/:id` | Rename / delete (not the default list) |
+| POST | `/wishlists/:id/items` | `WishlistItemPayload { materialId, listingId?, quantity?, note? }`; `:id` may be `default`; re-adding updates quantity/note |
+| PATCH/DELETE | `/wishlists/:id/items/:itemId` | Update `listingId/quantity/note` / remove |
+| POST | `/wishlists/:id/add-to-cart` | `{ city? }` → `WishlistAddToCartResult { added, skipped[{ materialId, reason }] }`: every item with a purchasable offer (its chosen `listingId` if still purchasable, else the best offer) is added to the cart with the same minQty/stock validation as `POST /cart/items` |
+
+### Price alerts (auth)
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/alerts` | `PriceAlert[]` with enriched `material` |
+| POST | `/alerts` | `PriceAlertPayload { materialId, targetPrice?, notifyBackInStock?, city? }`; one alert per product per user (upsert re-activates) |
+| DELETE | `/alerts/:id` | Remove |
+| job | `runPriceAlerts()` (`services/marketplace.ts`) | Scheduled by the app: deactivates and notifies (`SYSTEM`, link to the product) when the best effective price in the alert's city is <= `targetPrice`, or when `notifyBackInStock` and a purchasable offer exists |
+
+Migration `20260925140000_pg_trgm_search` enables `pg_trgm` and adds GIN trigram indexes on `Material.name`, `nameAr` and `brand`.

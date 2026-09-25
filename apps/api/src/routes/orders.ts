@@ -9,6 +9,7 @@ import { serialize } from "../lib/serialize";
 import { paged, paginate } from "../lib/pagination";
 import { companyUserIds, notify } from "../services/notifications";
 import { applyStockMovement, recordOrderEvent, requireCompanyRole } from "../services/portal";
+import { frequentlyOrdered, releaseCredit } from "../services/commerce";
 
 const router = Router();
 
@@ -19,6 +20,8 @@ const orderInclude = {
   rfq: { include: { items: { include: { material: true } } } },
   bid: { include: { items: true } },
   buyer: { select: { id: true, name: true, email: true, phone: true, company: true } },
+  address: true,
+  returns: { select: { id: true, reference: true, status: true, refundAmount: true, createdAt: true } },
 } satisfies Prisma.OrderInclude;
 
 function scope(req: Request): Prisma.OrderWhereInput {
@@ -40,6 +43,16 @@ router.get(
       prisma.order.findMany({ where, include: orderInclude, orderBy: { createdAt: "desc" }, skip, take }),
     ]);
     res.json(paged(serialize(orders), page, pageSize, total));
+  }),
+);
+
+/** "Buy again": the buyer's top materials by quantity over the last 12 months with the current best offer. Declared before /orders/:id. */
+router.get(
+  "/orders/frequently-ordered",
+  requireAuth(),
+  asyncHandler(async (req, res) => {
+    const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(50).default(20) }).parse(req.query);
+    res.json(serialize(await frequentlyOrdered(req.user!.id, limit)));
   }),
 );
 
@@ -77,8 +90,9 @@ router.patch(
     const updated = await prisma.order.update({ where: { id: order.id }, data: { status }, include: orderInclude });
     await recordOrderEvent(order.id, "STATUS", { status, userId: user.id });
     if (status === "CANCELLED") {
-      // Return reserved stock to the shelf.
+      // Return reserved stock to the shelf and free the buyer's credit line for unpaid net-terms orders.
       for (const item of updated.items) if (item.listingId) await applyStockMovement(item.listingId, "RELEASE", item.quantity, { reason: `Order ${order.reference} cancelled`, orderId: order.id, userId: user.id }).catch(() => undefined);
+      if (order.paymentMethod === "CREDIT" && order.paymentStatus === "UNPAID") await releaseCredit(order.id).catch(() => undefined);
     }
     const recipients = user.role === "BUYER" ? await companyUserIds([order.companyId]) : [order.buyerId];
     await notify({
@@ -107,11 +121,14 @@ router.patch(
     if (!order) throw notFound("Order not found");
     if (order.paymentStatus === "REFUNDED") throw badRequest("Refunded orders cannot be changed");
     if (req.user!.role !== "ADMIN") {
-      if (order.paymentMethod !== "COD") throw forbidden("Only cash-on-delivery payments can be confirmed by the supplier; bank transfers are confirmed by MySupplier");
+      if (order.paymentMethod !== "COD") throw forbidden("Only cash-on-delivery payments can be confirmed by the supplier; bank transfers and credit-terms settlements are confirmed by MySupplier");
       if (paymentStatus === "PAID" && order.status !== "DELIVERED") throw badRequest("Confirm cash collection after the order is delivered");
     }
     const updated = await prisma.order.update({ where: { id: order.id }, data: { paymentStatus }, include: orderInclude });
-    await recordOrderEvent(order.id, "PAYMENT", { message: `Payment ${paymentStatus.toLowerCase()}`, userId: req.user!.id });
+    // Net-terms settlement: paying a CREDIT order frees the company's credit line again.
+    let released = 0;
+    if (order.paymentMethod === "CREDIT" && paymentStatus === "PAID" && order.paymentStatus !== "PAID") released = await releaseCredit(order.id);
+    await recordOrderEvent(order.id, "PAYMENT", { message: `Payment ${paymentStatus.toLowerCase()}${released ? ` · SAR ${released.toLocaleString("en-US")} credit released` : ""}`, userId: req.user!.id });
     await notify({ userIds: [order.buyerId], type: "ORDER_UPDATE", title: `Order ${order.reference} marked ${paymentStatus.toLowerCase()}`, body: `Updated by ${req.user!.name}.`, link: `/dashboard/orders/${order.id}` });
     res.json(serialize(updated));
   }),

@@ -32,6 +32,7 @@ import shippingRoutes from "./routes/shipping";
 import einvoiceRoutes from "./routes/einvoice";
 import adminCommerceRoutes from "./routes/adminCommerce";
 import supplierProductRoutes from "./routes/supplierProducts";
+import commerceRoutes from "./routes/commerce";
 
 export function createApp() {
   initSentry();
@@ -54,6 +55,7 @@ export function createApp() {
   api.use(boqRoutes);
   api.use(shopRoutes);
   api.use(cartRoutes);
+  api.use(commerceRoutes);
   api.use(feedRoutes);
   api.use(paymentRoutes);
   api.use(deviceRoutes);

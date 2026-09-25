@@ -394,7 +394,7 @@ export interface BoqToRfqPayload {
 // Shop / e-commerce ---------------------------------------------------------------
 
 export type OrderType = "RFQ" | "DIRECT";
-export type PaymentMethod = "COD" | "BANK_TRANSFER" | "CARD";
+export type PaymentMethod = "COD" | "BANK_TRANSFER" | "CARD" | "CREDIT";
 export type PaymentStatus = "UNPAID" | "PAID" | "REFUNDED";
 export type MaterialSource = "CURATED" | "SUPPLIER" | "FEED";
 

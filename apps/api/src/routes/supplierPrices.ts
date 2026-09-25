@@ -3,11 +3,12 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/errorHandler";
 import { requireAuth, requireCompany } from "../middleware/auth";
-import { notFound } from "../lib/errors";
+import { badRequest, notFound } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import { paged, paginate } from "../lib/pagination";
 import { snapshotHistory } from "../services/catalog";
 import { importCatalog, type ImportRow } from "../services/catalogImport";
+import { validateTiers } from "../services/commerce";
 
 const router = Router();
 
@@ -32,6 +33,8 @@ async function upsertPrice(companyId: string, p: z.infer<typeof priceSchema>) {
   });
 }
 
+const listingInclude = { material: { include: { category: true } }, tiers: { orderBy: { minQty: "asc" as const } } };
+
 router.get(
   "/supplier/prices",
   requireAuth("SUPPLIER"),
@@ -41,7 +44,7 @@ router.get(
     const where = { companyId };
     const [total, listings] = await Promise.all([
       prisma.priceListing.count({ where }),
-      prisma.priceListing.findMany({ where, include: { material: { include: { category: true } } }, orderBy: { updatedAt: "desc" }, skip, take }),
+      prisma.priceListing.findMany({ where, include: listingInclude, orderBy: { updatedAt: "desc" }, skip, take }),
     ]);
     res.json(paged(serialize(listings), page, pageSize, total));
   }),
@@ -97,18 +100,56 @@ router.delete(
   }),
 );
 
+/** Edit an offer: price, stock, MOQ, lead time, validity, pause/resume, and a time-boxed sale price (must be below the base price). */
 router.patch(
   "/supplier/prices/:id",
   requireAuth("SUPPLIER"),
   asyncHandler(async (req, res) => {
     const companyId = requireCompany(req);
     const data = z
-      .object({ price: z.coerce.number().positive().optional(), stock: z.coerce.number().int().nonnegative().nullable().optional(), minQty: z.coerce.number().positive().optional(), leadTimeDays: z.coerce.number().int().min(0).optional(), validUntil: z.coerce.date().nullable().optional(), active: z.boolean().optional() })
+      .object({
+        price: z.coerce.number().positive().optional(), stock: z.coerce.number().int().nonnegative().nullable().optional(), minQty: z.coerce.number().positive().optional(),
+        leadTimeDays: z.coerce.number().int().min(0).optional(), validUntil: z.coerce.date().nullable().optional(), active: z.boolean().optional(),
+        salePrice: z.coerce.number().positive().nullable().optional(), saleEndsAt: z.coerce.date().nullable().optional(),
+      })
       .parse(req.body);
+    const listing = await prisma.priceListing.findUnique({ where: { id: req.params.id }, include: { tiers: true } });
+    if (!listing || listing.companyId !== companyId) throw notFound("Listing not found");
+    const basePrice = data.price ?? Number(listing.price);
+    const salePrice = data.salePrice === undefined ? (listing.salePrice === null ? null : Number(listing.salePrice)) : data.salePrice;
+    if (salePrice !== null && salePrice >= basePrice) throw badRequest("Sale price must be lower than the base price");
+    if (data.saleEndsAt && data.saleEndsAt < new Date()) throw badRequest("Sale end date must be in the future");
+    if (data.price !== undefined && listing.tiers.length) {
+      const err = validateTiers(listing.tiers.map((t) => ({ minQty: t.minQty, price: Number(t.price) })), data.price);
+      if (err) throw badRequest(`New price conflicts with volume tiers: ${err}`);
+    }
+    const updated = await prisma.priceListing.update({
+      where: { id: listing.id },
+      data: { ...data, ...(data.salePrice === null ? { saleEndsAt: null } : {}) },
+      include: listingInclude,
+    });
+    if (data.price !== undefined) await snapshotHistory([listing.materialId]);
+    res.json(serialize(updated));
+  }),
+);
+
+/** Replace the volume-discount ladder of an offer: ascending minQty (> 1) with strictly decreasing prices below the base price. */
+router.put(
+  "/supplier/prices/:id/tiers",
+  requireAuth("SUPPLIER"),
+  asyncHandler(async (req, res) => {
+    const companyId = requireCompany(req);
+    const { tiers } = z.object({ tiers: z.array(z.object({ minQty: z.coerce.number().positive(), price: z.coerce.number().positive() })).max(10) }).parse(req.body);
     const listing = await prisma.priceListing.findUnique({ where: { id: req.params.id } });
     if (!listing || listing.companyId !== companyId) throw notFound("Listing not found");
-    const updated = await prisma.priceListing.update({ where: { id: listing.id }, data, include: { material: { include: { category: true } } } });
-    if (data.price !== undefined) await snapshotHistory([listing.materialId]);
+    const sorted = [...tiers].sort((a, b) => a.minQty - b.minQty);
+    const err = validateTiers(sorted, Number(listing.price));
+    if (err) throw badRequest(err);
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.listingTier.deleteMany({ where: { listingId: listing.id } });
+      if (sorted.length) await tx.listingTier.createMany({ data: sorted.map((t) => ({ listingId: listing.id, minQty: t.minQty, price: t.price })) });
+      return tx.priceListing.findUniqueOrThrow({ where: { id: listing.id }, include: listingInclude });
+    });
     res.json(serialize(updated));
   }),
 );
