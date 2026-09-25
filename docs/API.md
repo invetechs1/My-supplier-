@@ -263,6 +263,28 @@ Verification documents are now served only through `GET /supplier/company/docume
 | POST | `/contact` | Public, rate limited: `{ name, email, phone?, subject, message, orderRef? }` creates a support ticket and notifies admins |
 | GET | `/admin/contact?status=&q=&page=` | Support inbox with `summary` by status; `PATCH /admin/contact/:id { status, notes }` |
 
+## ERP integration
+Machine API for SAP, Oracle Fusion, Dynamics 365 BC, Odoo, Zoho or custom ERPs. Full OpenAPI 3.0 spec in [`docs/openapi.yaml`](./openapi.yaml), connection guide, sync patterns, signature samples and field mappings in [`docs/INTEGRATIONS.md`](./INTEGRATIONS.md).
+
+Authentication: `X-API-Key: msk_live_…` (or `Authorization: ApiKey …`). Keys belong to a company, carry scopes (`catalog:read`, `prices:write`, `stock:write`, `orders:read`, `orders:write`, `invoices:read`, `rfqs:read`, `rfqs:write`, `webhooks:manage`) and are rate limited to 600 req/min per key. `/integrations/v1/*` rejects JWT-only callers with 401.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET/POST | `/integrations/keys`, `POST /integrations/keys/:id/revoke` | JWT company OWNER/MANAGER or ADMIN (`?companyId=`): `{ name, scopes[], expiresAt? }` → `{ apiKey, key }` – plaintext key returned once (sha256 hash + 12-char prefix stored). Audited |
+| GET | `/integrations/scopes` | Available scopes with descriptions and webhook event names |
+| GET/POST | `/integrations/webhooks` | JWT manager or key with `webhooks:manage`: `{ url (https, public), events[] or ["*"], description? }` → `{ endpoint, secret }` (secret once); `PATCH /:id { url?, events?, description?, active? }`, `DELETE /:id`, `POST /:id/test` (signed `ping`), `GET /:id/deliveries?status=&page=`, `POST /integrations/deliveries/:id/retry` |
+| GET | `/integrations/v1/ping` | `{ ok, company, keyName, scopes, serverTime }` connection test |
+| GET | `/integrations/v1/catalog/categories`, `/catalog/materials?updatedSince=&categorySlug=&sku=&q=&page=`, `/catalog/prices?sku=&city=&limit=` | `catalog:read`: product master for SKU mapping; best active offers per SKU for buyer ERPs |
+| PUT | `/integrations/v1/prices` | `prices:write` (suppliers): up to 1000 rows `{ sku|materialId, city, price, minQty?, leadTimeDays?, validUntil?, salePrice?, stock?, active? }`, upsert on (sku, city), per-row `created|updated|error` results |
+| PUT | `/integrations/v1/stock` | `stock:write`: up to 1000 rows `{ sku+city | listingId, stock }` (absolute, ADJUST movement); low stock fires `stock.low` |
+| GET | `/integrations/v1/orders?since=&status=&paymentStatus=&poNumber=&page=`, `/orders/:reference` | `orders:read`: supplier's sales orders (ERP shape: buyer contact + company VAT/CR, shipTo, items with SKU, totals, e-invoice ids, shipments), sorted by `updatedAt` for incremental pulls |
+| PATCH | `/integrations/v1/orders/:reference/status` | `orders:write`: `{ status: CONFIRMED|PROCESSING|SHIPPED|IN_TRANSIT|DELIVERED|CANCELLED, trackingNumber?, trackingUrl?, carrierName?, note? }` – same transitions as `/orders/:id/status`, aliases PROCESSING→CONFIRMED, SHIPPED→IN_TRANSIT, idempotent replay, creates/updates a shipment when a tracking number is given |
+| GET | `/integrations/v1/purchases?since=…`, `/purchases/:reference` | `orders:read`: orders placed by the key's (buyer) company |
+| GET | `/integrations/v1/invoices?since=&side=sales|purchases&includeXml=` | `invoices:read`: ZATCA e-invoice records with order totals (UBL XML optional) |
+| GET/POST | `/integrations/v1/rfqs`, `GET /rfqs/:id`, `POST /rfqs/:id/bids` | `rfqs:read` / `rfqs:write`: suppliers see open RFQs (marketplace query, with `myBid`) and bid with the same payload as the JWT route; buyer companies list their own RFQs and create new ones (`items[].sku` resolves description/unit) |
+
+Webhooks: `POST` JSON `{ id, event, createdAt, data }` with `X-MySupplier-Event`, `X-MySupplier-Delivery`, `X-MySupplier-Timestamp` and `X-MySupplier-Signature: sha256=HMAC-SHA256(secret, timestamp + "." + body)`; 10 s timeout; retries after 1m, 5m, 30m, 2h, 12h then `FAILED`; `responseCode` and the first 2 KB of the response are kept in the delivery log. Events: `order.created`, `order.status_changed`, `order.paid`, `order.cancelled`, `payment.refunded`, `invoice.issued`, `rfq.created`, `bid.received`, `bid.accepted`, `stock.low`, `return.requested`, `ping`.
+
 ## Demo accounts (seed)
 | Role | Email | Password |
 |---|---|---|

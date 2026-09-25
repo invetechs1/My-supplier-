@@ -11,6 +11,7 @@ import { nextReference } from "../lib/reference";
 import { companyUserIds, notify } from "../services/notifications";
 import { bidTotal, rankBids } from "../services/pricing";
 import { recordOrderEvent } from "../services/portal";
+import { companyIdsOfUsers, emitOrderWebhook, emitWebhook } from "../services/webhooks";
 
 const router = Router();
 
@@ -104,6 +105,7 @@ router.post(
       body: `${body.items.length} item(s). Bidding closes ${body.closesAt.toISOString().slice(0, 10)}.`,
       link: `/supplier/marketplace/${rfq.id}`,
     });
+    await emitWebhook("rfq.created", suppliers.map((s) => s.id), { rfq: shapeRfq(rfq) });
     res.status(201).json(serialize({ ...shapeRfq(rfq), bidCount: 0, lowestBid: null }));
   }),
 );
@@ -292,6 +294,7 @@ router.post(
       body: `${bid.company.name} quoted SAR ${totalPrice.toLocaleString("en-US")} (delivery in ${body.deliveryDays} days).`,
       link: `/dashboard/rfqs/${rfq.id}`,
     });
+    await emitWebhook("bid.received", await companyIdsOfUsers([rfq.buyerId]), { bid, rfq: { id: rfq.id, reference: rfq.reference, title: rfq.title } });
     res.status(existing ? 200 : 201).json(serialize(bid));
   }),
 );
@@ -371,6 +374,8 @@ router.post(
       body: `Order ${reference} created for SAR ${Number(bid.totalPrice).toLocaleString("en-US")}. Please confirm it.`,
       link: `/supplier/orders/${order.id}`,
     });
+    await emitWebhook("bid.accepted", [bid.companyId], { bid: { id: bid.id, totalPrice: Number(bid.totalPrice), currency: bid.currency, deliveryDays: bid.deliveryDays }, rfq: { id: bid.rfq.id, reference: bid.rfq.reference, title: bid.rfq.title }, order: { id: order.id, reference: order.reference } });
+    await emitOrderWebhook("order.created", order.id, { source: "RFQ_AWARD" });
     const losers = await prisma.bid.findMany({ where: { rfqId: bid.rfqId, status: "REJECTED" }, select: { companyId: true } });
     const loserUsers = await companyUserIds(losers.map((l) => l.companyId));
     await notify({

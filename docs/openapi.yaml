@@ -1,0 +1,1087 @@
+openapi: 3.0.3
+info:
+  title: MySupplier Integration API
+  version: "1.0.0"
+  description: |
+    Machine-to-machine API for connecting an ERP (SAP, Oracle Fusion, Microsoft Dynamics 365, Odoo, Zoho or a custom
+    system) to the MySupplier construction-materials marketplace.
+
+    * **Supplier ERPs** push prices and stock, pull sales orders, push fulfilment status, read open RFQs and bid.
+    * **Buyer ERPs** pull purchases and invoices, create RFQs and look up best offers for a SKU.
+
+    All `/integrations/v1/*` routes require an API key (`X-API-Key: msk_live_…`). Keys are created by a company
+    owner/manager in the dashboard or via `POST /integrations/keys` (JWT). Every key belongs to one company and
+    carries scopes. Rate limit: 600 requests per minute per key (headers `RateLimit-*`).
+
+    Timestamps are ISO-8601 UTC. Money is in SAR with 2 decimals. Lists are paginated with `page` (1-based) and
+    `pageSize` (max 100) and return `{ data, page, pageSize, total }`.
+  contact:
+    name: MySupplier integrations
+    email: integrations@mysupplier.sa
+servers:
+  - url: https://api.mysupplier.sa/api/v1
+    description: Production
+  - url: http://localhost:4000/api/v1
+    description: Local development
+tags:
+  - name: Connection
+  - name: Catalog
+  - name: Supplier sync
+  - name: Orders
+  - name: Invoices
+  - name: RFQs & bids
+  - name: API keys (management)
+  - name: Webhooks (management)
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /integrations/v1/ping:
+    get:
+      tags: [Connection]
+      summary: Test the connection and see the key's company and scopes
+      responses:
+        "200":
+          description: Key is valid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ping" }
+              example:
+                ok: true
+                company: { id: "cmp_01", name: "Eastern Steel Trading", type: SUPPLIER, city: Dammam }
+                keyName: "SAP PRD"
+                scopes: [catalog:read, prices:write, stock:write, orders:read, orders:write]
+                serverTime: "2026-09-25T09:12:44.000Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /integrations/v1/catalog/categories:
+    get:
+      tags: [Catalog]
+      summary: List categories (two-level tree)
+      description: Scope `catalog:read`.
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Category" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /integrations/v1/catalog/materials:
+    get:
+      tags: [Catalog]
+      summary: List materials (the shared product master)
+      description: |
+        Scope `catalog:read`. Use `updatedSince` for incremental master-data sync: pass the `serverTime` of your last
+        successful run. Materials are the platform-wide product master; your ERP maps its item codes to our `sku`.
+      parameters:
+        - { name: updatedSince, in: query, schema: { type: string, format: date-time } }
+        - { name: categorySlug, in: query, schema: { type: string }, description: Category or parent-category slug }
+        - { name: sku, in: query, schema: { type: string }, description: Comma-separated SKUs (max 100) }
+        - { name: q, in: query, schema: { type: string }, description: Free-text search on name / SKU / brand }
+        - { name: includeInactive, in: query, schema: { type: string, enum: ["true", "false"] } }
+        - { $ref: "#/components/parameters/page" }
+        - { $ref: "#/components/parameters/pageSize" }
+      responses:
+        "200":
+          description: Paginated materials
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Paginated" }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Material" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /integrations/v1/catalog/prices:
+    get:
+      tags: [Catalog]
+      summary: Best current offers for one or more SKUs
+      description: Scope `catalog:read`. Buyer ERPs use this to price purchase requisitions. Returns up to `limit` cheapest active offers per SKU.
+      parameters:
+        - { name: sku, in: query, schema: { type: string }, description: Comma-separated SKUs (max 50) }
+        - { name: materialId, in: query, schema: { type: string }, description: Comma-separated material ids (max 50) }
+        - { name: city, in: query, schema: { type: string }, example: Riyadh }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 20, default: 5 } }
+      responses:
+        "200":
+          description: Offers per material
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/MaterialOffers" }
+                  notFound:
+                    type: array
+                    items: { type: string }
+                    description: SKUs that do not exist in the catalogue
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /integrations/v1/prices:
+    put:
+      tags: [Supplier sync]
+      summary: Bulk upsert price listings (up to 1000 rows)
+      description: |
+        Scope `prices:write`. Supplier companies only. Rows are matched on `(sku | materialId, city)`; an existing
+        listing is updated, otherwise created. The call is **idempotent**: re-sending the same rows is safe.
+        Invalid rows do not abort the batch – each row gets its own result. HTTP 200 when at least one row
+        succeeded, 400 when every row failed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [rows]
+                  properties:
+                    rows:
+                      type: array
+                      maxItems: 1000
+                      items: { $ref: "#/components/schemas/PriceRow" }
+                - type: array
+                  maxItems: 1000
+                  items: { $ref: "#/components/schemas/PriceRow" }
+            example:
+              rows:
+                - { sku: "CEM-OPC-50", city: "Riyadh", price: 15.75, minQty: 100, leadTimeDays: 1, stock: 12000 }
+                - { sku: "RB-12-G60", city: "Riyadh", price: 2650, minQty: 1, leadTimeDays: 2, validUntil: "2026-12-31" }
+                - { materialId: "clx0material", city: "Jeddah", price: 44.5, salePrice: 41, active: true }
+      responses:
+        "200":
+          description: Per-row results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationResult" }
+              example:
+                total: 3
+                created: 1
+                updated: 1
+                failed: 1
+                results:
+                  - { index: 0, status: updated, sku: CEM-OPC-50, city: Riyadh, listingId: lst_1, materialId: mat_1 }
+                  - { index: 1, status: created, sku: RB-12-G60, city: Riyadh, listingId: lst_2, materialId: mat_2 }
+                  - { index: 2, status: error, sku: null, city: Jeddah, error: "Unknown materialId clx0material" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /integrations/v1/stock:
+    put:
+      tags: [Supplier sync]
+      summary: Bulk set stock levels (up to 1000 rows)
+      description: |
+        Scope `stock:write`. Sets the absolute on-hand quantity of a listing (recorded as an ADJUST stock movement).
+        Identify the listing by `listingId` or by `sku` + `city`. Listings that fall to or below the company's
+        low-stock threshold trigger a `stock.low` webhook.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rows]
+              properties:
+                rows:
+                  type: array
+                  maxItems: 1000
+                  items: { $ref: "#/components/schemas/StockRow" }
+            example:
+              rows:
+                - { sku: "CEM-OPC-50", city: "Riyadh", stock: 11500 }
+                - { listingId: "lst_2", stock: 0 }
+      responses:
+        "200":
+          description: Per-row results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /integrations/v1/orders:
+    get:
+      tags: [Orders]
+      summary: Sales orders of the key's (supplier) company
+      description: |
+        Scope `orders:read`. Sorted by `updatedAt` ascending so an ERP can page through changes. Pass `since` =
+        the `updatedAt` of the last processed order (or your last run's `serverTime`) to pull only new/changed orders.
+      parameters:
+        - { name: since, in: query, schema: { type: string, format: date-time }, description: "Orders with updatedAt >= since" }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/OrderStatus" } }
+        - { name: paymentStatus, in: query, schema: { type: string, enum: [UNPAID, PAID, REFUNDED] } }
+        - { name: reference, in: query, schema: { type: string } }
+        - { name: poNumber, in: query, schema: { type: string } }
+        - { $ref: "#/components/parameters/page" }
+        - { $ref: "#/components/parameters/pageSize" }
+      responses:
+        "200":
+          description: Paginated orders
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Paginated" }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Order" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /integrations/v1/orders/{reference}:
+    get:
+      tags: [Orders]
+      summary: One sales order by reference (ORD-2026-000123) or id
+      parameters: [{ $ref: "#/components/parameters/reference" }]
+      responses:
+        "200":
+          description: Order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /integrations/v1/orders/{reference}/status:
+    patch:
+      tags: [Orders]
+      summary: Push fulfilment status from the ERP
+      description: |
+        Scope `orders:write`. Allowed transitions: PENDING → CONFIRMED | CANCELLED, CONFIRMED → IN_TRANSIT | CANCELLED,
+        IN_TRANSIT → DELIVERED. ERP aliases: `PROCESSING` = CONFIRMED, `SHIPPED` = IN_TRANSIT.
+        Re-sending the current status is idempotent (`changed: false`). A `trackingNumber` creates or updates a
+        shipment on the order. The buyer is notified and `order.status_changed` (and `order.cancelled`) webhooks fire.
+      parameters: [{ $ref: "#/components/parameters/reference" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderStatusUpdate" }
+            example: { status: SHIPPED, trackingNumber: "SMSA123456789", carrierName: "SMSA", note: "2 pallets, driver Ahmed" }
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  changed: { type: boolean }
+                  order: { $ref: "#/components/schemas/Order" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /integrations/v1/purchases:
+    get:
+      tags: [Orders]
+      summary: Purchases of the key's (buyer) company
+      description: Scope `orders:read`. Same filters and shape as `/orders`, scoped to orders placed by users of the key's company.
+      parameters:
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/OrderStatus" } }
+        - { name: paymentStatus, in: query, schema: { type: string, enum: [UNPAID, PAID, REFUNDED] } }
+        - { name: poNumber, in: query, schema: { type: string } }
+        - { $ref: "#/components/parameters/page" }
+        - { $ref: "#/components/parameters/pageSize" }
+      responses:
+        "200":
+          description: Paginated orders
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Paginated" }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Order" }
+
+  /integrations/v1/purchases/{reference}:
+    get:
+      tags: [Orders]
+      summary: One purchase by reference or id
+      parameters: [{ $ref: "#/components/parameters/reference" }]
+      responses:
+        "200":
+          description: Order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /integrations/v1/invoices:
+    get:
+      tags: [Invoices]
+      summary: E-invoice records (ZATCA) with order totals
+      description: |
+        Scope `invoices:read`. Returns invoices where the company is the seller (`side: sales`) or the buyer
+        (`side: purchases`). Ordered by the ZATCA counter. `includeXml=true` embeds the UBL 2.1 XML.
+      parameters:
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+        - { name: side, in: query, schema: { type: string, enum: [sales, purchases] } }
+        - { name: includeXml, in: query, schema: { type: string, enum: ["true", "false"] } }
+        - { $ref: "#/components/parameters/page" }
+        - { $ref: "#/components/parameters/pageSize" }
+      responses:
+        "200":
+          description: Paginated invoices
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Paginated" }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Invoice" }
+
+  /integrations/v1/rfqs:
+    get:
+      tags: [RFQs & bids]
+      summary: Open RFQs to bid on (supplier) or the company's own RFQs (buyer)
+      description: |
+        Scope `rfqs:read`. For supplier companies this mirrors the marketplace: OPEN RFQs whose bidding has not
+        closed, optionally filtered by `city`, each with `myBid`. For buyer companies (or `mine=true`) it lists RFQs
+        created by the company's users.
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [OPEN, CLOSED, AWARDED, CANCELLED], default: OPEN } }
+        - { name: city, in: query, schema: { type: string } }
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+        - { name: mine, in: query, schema: { type: string, enum: ["true", "false"] } }
+        - { $ref: "#/components/parameters/page" }
+        - { $ref: "#/components/parameters/pageSize" }
+      responses:
+        "200":
+          description: Paginated RFQs
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Paginated" }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Rfq" }
+    post:
+      tags: [RFQs & bids]
+      summary: Create an RFQ (buyer ERP)
+      description: |
+        Scope `rfqs:write`. Items may reference a catalogue `sku` (description and unit are then optional) or be
+        free text. Suppliers in the delivery city and suppliers listing the requested materials are notified and
+        receive the `rfq.created` webhook.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RfqCreate" }
+            example:
+              title: "Tower B – structural steel, phase 2"
+              deliveryCity: Riyadh
+              deliveryAddress: "King Fahd Rd, site gate 3"
+              deliveryDate: "2026-10-20"
+              closesAt: "2026-10-05T12:00:00Z"
+              items:
+                - { sku: "RB-12-G60", quantity: 40 }
+                - { description: "Binding wire 1.2mm", unit: kg, quantity: 500 }
+      responses:
+        "201":
+          description: Created RFQ
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rfq" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /integrations/v1/rfqs/{id}:
+    get:
+      tags: [RFQs & bids]
+      summary: RFQ detail (id or reference) with items and visible bids
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: RFQ
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rfq" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /integrations/v1/rfqs/{id}/bids:
+    post:
+      tags: [RFQs & bids]
+      summary: Submit or update the company's bid (supplier ERP)
+      description: Scope `rfqs:write`. One bid per company per RFQ – posting again replaces it. Quantities are always the buyer's requested quantities.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BidCreate" }
+            example:
+              validUntil: "2026-10-12T00:00:00Z"
+              deliveryDays: 5
+              notes: "Price ex-works Dammam, delivery included"
+              items:
+                - { rfqItemId: "rfqi_1", unitPrice: 2590 }
+                - { rfqItemId: "rfqi_2", unitPrice: 6.2, leadTimeDays: 3 }
+      responses:
+        "201": { description: Bid created, content: { application/json: { schema: { $ref: "#/components/schemas/Bid" } } } }
+        "200": { description: Bid updated, content: { application/json: { schema: { $ref: "#/components/schemas/Bid" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ------------------------------------------------------------------ management (JWT)
+  /integrations/scopes:
+    get:
+      tags: [API keys (management)]
+      security: [{ BearerAuth: [] }]
+      summary: List available scopes and webhook events
+      responses:
+        "200":
+          description: Scopes and events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scopes: { type: array, items: { type: object, properties: { scope: { $ref: "#/components/schemas/ApiScope" }, description: { type: string } } } }
+                  events: { type: array, items: { $ref: "#/components/schemas/WebhookEvent" } }
+
+  /integrations/keys:
+    get:
+      tags: [API keys (management)]
+      security: [{ BearerAuth: [] }]
+      summary: List the company's API keys
+      description: JWT of a company OWNER/MANAGER (or ADMIN with `?companyId=`). Hashes are never returned.
+      parameters: [{ name: companyId, in: query, schema: { type: string }, description: Admins only }]
+      responses:
+        "200": { description: Keys, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ApiKey" } } } } }
+    post:
+      tags: [API keys (management)]
+      security: [{ BearerAuth: [] }]
+      summary: Create an API key (plaintext returned once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApiKeyCreate" }
+            example: { name: "SAP PRD", scopes: [catalog:read, prices:write, stock:write, orders:read, orders:write, invoices:read], expiresAt: "2027-09-30T00:00:00Z" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyCreateResult" }
+              example:
+                apiKey: { id: key_01, companyId: cmp_01, createdById: usr_01, name: "SAP PRD", prefix: "msk_live_7Hq", scopes: [catalog:read, prices:write], lastUsedAt: null, expiresAt: "2027-09-30T00:00:00.000Z", revokedAt: null, createdAt: "2026-09-25T09:00:00.000Z" }
+                key: "msk_live_7HqZt3kPq9wLm2XcV5bN8rJd4sF6gYa1"
+                warning: "Store this key now – it cannot be shown again."
+
+  /integrations/keys/{id}/revoke:
+    post:
+      tags: [API keys (management)]
+      security: [{ BearerAuth: [] }]
+      summary: Revoke an API key (immediate, irreversible)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Revoked key, content: { application/json: { schema: { $ref: "#/components/schemas/ApiKey" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /integrations/webhooks:
+    get:
+      tags: [Webhooks (management)]
+      security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }]
+      summary: List webhook endpoints with delivery counts
+      description: JWT company OWNER/MANAGER, ADMIN, or an API key with `webhooks:manage`.
+      responses:
+        "200": { description: Endpoints, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WebhookEndpoint" } } } } }
+    post:
+      tags: [Webhooks (management)]
+      security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }]
+      summary: Register an endpoint (signing secret returned once)
+      description: URL must be https and publicly reachable (private / loopback addresses are rejected). Max 10 endpoints per company.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookEndpointCreate" }
+            example: { url: "https://erp.example.com/hooks/mysupplier", events: [order.created, order.status_changed, order.paid, payment.refunded], description: "SAP PI/PO inbound" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookEndpointCreateResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /integrations/webhooks/{id}:
+    patch:
+      tags: [Webhooks (management)]
+      security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }]
+      summary: Update url, events, description or active flag
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookEndpointPatch" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookEndpoint" } } } }
+    delete:
+      tags: [Webhooks (management)]
+      security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }]
+      summary: Delete an endpoint and its delivery log
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Deleted, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean } } } } } }
+
+  /integrations/webhooks/{id}/test:
+    post:
+      tags: [Webhooks (management)]
+      security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }]
+      summary: Send a signed `ping` event now and return the result
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: Outcome of the test delivery
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeliveryOutcome" }
+
+  /integrations/webhooks/{id}/deliveries:
+    get:
+      tags: [Webhooks (management)]
+      security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }]
+      summary: Delivery log of an endpoint
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [PENDING, SUCCESS, FAILED] } }
+        - { name: event, in: query, schema: { type: string } }
+        - { $ref: "#/components/parameters/page" }
+        - { $ref: "#/components/parameters/pageSize" }
+      responses:
+        "200":
+          description: Paginated deliveries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Paginated" }
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: "#/components/schemas/WebhookDelivery" } }
+
+  /integrations/deliveries/{id}/retry:
+    post:
+      tags: [Webhooks (management)]
+      security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }]
+      summary: Re-send a delivery immediately (resets the attempt counter)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Outcome, content: { application/json: { schema: { $ref: "#/components/schemas/DeliveryOutcome" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+# ====================================================================== components
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: "`msk_live_…` key. Alternatively `Authorization: ApiKey msk_live_…`."
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: User login token (dashboard). Used for key / webhook management only.
+
+  parameters:
+    page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+    pageSize: { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+    reference: { name: reference, in: path, required: true, schema: { type: string }, example: ORD-2026-000123, description: Order reference or id }
+
+  responses:
+    BadRequest:
+      description: Validation failed
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: "Validation failed", details: { fieldErrors: { closesAt: ["Invalid date"] } } }
+    Unauthorized:
+      description: Missing, malformed, revoked or expired API key (or JWT used where a key is required)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: "This endpoint requires an API key. Send it as `X-API-Key: msk_live_…` (create one under Integrations → API keys)." }
+    Forbidden:
+      description: Key lacks the required scope, or the company type cannot perform the action
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: "API key is missing the required scope: prices:write", details: { required: [prices:write], granted: [catalog:read] } }
+    NotFound:
+      description: Not found (or not owned by the key's company)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+        details: {}
+    Paginated:
+      type: object
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+    ApiScope:
+      type: string
+      enum: [catalog:read, prices:write, stock:write, orders:read, orders:write, invoices:read, rfqs:read, rfqs:write, webhooks:manage]
+    WebhookEvent:
+      type: string
+      enum: [order.created, order.status_changed, order.paid, order.cancelled, payment.refunded, invoice.issued, rfq.created, bid.received, bid.accepted, stock.low, return.requested, ping, "*"]
+    OrderStatus:
+      type: string
+      enum: [PENDING, CONFIRMED, IN_TRANSIT, DELIVERED, CANCELLED]
+    Ping:
+      type: object
+      properties:
+        ok: { type: boolean }
+        company: { type: object, properties: { id: { type: string }, name: { type: string }, type: { type: string, enum: [SUPPLIER, CONTRACTOR, CONSULTANT, OTHER] }, city: { type: string } } }
+        keyName: { type: string }
+        scopes: { type: array, items: { $ref: "#/components/schemas/ApiScope" } }
+        serverTime: { type: string, format: date-time }
+    Category:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string, example: steel }
+        name: { type: string }
+        nameAr: { type: string }
+        parentId: { type: string, nullable: true }
+        parentSlug: { type: string, nullable: true }
+        materialCount: { type: integer }
+    Material:
+      type: object
+      properties:
+        id: { type: string }
+        sku: { type: string, example: RB-12-G60 }
+        name: { type: string, example: Deformed rebar 12mm Grade 60 }
+        nameAr: { type: string }
+        unit: { type: string, example: ton }
+        brand: { type: string, nullable: true }
+        specs: { type: object, additionalProperties: true, nullable: true }
+        description: { type: string, nullable: true }
+        imageUrl: { type: string, nullable: true }
+        images: { type: array, items: { type: string } }
+        datasheetUrl: { type: string, nullable: true }
+        tags: { type: array, items: { type: string } }
+        active: { type: boolean }
+        weightKg: { type: number, nullable: true }
+        volumeM3: { type: number, nullable: true }
+        hazardous: { type: boolean }
+        category: { type: object, properties: { id: { type: string }, slug: { type: string }, name: { type: string }, nameAr: { type: string }, parentId: { type: string, nullable: true } } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Offer:
+      type: object
+      properties:
+        id: { type: string, description: listingId }
+        companyId: { type: string }
+        company: { type: object, properties: { id: { type: string }, name: { type: string }, verified: { type: boolean }, rating: { type: number } } }
+        price: { type: number }
+        salePrice: { type: number, nullable: true }
+        effectivePrice: { type: number }
+        currency: { type: string, example: SAR }
+        minQty: { type: number }
+        leadTimeDays: { type: integer }
+        city: { type: string }
+        stock: { type: integer, nullable: true, description: null = not tracked }
+        validUntil: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: string, format: date-time }
+    MaterialOffers:
+      type: object
+      properties:
+        id: { type: string }
+        sku: { type: string }
+        name: { type: string }
+        nameAr: { type: string }
+        unit: { type: string }
+        bestPrice: { type: number, nullable: true }
+        offers: { type: array, items: { $ref: "#/components/schemas/Offer" } }
+    PriceRow:
+      type: object
+      required: [city, price]
+      description: Either `sku` or `materialId` is required.
+      properties:
+        sku: { type: string, maxLength: 80 }
+        materialId: { type: string }
+        city: { type: string, example: Riyadh }
+        price: { type: number, exclusiveMinimum: 0, description: List price per unit, SAR, excluding VAT }
+        minQty: { type: number, exclusiveMinimum: 0, default: 1 }
+        leadTimeDays: { type: integer, minimum: 0, maximum: 365, default: 1 }
+        validUntil: { type: string, format: date, nullable: true }
+        salePrice: { type: number, nullable: true, description: Must be lower than price }
+        stock: { type: integer, minimum: 0, nullable: true, description: Absolute on-hand quantity; omit to leave unchanged }
+        active: { type: boolean }
+        currency: { type: string, enum: [SAR] }
+    StockRow:
+      type: object
+      required: [stock]
+      description: Either `listingId` or `sku` + `city`.
+      properties:
+        sku: { type: string }
+        city: { type: string }
+        listingId: { type: string }
+        stock: { type: integer, minimum: 0 }
+    RowResult:
+      type: object
+      properties:
+        index: { type: integer }
+        status: { type: string, enum: [created, updated, error] }
+        sku: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        listingId: { type: string, nullable: true }
+        materialId: { type: string, nullable: true }
+        stock: { type: integer }
+        previousStock: { type: integer, nullable: true }
+        error: { type: string }
+    IntegrationResult:
+      type: object
+      properties:
+        total: { type: integer }
+        created: { type: integer }
+        updated: { type: integer }
+        failed: { type: integer }
+        results: { type: array, items: { $ref: "#/components/schemas/RowResult" } }
+    Party:
+      type: object
+      nullable: true
+      properties:
+        id: { type: string }
+        name: { type: string }
+        nameAr: { type: string, nullable: true }
+        vatNumber: { type: string, nullable: true }
+        crNumber: { type: string, nullable: true }
+        city: { type: string }
+    OrderItem:
+      type: object
+      properties:
+        id: { type: string }
+        sku: { type: string, nullable: true }
+        materialId: { type: string, nullable: true }
+        listingId: { type: string, nullable: true }
+        name: { type: string }
+        nameAr: { type: string, nullable: true }
+        unit: { type: string }
+        quantity: { type: number }
+        unitPrice: { type: number }
+        lineTotal: { type: number }
+    Order:
+      type: object
+      properties:
+        id: { type: string }
+        reference: { type: string, example: ORD-2026-000123 }
+        type: { type: string, enum: [RFQ, DIRECT] }
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        paymentStatus: { type: string, enum: [UNPAID, PAID, REFUNDED] }
+        paymentMethod: { type: string, enum: [COD, BANK_TRANSFER, CARD, CREDIT], nullable: true }
+        currency: { type: string, example: SAR }
+        poNumber: { type: string, nullable: true, description: Buyer's purchase-order number }
+        dueDate: { type: string, format: date-time, nullable: true }
+        couponCode: { type: string, nullable: true }
+        subtotal: { type: number }
+        vat: { type: number }
+        deliveryFee: { type: number }
+        discount: { type: number }
+        total: { type: number }
+        notes: { type: string, nullable: true }
+        rfqId: { type: string, nullable: true }
+        bidId: { type: string, nullable: true }
+        supplier: { $ref: "#/components/schemas/Party" }
+        buyer:
+          type: object
+          properties:
+            userId: { type: string }
+            name: { type: string }
+            email: { type: string }
+            phone: { type: string, nullable: true }
+            company: { $ref: "#/components/schemas/Party" }
+        shipTo:
+          type: object
+          properties:
+            recipient: { type: string }
+            phone: { type: string, nullable: true }
+            city: { type: string, nullable: true }
+            district: { type: string, nullable: true }
+            street: { type: string, nullable: true }
+            building: { type: string, nullable: true }
+            notes: { type: string, nullable: true }
+            lat: { type: number, nullable: true }
+            lng: { type: number, nullable: true }
+        items: { type: array, items: { $ref: "#/components/schemas/OrderItem" } }
+        einvoice:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string }
+            invoiceNumber: { type: string, example: INV-2026-000123 }
+            uuid: { type: string }
+            status: { type: string, enum: [GENERATED, REPORTED, CLEARED, REJECTED, PENDING_CONFIG] }
+            issuedAt: { type: string, format: date-time }
+        shipments:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              carrier: { type: string }
+              carrierName: { type: string }
+              trackingNumber: { type: string, nullable: true }
+              trackingUrl: { type: string, nullable: true }
+              status: { type: string }
+              deliveredAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    OrderStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [CONFIRMED, PROCESSING, SHIPPED, IN_TRANSIT, DELIVERED, CANCELLED] }
+        trackingNumber: { type: string, maxLength: 80 }
+        trackingUrl: { type: string, format: uri }
+        carrierName: { type: string, maxLength: 80 }
+        note: { type: string, maxLength: 500 }
+    Invoice:
+      type: object
+      properties:
+        id: { type: string }
+        orderId: { type: string }
+        invoiceNumber: { type: string }
+        uuid: { type: string }
+        invoiceHash: { type: string }
+        previousInvoiceHash: { type: string }
+        counter: { type: integer }
+        status: { type: string, enum: [GENERATED, REPORTED, CLEARED, REJECTED, PENDING_CONFIG] }
+        side: { type: string, enum: [sales, purchases] }
+        xml: { type: string, description: Only with includeXml=true }
+        order:
+          type: object
+          properties:
+            id: { type: string }
+            reference: { type: string }
+            poNumber: { type: string, nullable: true }
+            status: { $ref: "#/components/schemas/OrderStatus" }
+            paymentStatus: { type: string }
+            subtotal: { type: number }
+            vat: { type: number }
+            deliveryFee: { type: number }
+            discount: { type: number }
+            total: { type: number }
+            currency: { type: string }
+            supplier: { $ref: "#/components/schemas/Party" }
+            buyer: { type: object }
+            items: { type: array, items: { $ref: "#/components/schemas/OrderItem" } }
+            createdAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    RfqItem:
+      type: object
+      properties:
+        id: { type: string }
+        materialId: { type: string, nullable: true }
+        material: { type: object, nullable: true, properties: { id: { type: string }, sku: { type: string }, name: { type: string }, unit: { type: string } } }
+        description: { type: string }
+        quantity: { type: number }
+        unit: { type: string }
+        notes: { type: string, nullable: true }
+    Rfq:
+      type: object
+      properties:
+        id: { type: string }
+        reference: { type: string, example: RFQ-2026-000045 }
+        title: { type: string }
+        status: { type: string, enum: [OPEN, CLOSED, AWARDED, CANCELLED] }
+        deliveryCity: { type: string }
+        deliveryAddress: { type: string, nullable: true }
+        deliveryDate: { type: string, format: date-time, nullable: true }
+        closesAt: { type: string, format: date-time }
+        notes: { type: string, nullable: true }
+        awardedBidId: { type: string, nullable: true }
+        bidCount: { type: integer }
+        buyer: { type: object, properties: { id: { type: string }, name: { type: string }, company: { $ref: "#/components/schemas/Party" } } }
+        items: { type: array, items: { $ref: "#/components/schemas/RfqItem" } }
+        myBid: { type: object, nullable: true, properties: { id: { type: string }, status: { type: string }, totalPrice: { type: number } } }
+        bids: { type: array, items: { $ref: "#/components/schemas/Bid" }, description: Detail only – all bids for the owner, own bid for suppliers }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    RfqCreate:
+      type: object
+      required: [title, deliveryCity, closesAt, items]
+      properties:
+        title: { type: string, minLength: 3 }
+        deliveryCity: { type: string }
+        deliveryAddress: { type: string }
+        deliveryDate: { type: string, format: date }
+        closesAt: { type: string, format: date-time, description: Must be in the future }
+        notes: { type: string }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required: [quantity]
+            properties:
+              sku: { type: string }
+              materialId: { type: string }
+              description: { type: string, description: Required when no sku/materialId }
+              unit: { type: string, description: Required when no sku/materialId }
+              quantity: { type: number, exclusiveMinimum: 0 }
+              notes: { type: string }
+    BidCreate:
+      type: object
+      required: [validUntil, items]
+      properties:
+        validUntil: { type: string, format: date-time }
+        deliveryDays: { type: integer, minimum: 0, default: 7 }
+        notes: { type: string }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [rfqItemId, unitPrice]
+            properties:
+              rfqItemId: { type: string }
+              unitPrice: { type: number, minimum: 0 }
+              leadTimeDays: { type: integer, minimum: 0 }
+              notes: { type: string }
+    Bid:
+      type: object
+      properties:
+        id: { type: string }
+        rfqId: { type: string }
+        companyId: { type: string }
+        totalPrice: { type: number }
+        currency: { type: string }
+        validUntil: { type: string, format: date-time }
+        deliveryDays: { type: integer }
+        notes: { type: string, nullable: true }
+        status: { type: string, enum: [SUBMITTED, WITHDRAWN, ACCEPTED, REJECTED] }
+        items: { type: array, items: { type: object, properties: { rfqItemId: { type: string }, unitPrice: { type: number }, quantity: { type: number }, leadTimeDays: { type: integer } } } }
+        createdAt: { type: string, format: date-time }
+    ApiKey:
+      type: object
+      properties:
+        id: { type: string }
+        companyId: { type: string }
+        createdById: { type: string }
+        name: { type: string }
+        prefix: { type: string, example: msk_live_7Hq }
+        scopes: { type: array, items: { $ref: "#/components/schemas/ApiScope" } }
+        lastUsedAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    ApiKeyCreate:
+      type: object
+      required: [name, scopes]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 80 }
+        scopes: { type: array, minItems: 1, items: { $ref: "#/components/schemas/ApiScope" } }
+        expiresAt: { type: string, format: date-time, nullable: true }
+    ApiKeyCreateResult:
+      type: object
+      properties:
+        apiKey: { $ref: "#/components/schemas/ApiKey" }
+        key: { type: string, description: Plaintext key – shown once }
+        warning: { type: string }
+    WebhookEndpoint:
+      type: object
+      properties:
+        id: { type: string }
+        companyId: { type: string }
+        url: { type: string, format: uri }
+        events: { type: array, items: { $ref: "#/components/schemas/WebhookEvent" } }
+        description: { type: string, nullable: true }
+        active: { type: boolean }
+        deliveries: { type: object, properties: { PENDING: { type: integer }, SUCCESS: { type: integer }, FAILED: { type: integer } } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    WebhookEndpointCreate:
+      type: object
+      required: [url, events]
+      properties:
+        url: { type: string, format: uri, description: https only, publicly reachable }
+        events: { type: array, minItems: 1, items: { $ref: "#/components/schemas/WebhookEvent" } }
+        description: { type: string, maxLength: 200 }
+    WebhookEndpointPatch:
+      type: object
+      properties:
+        url: { type: string, format: uri }
+        events: { type: array, items: { $ref: "#/components/schemas/WebhookEvent" } }
+        description: { type: string, nullable: true }
+        active: { type: boolean }
+    WebhookEndpointCreateResult:
+      type: object
+      properties:
+        endpoint: { $ref: "#/components/schemas/WebhookEndpoint" }
+        secret: { type: string, example: whsec_…, description: HMAC secret – shown once }
+        warning: { type: string }
+    WebhookDelivery:
+      type: object
+      properties:
+        id: { type: string }
+        endpointId: { type: string }
+        event: { $ref: "#/components/schemas/WebhookEvent" }
+        payload: {}
+        status: { type: string, enum: [PENDING, SUCCESS, FAILED] }
+        attempts: { type: integer }
+        responseCode: { type: integer, nullable: true }
+        responseBody: { type: string, nullable: true, description: First 2 KB of the receiver's response (or the network error) }
+        nextAttemptAt: { type: string, format: date-time, nullable: true }
+        deliveredAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    DeliveryOutcome:
+      type: object
+      properties:
+        ok: { type: boolean }
+        outcome: { type: string, enum: [delivered, retried, failed] }
+        delivery: { $ref: "#/components/schemas/WebhookDelivery" }
+    WebhookEnvelope:
+      type: object
+      description: |
+        Body of every webhook POST. Headers: `X-MySupplier-Event`, `X-MySupplier-Delivery` (id, use for de-duplication),
+        `X-MySupplier-Timestamp` (unix seconds), `X-MySupplier-Signature: sha256=<hex HMAC-SHA256(secret, timestamp + "." + rawBody)>`.
+        Respond 2xx within 10 s. Retries after 1 m, 5 m, 30 m, 2 h and 12 h, then FAILED.
+      properties:
+        id: { type: string }
+        event: { $ref: "#/components/schemas/WebhookEvent" }
+        createdAt: { type: string, format: date-time }
+        data: {}
+      example:
+        id: dlv_01
+        event: order.created
+        createdAt: "2026-09-25T09:15:00.000Z"
+        data:
+          order: { reference: ORD-2026-000123, status: PENDING, total: 12650, items: [{ sku: RB-12-G60, quantity: 4, unitPrice: 2650 }] }

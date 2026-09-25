@@ -14,6 +14,7 @@ import { cardPaymentsEnabled, fetchMoyasarPayment, refundMoyasarPayment, toHalal
 import { requireCompanyRole } from "../services/portal";
 import { companyUserIds, notify } from "../services/notifications";
 import { recordOrderEvent } from "../services/portal";
+import { emitOrderWebhook } from "../services/webhooks";
 
 const router = Router();
 /** Constant-time secret comparison; false when the expected secret is not configured. */
@@ -83,6 +84,7 @@ async function settle(orderId: string, providerPaymentId: string, raw: unknown, 
     await recordOrderEvent(orderId, "PAYMENT", { message: `Card payment received (${providerPaymentId})` });
     await notify({ userIds: [order.buyerId], type: "ORDER_UPDATE", title: `Payment received for ${order.reference}`, body: `SAR ${Number(order.total).toLocaleString("en-US")} paid by card. Thank you!`, link: `/dashboard/orders/${order.id}` });
     await notify({ userIds: await companyUserIds([order.companyId]), type: "ORDER_UPDATE", title: `${order.reference} paid`, body: "The buyer paid by card. Please confirm and dispatch.", link: `/supplier/orders/${order.id}` });
+    await emitOrderWebhook("order.paid", order.id, { payment: { provider: "MOYASAR", providerPaymentId, amount: Number(order.total), method: "CARD" } });
     return { order: updated, payment };
   }
   return { order, payment };
@@ -203,6 +205,7 @@ router.post(
     await recordOrderEvent(order.id, "PAYMENT", { message: `Refunded SAR ${refundAmount.toLocaleString("en-US")} – ${reason}`, userId: req.user!.id });
     await notify({ userIds: [order.buyerId], type: "ORDER_UPDATE", title: `Refund issued for ${order.reference}`, body: `SAR ${refundAmount.toLocaleString("en-US")} – ${reason}`, link: `/dashboard/orders/${order.id}` });
     await audit(req, "payment.refund", "Order", order.id, { reference: order.reference, amount: refundAmount, reason, method: order.paymentMethod });
+    await emitOrderWebhook("payment.refunded", order.id, { refund: { amount: refundAmount, reason, method: order.paymentMethod, paymentId: payment.id } });
     res.json(serialize({ order: updated, payment, refundedAmount: refundAmount }));
   }),
 );
