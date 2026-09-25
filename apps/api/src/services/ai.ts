@@ -224,8 +224,15 @@ export function extractHeuristically(text: string, hints?: ExtractInput["hints"]
 export async function extractPrices(input: ExtractInput): Promise<{ extraction: Extraction; aiUsed: boolean; model: string | null }> {
   const needsAi = Boolean(input.file && (input.file.mimeType === "application/pdf" || input.file.mimeType.startsWith("image/")));
   if (aiEnabled()) {
-    const r = await extractWithAi(input);
-    return { extraction: r.extraction, aiUsed: true, model: r.model };
+    try {
+      const r = await extractWithAi(input);
+      return { extraction: r.extraction, aiUsed: true, model: r.model };
+    } catch (err) {
+      // Billing, quota, network or model errors must not lose the upload: text, CSV and Excel
+      // fall back to the heuristic parser; only PDFs and photos genuinely need the model.
+      console.warn("[ai] extraction failed, falling back to heuristics:", (err as Error).message?.slice(0, 200));
+      if (needsAi) throw new Error(`The AI service could not read this document (${(err as Error).message?.slice(0, 120) ?? "unknown error"}). Paste the text or upload CSV/Excel instead.`);
+    }
   }
   if (needsAi) throw new Error("Reading PDFs and photos requires the AI service (ANTHROPIC_API_KEY). Paste the text or upload CSV/Excel instead.");
   const text = input.file ? spreadsheetToText(input.file.buffer, input.file.mimeType) : (input.text ?? "");
