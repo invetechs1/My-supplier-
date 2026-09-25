@@ -42,10 +42,21 @@ function ProductGrid({ products, onOpen }: { products: Product[]; onOpen: (p: Pr
 export default function ShopScreen() {
   const router = useRouter();
   const { t } = useI18n();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isSupplier } = useAuth();
   const { data, loading, error, refreshing, reload, refresh } = useApi(() => api.shopHome(), []);
+  // Personalised rails (logged in only): popular items from recently browsed categories + last viewed.
+  const recommended = useApi(() => api.recommendations(), [isAuthenticated], isAuthenticated);
+  const recent = useApi(() => api.recentlyViewed(), [isAuthenticated], isAuthenticated);
 
   const openProduct = useCallback((p: Product) => router.push(`/shop/product/${p.id}`), [router]);
+  const onRefresh = useCallback(() => {
+    refresh();
+    if (isAuthenticated) {
+      recommended.refresh();
+      recent.refresh();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refresh, isAuthenticated]);
   const goSearch = useCallback(
     (params: Record<string, string> = {}) => router.push({ pathname: "/shop/search", params }),
     [router],
@@ -70,7 +81,7 @@ export default function ShopScreen() {
   const categories: Category[] = home?.categories ?? [];
 
   return (
-    <Screen scroll padded={false} refreshing={refreshing} onRefresh={refresh}>
+    <Screen scroll padded={false} refreshing={refreshing} onRefresh={onRefresh}>
       <View style={styles.hero}>
         <View style={styles.heroTop}>
           <View style={{ flex: 1 }}>
@@ -105,6 +116,31 @@ export default function ShopScreen() {
           <Ionicons name="cart" size={30} color={colors.text} />
         </View>
       </Pressable>
+
+      {isAuthenticated && !isSupplier ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
+          {(
+            [
+              { icon: "repeat-outline", label: t("buyAgain"), path: "/buy-again" },
+              { icon: "heart-outline", label: t("myLists"), path: "/lists" },
+              { icon: "calendar-outline", label: t("recurringOrders"), path: "/recurring" },
+              { icon: "notifications-outline", label: t("priceAlerts"), path: "/alerts" },
+            ] as const
+          ).map((q) => (
+            <Pressable key={q.path} onPress={() => router.push(q.path)} style={({ pressed }) => [styles.quick, pressed && { opacity: 0.85 }]}>
+              <Ionicons name={q.icon} size={16} color={colors.primary} />
+              <Text style={styles.quickText}>{q.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
+
+      {isAuthenticated && recommended.data?.items.length ? (
+        <>
+          <SectionHeader title={t("recommendedForYou")} style={styles.sectionPadded} actionTitle={t("seeAll")} onAction={() => goSearch({ sort: "popular" })} />
+          <ProductRail products={recommended.data.items} onOpen={openProduct} />
+        </>
+      ) : null}
 
       {categories.length ? (
         <>
@@ -150,6 +186,13 @@ export default function ShopScreen() {
         <>
           <SectionHeader title={t("newArrivals")} style={styles.sectionPadded} actionTitle={t("seeAll")} onAction={() => goSearch({ sort: "newest" })} />
           <ProductRail products={home.newArrivals} onOpen={openProduct} />
+        </>
+      ) : null}
+
+      {isAuthenticated && recent.data?.length ? (
+        <>
+          <SectionHeader title={t("recentlyViewed")} style={styles.sectionPadded} />
+          <ProductRail products={recent.data} onOpen={openProduct} />
         </>
       ) : null}
 
@@ -210,6 +253,9 @@ const styles = StyleSheet.create({
   bannerStats: { fontSize: 12, color: "rgba(17,24,39,0.7)", marginTop: spacing.sm, fontWeight: "600" },
   bannerIcon: { width: 56, height: 56, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.55)", alignItems: "center", justifyContent: "center" },
   sectionPadded: { paddingHorizontal: spacing.lg },
+  quickRow: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.sm },
+  quick: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: colors.surface, ...shadow.card },
+  quickText: { fontSize: 13, fontWeight: "600", color: colors.text },
   sectionTitle: { ...typography.h2, fontSize: 18 },
   sectionAction: { color: colors.primary, fontWeight: "600", fontSize: 14 },
   dealsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.xl, marginBottom: spacing.md },

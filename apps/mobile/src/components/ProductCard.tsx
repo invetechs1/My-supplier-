@@ -5,6 +5,7 @@ import type { Product } from "@mysupplier/shared";
 import { formatSar } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { useAddToCart, dealPercent, isPurchasable } from "@/hooks/useAddToCart";
+import { compareAtOf, effectivePriceOf, saleLive, tiersOf } from "@/lib/pricing";
 import { colors, radius, spacing, typography, shadow } from "@/theme";
 import { ProductImage } from "./ProductImage";
 
@@ -45,7 +46,7 @@ export function StockPill({ product, small = false }: { product: Product; small?
 export function DealBadge({ product }: { product: Product }) {
   const { t } = useI18n();
   if (!product.isDeal) return null;
-  const pct = dealPercent(product.avgPrice, product.bestOffer?.price);
+  const pct = dealPercent(product.avgPrice, effectivePriceOf(product.bestOffer));
   return (
     <View style={styles.deal}>
       <Ionicons name="flash" size={11} color={colors.text} />
@@ -61,6 +62,10 @@ export function ProductCard({ product, onPress, width, style }: ProductCardProps
   const sellers = product.offerCount ?? product.supplierCount ?? 0;
   const canBuy = Boolean(offer) && isPurchasable(offer) && product.inStock !== false && offer?.stock !== 0;
   const busy = adding === offer?.listingId;
+  const price = effectivePriceOf(offer) ?? product.minPrice;
+  const compareAt = compareAtOf(offer);
+  const onSale = saleLive(offer);
+  const hasTiers = tiersOf(offer).length > 0;
 
   return (
     <Pressable
@@ -72,6 +77,11 @@ export function ProductCard({ product, onPress, width, style }: ProductCardProps
       <View>
         <ProductImage material={product} fill rounded={radius.md} />
         <View style={styles.badges}>
+          {onSale ? (
+            <View style={styles.sale}>
+              <Text style={styles.saleText}>{t("sale")}</Text>
+            </View>
+          ) : null}
           <DealBadge product={product} />
         </View>
       </View>
@@ -91,11 +101,17 @@ export function ProductCard({ product, onPress, width, style }: ProductCardProps
 
         <View style={styles.priceRow}>
           <Text style={styles.from}>{t("from")} </Text>
-          <Text style={styles.price} numberOfLines={1}>
-            {formatSar(offer?.price ?? product.minPrice)}
+          <Text style={[styles.price, onSale && { color: colors.danger }]} numberOfLines={1}>
+            {formatSar(price)}
           </Text>
           <Text style={styles.unit}>/{product.unit}</Text>
+          {compareAt && price && compareAt > price ? <Text style={styles.compareAt}>{formatSar(compareAt)}</Text> : null}
         </View>
+        {hasTiers && !onSale ? (
+          <Text style={styles.tierHint} numberOfLines={1}>
+            {t("volumePricing")}
+          </Text>
+        ) : null}
 
         <View style={styles.metaRow}>
           <Text style={styles.meta} numberOfLines={1}>
@@ -150,6 +166,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   dealText: { fontSize: 10, fontWeight: "800", color: colors.text },
+  sale: { backgroundColor: colors.danger, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm },
+  saleText: { fontSize: 10, fontWeight: "800", color: "#fff", textTransform: "uppercase" },
+  compareAt: { ...typography.caption, textDecorationLine: "line-through", marginLeft: 4 },
+  tierHint: { ...typography.caption, color: colors.primary, fontWeight: "600", marginTop: 1 },
   body: { paddingTop: spacing.sm, paddingHorizontal: 2 },
   brand: { ...typography.caption, textTransform: "uppercase", letterSpacing: 0.4, fontWeight: "600" },
   name: { fontSize: 14, fontWeight: "600", color: colors.text, minHeight: 36, lineHeight: 18 },

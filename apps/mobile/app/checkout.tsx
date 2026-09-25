@@ -3,8 +3,8 @@ import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "rea
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { SAUDI_CITIES, type CarrierCode, type CheckoutResult, type DeliveryQuote, type OrderExtended, type PaymentConfig, type PaymentMethod } from "@mysupplier/shared";
-import { Screen, Button, Card, KeyValue, TextField, PickerField, PickerModal, EmptyState, LoadingView, RequireAuth, StatusBadge } from "@/components";
+import { SAUDI_CITIES, type Address, type CarrierCode, type CheckoutResult, type DeliveryQuote, type OrderExtended, type PaymentConfig, type PaymentMethod } from "@mysupplier/shared";
+import { Screen, Button, Card, KeyValue, TextField, PickerField, PickerModal, EmptyState, LoadingView, RequireAuth, StatusBadge, AddressSheet } from "@/components";
 import { api, getErrorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCart, type CartGroup } from "@/lib/cart";
@@ -132,7 +132,13 @@ function CheckoutForm() {
   const router = useRouter();
   const { t } = useI18n();
   const { user, token } = useAuth();
-  const { items, groups, summary, loading, refresh, quotes, deliveryCity, setDeliveryCity } = useCart();
+  const { items, groups, summary, loading, refresh, quotes, deliveryCity, setDeliveryCity, coupon, couponCode, credit } = useCart();
+  // Address book: pick a saved address (fills city / address / phone) or type one.
+  const [addresses, setAddresses] = useState<Address[] | null>(null);
+  const [addressId, setAddressId] = useState<string | null>(null);
+  const [manualAddress, setManualAddress] = useState(false);
+  const [addressSheetOpen, setAddressSheetOpen] = useState(false);
+  const [poNumber, setPoNumber] = useState("");
   const [quoteBusy, setQuoteBusy] = useState(false);
   /** Carrier chosen per supplier id when the buyer picks something other than the cheapest quote. */
   const [chosen, setChosen] = useState<Record<string, DeliveryQuote>>({});
@@ -163,6 +169,38 @@ function CheckoutForm() {
   const [cityOpen, setCityOpen] = useState(false);
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState(user?.phone ?? "");
+
+  /** Apply a saved address to the delivery fields (the API does the same server-side from `addressId`). */
+  const applyAddress = (a: Address) => {
+    setAddressId(a.id);
+    setManualAddress(false);
+    setCity(a.city);
+    setAddress([a.street, a.building, a.district].filter(Boolean).join(", "));
+    setPhone(a.phone || user?.phone || "");
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .addresses()
+      .then((list) => {
+        if (cancelled) return;
+        setAddresses(list);
+        const preferred = list.find((a) => a.isDefault) ?? list[0];
+        if (preferred) applyAddress(preferred);
+        else setManualAddress(true);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAddresses([]);
+          setManualAddress(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [payment, setPayment] = useState<PaymentMethod>("COD");
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<{ city?: string; address?: string; phone?: string }>({});
@@ -178,6 +216,12 @@ function CheckoutForm() {
   useEffect(() => {
     if (paymentConfig && !cardEnabled && payment === "CARD") setPayment("COD");
   }, [paymentConfig, cardEnabled, payment]);
+
+  const creditOk = Boolean(credit?.approved);
+  const creditCovers = Boolean(credit?.canCoverCart);
+  useEffect(() => {
+    if (payment === "CREDIT" && !creditOk) setPayment("COD");
+  }, [payment, creditOk]);
 
   // Re-price delivery whenever the destination changes (GET /cart?deliveryCity=).
   useEffect(() => {
@@ -224,10 +268,24 @@ function CheckoutForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups, chosen, quotes]);
 
-  const PAYMENT_OPTIONS: Array<{ value: PaymentMethod; label: string; hint?: string; icon: "cash-outline" | "business-outline" | "card-outline"; disabled?: boolean }> = [
+  const PAYMENT_OPTIONS: Array<{ value: PaymentMethod; label: string; hint?: string; icon: "cash-outline" | "business-outline" | "card-outline" | "wallet-outline"; disabled?: boolean; badge?: string }> = [
     { value: "COD", label: t("cod"), icon: "cash-outline" },
     { value: "BANK_TRANSFER", label: t("bankTransfer"), hint: "Bank details and the order reference are shown after checkout", icon: "business-outline" },
     { value: "CARD", label: t("card"), hint: cardEnabled ? t("cardOnlineHint") : t("cardUnavailable"), icon: "card-outline", disabled: !cardEnabled },
+    ...(credit && creditOk
+      ? [
+          {
+            value: "CREDIT" as PaymentMethod,
+            label: t("creditTerms"),
+            hint: creditCovers
+              ? `${t("creditAvailable")} ${formatSar(credit.available)} · ${t("creditPayWithin")} ${credit.termsDays} ${t("days")}`
+              : `${t("creditInsufficient")} (${t("creditAvailable")} ${formatSar(credit.available)})`,
+            icon: "wallet-outline" as const,
+            disabled: !creditCovers,
+            badge: `${credit.termsDays}d`,
+          },
+        ]
+      : []),
   ];
 
   /** Run the hosted card payment for one order; verify on return and update the result list. */
@@ -252,8 +310,13 @@ function CheckoutForm() {
     }
   };
 
+  const useSaved = !manualAddress && Boolean(addressId);
   const validate = () => {
     const next: typeof errors = {};
+    if (useSaved) {
+      setErrors({});
+      return true;
+    }
     if (!city) next.city = "Delivery city is required";
     if (address.trim().length < 5) next.address = "Enter a delivery address";
     if (phone.trim().length < 7) next.phone = "Enter a contact phone";
@@ -273,6 +336,9 @@ function CheckoutForm() {
         paymentMethod: payment,
         notes: notes.trim() || undefined,
         carrierBySupplier,
+        addressId: useSaved ? (addressId as string) : undefined,
+        poNumber: poNumber.trim() || undefined,
+        couponCode: coupon && couponCode ? couponCode : undefined,
       });
       setResult(res);
       void refresh();
@@ -365,25 +431,95 @@ function CheckoutForm() {
       <Stack.Screen options={{ title: t("checkout") }} />
 
       <Text style={styles.sectionTitle}>{t("deliveryDetails")}</Text>
-      <PickerField label="Delivery city" value={city} placeholder="Select city" onPress={() => setCityOpen(true)} error={errors.city} />
-      <TextField
-        label="Delivery address"
-        value={address}
-        onChangeText={setAddress}
-        placeholder="Site / warehouse address, district, landmarks"
-        multiline
-        error={errors.address}
-      />
-      <TextField
-        label="Contact phone"
-        value={phone}
-        onChangeText={setPhone}
-        placeholder="+9665XXXXXXXX"
-        keyboardType="phone-pad"
-        autoComplete="tel"
-        textContentType="telephoneNumber"
-        error={errors.phone}
-      />
+      {addresses === null ? (
+        <View style={styles.quoteLoading}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={typography.caption}>{t("savedAddresses")}…</Text>
+        </View>
+      ) : null}
+      {addresses && addresses.length && !manualAddress ? (
+        <Card style={{ paddingVertical: spacing.sm }}>
+          {addresses.map((a, i) => {
+            const selected = addressId === a.id;
+            return (
+              <Pressable key={a.id} onPress={() => applyAddress(a)} style={[styles.addressRow, i > 0 && styles.addressRowBorder]} accessibilityRole="radio" accessibilityState={{ selected }}>
+                <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={20} color={selected ? colors.primary : colors.textMuted} />
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={styles.addressLabel}>{a.label}</Text>
+                    {a.isDefault ? <Text style={styles.defaultPill}>{t("defaultLabel")}</Text> : null}
+                  </View>
+                  <Text style={typography.caption} numberOfLines={2}>
+                    {[a.street, a.building, a.district, a.city].filter(Boolean).join(", ")}
+                  </Text>
+                  <Text style={typography.caption}>
+                    {a.recipient} · {a.phone}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+          <View style={styles.addressActions}>
+            <Pressable onPress={() => setAddressSheetOpen(true)} style={styles.changeLink} hitSlop={6}>
+              <Ionicons name="add" size={16} color={colors.primary} />
+              <Text style={styles.changeLinkText}>{t("addAddress")}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setManualAddress(true);
+                setAddressId(null);
+              }}
+              style={styles.changeLink}
+              hitSlop={6}
+            >
+              <Text style={styles.changeLinkText}>{t("enterManually")}</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+            </Pressable>
+          </View>
+        </Card>
+      ) : addresses ? (
+        <>
+          <PickerField label={t("deliveryCity")} value={city} placeholder={t("selectCity")} onPress={() => setCityOpen(true)} error={errors.city} />
+          <TextField
+            label={t("deliveryAddress")}
+            value={address}
+            onChangeText={setAddress}
+            placeholder="Site / warehouse address, district, landmarks"
+            multiline
+            error={errors.address}
+          />
+          <TextField
+            label={t("contactPhone")}
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="+9665XXXXXXXX"
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            textContentType="telephoneNumber"
+            error={errors.phone}
+          />
+          <View style={[styles.addressActions, { marginTop: -spacing.xs, marginBottom: spacing.md }]}>
+            <Pressable onPress={() => setAddressSheetOpen(true)} style={styles.changeLink} hitSlop={6}>
+              <Ionicons name="bookmark-outline" size={14} color={colors.primary} />
+              <Text style={styles.changeLinkText}>{t("addAddress")}</Text>
+            </Pressable>
+            {addresses.length ? (
+              <Pressable
+                onPress={() => {
+                  const preferred = addresses.find((a) => a.id === addressId) ?? addresses.find((a) => a.isDefault) ?? addresses[0];
+                  applyAddress(preferred);
+                }}
+                style={styles.changeLink}
+                hitSlop={6}
+              >
+                <Text style={styles.changeLinkText}>{t("useSavedAddress")}</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+              </Pressable>
+            ) : null}
+          </View>
+        </>
+      ) : null}
+      <TextField label={`${t("poNumber")} (${t("optional")})`} value={poNumber} onChangeText={setPoNumber} placeholder="PO-2026-0042" hint={t("poNumberHint")} autoCapitalize="characters" maxLength={40} />
 
       <Text style={styles.sectionTitle}>{t("paymentMethod")}</Text>
       <View style={styles.segment}>
@@ -401,7 +537,7 @@ function CheckoutForm() {
               <Text style={[styles.segmentText, active && styles.segmentTextActive, opt.disabled && { color: colors.textMuted }]} numberOfLines={2}>
                 {opt.label}
               </Text>
-              {opt.disabled ? <Text style={styles.soon}>Soon</Text> : null}
+              {opt.badge ? <Text style={[styles.soon, active && { color: "rgba(255,255,255,0.85)" }]}>{opt.badge}</Text> : opt.disabled ? <Text style={styles.soon}>{opt.value === "CARD" ? "Soon" : "—"}</Text> : null}
             </Pressable>
           );
         })}
@@ -410,7 +546,21 @@ function CheckoutForm() {
         <Text style={[typography.caption, { marginTop: -spacing.sm, marginBottom: spacing.md }]}>{PAYMENT_OPTIONS.find((o) => o.value === payment)?.hint}</Text>
       ) : null}
 
-      <TextField label={t("notes")} value={notes} onChangeText={setNotes} placeholder="Delivery window, crane access, PO number..." multiline />
+      {payment === "CREDIT" && credit ? (
+        <View style={styles.creditBox}>
+          <Ionicons name="wallet-outline" size={18} color={colors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.creditTitle}>
+              {t("creditAvailable")}: {formatSar(credit.available)} / {formatSar(credit.limit)}
+            </Text>
+            <Text style={typography.caption}>
+              {t("creditPayWithin")} {credit.termsDays} {t("days")} · {t("total")} {formatSar(summary.total)}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
+      <TextField label={t("notes")} value={notes} onChangeText={setNotes} placeholder="Delivery window, crane access, gate code..." multiline />
 
       <Text style={styles.sectionTitle}>{t("delivery")}</Text>
       {!city ? (
@@ -476,7 +626,7 @@ function CheckoutForm() {
         })
       )}
 
-      <Text style={styles.sectionTitle}>Order summary</Text>
+      <Text style={styles.sectionTitle}>{t("orderSummary")}</Text>
       <Card>
         {groups.map((g) => (
           <View key={g.key} style={styles.groupRow}>
@@ -493,6 +643,8 @@ function CheckoutForm() {
         ))}
         <View style={styles.divider} />
         <KeyValue label={t("subtotal")} value={formatSar(summary.subtotal)} />
+        {summary.savings > 0 ? <KeyValue label={t("youSave")} value={`-${formatSar(summary.savings)}`} /> : null}
+        {coupon && summary.discount > 0 ? <KeyValue label={`${t("discount")} (${coupon.code})`} value={`-${formatSar(summary.discount)}`} /> : null}
         <KeyValue label={t("vat")} value={formatSar(summary.vat)} />
         <KeyValue label={t("deliveryFee")} value={quoteBusy ? "…" : formatSar(displayDelivery)} />
         <View style={styles.totalRow}>
@@ -507,7 +659,18 @@ function CheckoutForm() {
       {submitError ? <Text style={styles.error}>{submitError}</Text> : null}
       <Button title={`${t("placeOrder")} · ${formatSar(displayTotal)}`} size="lg" fullWidth loading={submitting} disabled={quoteBusy} onPress={placeOrder} />
 
-      <PickerModal visible={cityOpen} title="Delivery city" options={CITY_OPTIONS} value={city} onSelect={setCity} onClose={() => setCityOpen(false)} searchable />
+      <PickerModal visible={cityOpen} title={t("deliveryCity")} options={CITY_OPTIONS} value={city} onSelect={setCity} onClose={() => setCityOpen(false)} searchable />
+      <AddressSheet
+        visible={addressSheetOpen}
+        onClose={() => setAddressSheetOpen(false)}
+        onSaved={(a) => {
+          setAddresses((prev) => {
+            const rest = (prev ?? []).filter((x) => x.id !== a.id).map((x) => (a.isDefault ? { ...x, isDefault: false } : x));
+            return [a, ...rest];
+          });
+          applyAddress(a);
+        }}
+      />
       <QuoteOptionsSheet
         group={optionsFor}
         city={city}
@@ -531,9 +694,10 @@ export default function CheckoutScreen() {
 
 const styles = StyleSheet.create({
   sectionTitle: { ...typography.h3, marginTop: spacing.lg, marginBottom: spacing.sm },
-  segment: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md },
+  segment: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.md },
   segmentItem: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: "30%",
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
@@ -577,6 +741,13 @@ const styles = StyleSheet.create({
   orderLink: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, marginTop: spacing.sm },
   orderLinkText: { color: colors.primary, fontWeight: "600", fontSize: 13 },
   quoteLoading: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.sm },
+  addressRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md, paddingVertical: spacing.sm },
+  addressRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  addressLabel: { ...typography.body, fontWeight: "600" },
+  defaultPill: { ...typography.caption, color: colors.primary, backgroundColor: colors.primaryLight, paddingHorizontal: 6, paddingVertical: 1, borderRadius: radius.sm, fontWeight: "600", overflow: "hidden" },
+  addressActions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  creditBox: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primaryLight, marginBottom: spacing.md },
+  creditTitle: { ...typography.body, fontWeight: "600", color: colors.primary },
   quoteSummary: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingTop: spacing.sm },
   quoteIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center" },
   quoteCarrier: { ...typography.body, fontWeight: "600" },
