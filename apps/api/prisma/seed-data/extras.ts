@@ -1,0 +1,60 @@
+/**
+ * Spec patches for products defined in seed.ts, so every category's products carry the keys its
+ * CategoryAttribute rows declare. Merged into `specs` at seed time; existing keys are kept.
+ */
+export const specPatches: Record<string, Record<string, string | number | boolean>> = {
+  "CEM-OPC-50": { type: "OPC" }, "CEM-SRC-50": { type: "SRC", weight_kg: 50 }, "CEM-WHT-50": { type: "White", weight_kg: 50 }, "CEM-BULK-T": { type: "OPC", weight_kg: 1000 },
+  "RMC-C25": { type: "Ready Mix" }, "RMC-C30": { type: "Ready Mix", slump_mm: 100 }, "RMC-C40": { type: "Ready Mix", slump_mm: 100 },
+  "RBR-8": { grade: "B500B", type: "Rebar" }, "RBR-10": { grade: "B500B", type: "Rebar" }, "RBR-12": { grade: "Grade 60", type: "Rebar" }, "RBR-16": { grade: "Grade 60", type: "Rebar" }, "RBR-20": { grade: "Grade 60", type: "Rebar" }, "RBR-25": { grade: "Grade 60", type: "Rebar" },
+  "STL-MESH-A142": { type: "Mesh", grade: "B500B" }, "STL-IPE-200": { type: "Beam", grade: "S275" }, "STL-HSS-50": { type: "Hollow Section", grade: "S275" },
+  "BLK-HOL-20": { thickness_cm: 20, type: "Hollow" }, "BLK-HOL-15": { thickness_cm: 15, type: "Hollow" }, "BLK-SOL-10": { thickness_cm: 10, type: "Solid" }, "BLK-INS-20": { thickness_cm: 20, type: "Insulated" }, "BLK-AAC-20": { thickness_cm: 20, type: "AAC" }, "BRK-RED": { thickness_cm: 6, type: "Clay" }, "PAV-INT-6": { thickness_cm: 6, type: "Paver" }, "CRB-STD": { thickness_cm: 15, type: "Kerb" },
+  "TIL-POR-60": { material: "Porcelain", finish: "Matt", size_cm: "60x60" }, "TIL-POR-120": { material: "Porcelain", finish: "Polished", size_cm: "60x120" }, "TIL-CER-30": { material: "Ceramic", finish: "Glossy", size_cm: "30x60" }, "MRB-CAR": { material: "Marble", finish: "Polished", size_cm: "60x60" }, "GRT-BLK": { material: "Granite", finish: "Polished", size_cm: "60x60" }, "TIL-ADH-25": { material: "Adhesive", finish: "Matt", size_cm: "N/A" },
+  "PNT-EMU-INT": { volume_l: 18, finish: "Matt", base: "Water" }, "PNT-EXT-ACR": { volume_l: 18, finish: "Silk", base: "Water" }, "PNT-PRM": { volume_l: 18, finish: "Matt", base: "Water" }, "PNT-PUT-25": { volume_l: 15, finish: "Matt", base: "Water" }, "PNT-EPX-FLR": { volume_l: 20, finish: "Gloss", base: "Epoxy" },
+  "PVC-110": { size_mm: 110, material: "PVC", pressure_pn: 6 }, "PVC-160": { size_mm: 160, material: "PVC", pressure_pn: 6 }, "PPR-25": { size_mm: 25, material: "PPR", pressure_pn: 20 }, "PPR-32": { size_mm: 32, material: "PPR", pressure_pn: 20 }, "HDPE-63": { size_mm: 63, material: "HDPE", pressure_pn: 16 }, "WTR-TNK-2000": { size_mm: 0, material: "PE", pressure_pn: 0 },
+  "CBL-2.5": { size_mm2: 2.5, cores: 1, voltage_v: 450 }, "CBL-4": { size_mm2: 4, cores: 1, voltage_v: 450 }, "CBL-16-4C": { size_mm2: 16, cores: 4, voltage_v: 1000 }, "CND-20": { voltage_v: 0 }, "DB-12W": { rating_a: 63, voltage_v: 415 }, "MCB-32": { rating_a: 32, voltage_v: 240, cores: 1 },
+  "INS-XPS-50": { thickness_mm: 50, type: "XPS" }, "INS-PU-50": { thickness_mm: 50, type: "PU" }, "WP-MEM-4": { thickness_mm: 4, type: "Bitumen Membrane" }, "WP-CEM-20": { thickness_mm: 2, type: "Cementitious" }, "INS-RW-50": { thickness_mm: 50, type: "Rockwool" },
+  "GYP-BRD-12": { thickness_mm: 12.5, type: "Standard" }, "GYP-MR-12": { thickness_mm: 12.5, type: "Moisture Resistant" }, "GYP-PLS-25": { thickness_mm: 0, type: "Plaster" }, "CLG-TILE-60": { thickness_mm: 15, type: "Mineral Fibre" },
+  "HV-SPL-24": { capacity_btu: 24000, capacity_ton: 2, refrigerant: "R410A", type: "Split", inverter: false }, "HV-SPL-18": { capacity_btu: 18000, capacity_ton: 1.5, refrigerant: "R410A", type: "Split", inverter: false }, "HV-DCT-GI": { type: "Duct", refrigerant: "N/A", inverter: false }, "HV-CU-3/8": { type: "Duct", refrigerant: "N/A", inverter: false }, "HV-EXF-12": { type: "Fan", refrigerant: "N/A", inverter: false },
+  "LT-PNL-60": { power_w: 40, lumens: 4000, color_temp_k: 6500, ip_rating: "IP20" }, "LT-FLD-100": { power_w: 100, lumens: 10000, color_temp_k: 6500, ip_rating: "IP65" }, "LT-DWN-12": { power_w: 12, lumens: 1100, color_temp_k: 4000, ip_rating: "IP44" }, "LT-SW-1G": { power_w: 0, ip_rating: "IP20" }, "LT-SKT-13": { power_w: 0, ip_rating: "IP20" },
+  "PPE-HLM": { standard: "EN 397", size: "Universal" }, "PPE-VST": { standard: "EN 20471", size: "XL" }, "PPE-BOOT": { standard: "EN ISO 20345", size: "Universal" }, "PPE-GLV": { standard: "EN 388", size: "L" }, "PPE-HRN": { standard: "N/A", size: "Universal" }, "PPE-CONE": { standard: "N/A", size: "Universal" }, "PPE-GGL": { standard: "EN 166", size: "Universal" }, "PPE-EAR": { standard: "N/A", size: "Universal" }, "PPE-RSP": { standard: "EN 149", size: "Universal" }, "PPE-MSK-N95": { standard: "EN 149", size: "Universal" }, "PPE-CVRL": { standard: "N/A", size: "XL" },
+  "TL-DRL-HAM": { power_w: 800, voltage_v: 220, cordless: false }, "TL-GRD-115": { power_w: 720, voltage_v: 220, cordless: false }, "TL-MIX-350": { power_w: 1500, voltage_v: 220, cordless: false }, "TL-VIB-45": { power_w: 1500, voltage_v: 220, cordless: false }, "TL-LVL-LAS": { power_w: 5, voltage_v: 4, cordless: true }, "TL-CUT-TIL": { power_w: 800, voltage_v: 220, cordless: false }, "TL-DRL-CDL": { power_w: 500, voltage_v: 18, cordless: true }, "TL-HAM-DEM": { power_w: 1700, voltage_v: 220, cordless: false }, "TL-SAW-CIR": { power_w: 1400, voltage_v: 220, cordless: false }, "TL-SAW-CHP": { power_w: 2200, voltage_v: 220, cordless: false }, "TL-JIG": { power_w: 650, voltage_v: 220, cordless: false }, "TL-IMP-WR": { power_w: 400, voltage_v: 18, cordless: true }, "TL-GRD-230": { power_w: 2200, voltage_v: 220, cordless: false }, "TL-SAW-TIL": { power_w: 1200, voltage_v: 220, cordless: false }, "TL-PRS-WSH": { power_w: 2100, voltage_v: 220, cordless: false }, "TL-VAC-IND": { power_w: 1400, voltage_v: 220, cordless: false },
+  "GN-DSL-30": { fuel: "Diesel" }, "GN-DSL-100": { kva: 100, fuel: "Diesel" }, "GN-DSL-250": { kva: 250, fuel: "Diesel" }, "GN-PET-7": { kva: 7, fuel: "Petrol" }, "GN-CMP-185": { fuel: "Diesel" }, "GN-CMP-500": { fuel: "Electric" }, "GN-PMP-3D": { fuel: "Diesel" }, "GN-PMP-SUB": { fuel: "Electric" }, "GN-PMP-TRSH": { fuel: "Diesel" }, "GN-LT-TWR": { fuel: "Diesel" },
+  "FS-EXT-6": { capacity_kg: 6, agent: "Dry Powder" }, "FS-EXT-CO2": { capacity_kg: 5, agent: "CO2" }, "FS-HRL-30": { agent: "Water", size_inch: 0.75 }, "FS-SPR-68": { agent: "Water", size_inch: 0.5 }, "FS-PIPE-4": { agent: "N/A", size_inch: 4 }, "FS-BLNK": { agent: "N/A" },
+  "SO-PNL-550": { power_w: 550, voltage_v: 41 }, "SO-INV-10": { power_w: 10000, voltage_v: 400 }, "SO-BAT-5": { capacity_kwh: 5, voltage_v: 48 }, "SO-WH-200": { power_w: 2000 }, "SO-LT-ST": { power_w: 60, voltage_v: 12 },
+  "SC-TWR-MOB": { height_m: 8, load_kg: 250 }, "SC-SCS-LFT": { height_m: 12, load_kg: 320 }, "SC-BOOM-16": { height_m: 16, load_kg: 230 }, "SC-LDR-6": { height_m: 6, load_kg: 150 }, "SC-LDR-STP": { height_m: 2, load_kg: 150 }, "SC-GNDL": { height_m: 100, load_kg: 630 },
+  "LF-CHN-3T": { capacity_ton: 3, length_m: 6 }, "LF-ELC-1T": { capacity_ton: 1, length_m: 6 }, "LF-MAT-500": { capacity_ton: 0.5, length_m: 30 }, "LF-SLG-WEB": { capacity_ton: 3, length_m: 3 }, "LF-SLG-WR": { capacity_ton: 5, length_m: 3 }, "LF-SHK-8.5": { capacity_ton: 8.5 }, "LF-JCK-20": { capacity_ton: 20 }, "LF-PLT-JCK": { capacity_ton: 2.5 }, "LF-PAS-HST": { capacity_ton: 2, length_m: 100 }, "LF-TWR-CRN": { capacity_ton: 8, length_m: 60 }, "LF-MOB-CRN": { capacity_ton: 50, length_m: 40 },
+  "WL-INV-200": { current_a: 200, process: "MMA" }, "WL-MIG-350": { current_a: 350, process: "MIG" }, "WL-DSL-400": { current_a: 400, process: "MMA" }, "WL-CUT-PLS": { current_a: 60, process: "Plasma" }, "WL-OXY-SET": { current_a: 0, process: "Oxy-fuel" }, "WL-ELC-6013": { process: "MMA" }, "WL-ELC-7018": { process: "MMA" },
+};
+
+/** Review text pools; picked deterministically per (material, reviewer). */
+export const reviewTexts: { rating: number; title: string; body: string }[] = [
+  { rating: 5, title: "Exactly as specified", body: "Delivered on time to site, matches the datasheet and the invoice was correct. Will reorder." },
+  { rating: 5, title: "ممتاز", body: "وصلت الطلبية في الوقت المحدد والجودة مطابقة للمواصفات. تعامل احترافي من المورد." },
+  { rating: 5, title: "Good price for the brand", body: "Cheaper than our usual distributor for the same original part. Packaging intact." },
+  { rating: 4, title: "Solid product, slow delivery", body: "Quality is fine and the spec matches, but delivery took two days longer than quoted." },
+  { rating: 4, title: "جودة جيدة", body: "المنتج جيد وسعره مناسب. التغليف كان بسيطاً لكن لم يحدث أي ضرر." },
+  { rating: 5, title: "Our maintenance team is happy", body: "Fitted straight away with no issues. Supplier answered technical questions quickly." },
+  { rating: 4, title: "Works as expected", body: "No surprises. Would be five stars if the datasheet had been attached to the listing." },
+  { rating: 3, title: "Acceptable", body: "Product is fine but one carton arrived damaged and had to be replaced. Supplier sorted it within a week." },
+  { rating: 5, title: "سعر منافس", body: "قارنا ثلاثة موردين وكان هذا الأفضل سعراً مع نفس الماركة. التوصيل للموقع كان سلساً." },
+  { rating: 4, title: "Reliable for repeat orders", body: "We order this every month for our facility contract. Consistent quality batch to batch." },
+  { rating: 3, title: "Minor spec difference", body: "The item works but the finish differs slightly from the photo. Fine for back-of-house use." },
+  { rating: 5, title: "Great support", body: "Supplier helped us pick the right size over the phone and delivered the next morning." },
+  { rating: 4, title: "توصيل سريع", body: "التوصيل كان سريعاً والمنتج أصلي. ينقص فقط شهادة المطابقة مع الفاتورة." },
+  { rating: 5, title: "Passed inspection", body: "Consultant approved the material submittal on first pass. Certificates were provided on request." },
+  { rating: 2, title: "Late and incomplete", body: "Half the order arrived a week late. Supplier apologised and credited the delivery fee, but it delayed our works." },
+];
+
+/** Q&A pools; picked deterministically per popular product. */
+export const questionTexts: { question: string; answer: string }[] = [
+  { question: "Is this item available for delivery to Riyadh within 48 hours?", answer: "Yes, we keep stock in our Riyadh warehouse. Orders confirmed before 2pm ship the same day and typically arrive next working day." },
+  { question: "هل يمكن توفير شهادة مطابقة أو Data Sheet مع الطلب؟", answer: "نعم، نرفق شهادة المنشأ وبيانات المنتج مع كل طلب، ويمكن إرسالها مسبقاً بالبريد عند الطلب." },
+  { question: "Do you offer a discount for quantities above 100 units?", answer: "Yes. Tier pricing applies automatically in the cart from 10, 50 and 200 units. For larger project quantities please send an RFQ." },
+  { question: "What is the warranty period?", answer: "12 months manufacturer warranty against defects, subject to installation by a qualified technician." },
+  { question: "هل السعر شامل ضريبة القيمة المضافة والتوصيل؟", answer: "السعر المعروض قبل الضريبة. تضاف ضريبة 15٪ في السلة، ورسوم التوصيل تظهر حسب المدينة قبل تأكيد الطلب." },
+  { question: "Can you supply this in a different size or rating?", answer: "Most sizes in the range are available on request. Use the RFQ button and mention the required size; we quote within one working day." },
+  { question: "Is installation included in the price?", answer: "No, this listing is supply only. Installation can be added as a separate service line from the Services category." },
+  { question: "هل المنتج أصلي من الوكيل؟", answer: "نعم، جميع منتجاتنا أصلية ومستوردة عبر الوكيل المعتمد في المملكة مع إمكانية التحقق من الرقم التسلسلي." },
+  { question: "What is the minimum order quantity?", answer: "The minimum quantity is shown on each supplier offer. Smaller quantities can be collected from the branch counter." },
+  { question: "Do you deliver to Jubail and Ras Al Khair?", answer: "Yes, Eastern Province deliveries run three times a week. Add the site address at checkout to see the delivery fee." },
+];
