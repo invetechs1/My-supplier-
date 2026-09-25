@@ -6,7 +6,7 @@ import React, { Suspense, useEffect, useRef, useState } from "react";
 import type { ListingStatus, SupplierProduct, SupplierProductPatch } from "@mysupplier/shared";
 import { api, errorMessage } from "@/lib/api";
 import { useAsync, useDebounce, useFlash, type Flash } from "@/lib/hooks";
-import { useI18n, type Lang } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { cn, formatNumber, formatSar, timeAgo } from "@/lib/format";
 import { Alert, Badge, Button, Card, EmptyState, FlashMessage, Input, LinkButton, LoadingBlock, PageHeader, Pagination, Select, Spinner, StatTile, Toggle } from "@/components/ui";
 import { generatedImageUrl } from "@/components/shop/ProductCard";
@@ -74,19 +74,16 @@ const formFor = (p: SupplierProduct): EditForm => ({
 
 function SupplierProductCard({
   product: p,
-  lang,
-  t,
   onReplace,
   onReload,
   onFlash,
 }: {
   product: SupplierProduct;
-  lang: Lang;
-  t: (key: string) => string;
   onReplace: (next: SupplierProduct) => void;
   onReload: () => void;
   onFlash: (flash: Flash) => void;
 }) {
+  const { t, lang } = useI18n();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<EditForm>(() => formFor(p));
   const [saving, setSaving] = useState(false);
@@ -490,10 +487,10 @@ function SupplierProductsInner() {
         <>
           <div className={cn("grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3", state.loading && "opacity-60 transition")} aria-busy={state.loading}>
             {rows.map((p) => (
-              <SupplierProductCard key={p.id} product={p} lang={lang} t={t} onReplace={replaceProduct} onReload={state.reload} onFlash={setFlash} />
+              <SupplierProductCard key={p.id} product={p} onReplace={replaceProduct} onReload={state.reload} onFlash={setFlash} />
             ))}
           </div>
-          {state.data && (
+          {state.data && state.data.total > state.data.pageSize && (
             <Card className="mt-4">
               <Pagination page={state.data.page} pageSize={state.data.pageSize} total={state.data.total} onChange={(next) => { setPage(next); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
             </Card>
