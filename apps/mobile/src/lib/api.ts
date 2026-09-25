@@ -1,5 +1,7 @@
 import { storage } from "./storage";
 import type {
+  SupplierProduct,
+  SupplierProductsResponse,
   AiConfig,
   ApiError,
   AuthResponse,
@@ -547,6 +549,9 @@ export const api = {
   myBids: (query: { status?: string; page?: number } = {}) =>
     request<Paginated<Bid>>("/bids", { query }),
   withdrawBid: (id: string) => request<Bid>(`/bids/${id}/withdraw`, { method: "POST" }),
+  supplierProducts: (query: { q?: string; status?: string; city?: string; sort?: string; page?: number } = {}) => request<SupplierProductsResponse>("/supplier/products", { query }),
+  uploadListingImage: (listingId: string, form: FormData) => requestMultipart<SupplierProduct>(`/supplier/prices/${encodeURIComponent(listingId)}/image`, form),
+  deleteListingImage: (listingId: string) => request<SupplierProduct>(`/supplier/prices/${encodeURIComponent(listingId)}/image`, { method: "DELETE" }),
   supplierPrices: (page = 1) =>
     request<Paginated<PriceListing>>("/supplier/prices", { query: { page } }),
   upsertPrice: (payload: UpsertPricePayload) =>

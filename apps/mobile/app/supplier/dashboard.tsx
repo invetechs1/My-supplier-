@@ -135,6 +135,7 @@ function DashboardContent() {
       </View>
 
       <View style={styles.quickLinks}>
+        <QuickLink icon="images-outline" label={t("myProducts")} onPress={() => router.push("/supplier/products")} />
         <QuickLink icon="cube-outline" label={t("inventory")} onPress={() => router.push("/supplier/inventory")} />
         <QuickLink icon="pricetags-outline" label="Prices" onPress={() => router.push("/supplier/prices")} />
         {canManageCompany ? <QuickLink icon="wallet-outline" label={t("finance")} onPress={() => router.push("/supplier/finance")} /> : null}

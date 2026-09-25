@@ -235,6 +235,8 @@ model PriceListing {
   sourceName   String?
   validUntil   DateTime?
   stock        Int?
+  active       Boolean     @default(true)
+  imageUrl     String?
   branchId     String?
   branch       Branch?     @relation(fields: [branchId], references: [id], onDelete: SetNull)
   movements    StockMovement[]

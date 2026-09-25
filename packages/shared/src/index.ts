@@ -96,6 +96,11 @@ export interface PriceListing {
   source: PriceSource;
   sourceName?: string | null;
   validUntil?: string | null;
+  stock?: number | null;
+  /** Paused listings are hidden from buyers but kept for the supplier. */
+  active?: boolean;
+  /** Supplier-uploaded photo for this offer (shown in the shop when the material has no image). */
+  imageUrl?: string | null;
   updatedAt: string;
 }
 
@@ -1218,4 +1223,47 @@ export interface AnnouncementPayload {
   audience: "ALL" | "BUYERS" | "SUPPLIERS";
   link?: string | null;
   email?: boolean;
+}
+
+// ---------------------------------------------------------------- supplier "My products"
+export type ListingStatus = "ACTIVE" | "PAUSED" | "OUT_OF_STOCK" | "EXPIRED";
+
+export interface SupplierProduct {
+  id: string; // listing id
+  materialId: string;
+  material: Pick<Material, "id" | "sku" | "name" | "nameAr" | "unit" | "brand" | "imageUrl"> & { category?: Pick<Category, "id" | "slug" | "name" | "nameAr" | "icon"> | null };
+  city: string;
+  price: number;
+  currency: string;
+  minQty: number;
+  leadTimeDays: number;
+  stock: number | null;
+  validUntil?: string | null;
+  active: boolean;
+  imageUrl?: string | null;
+  /** Photo shown to buyers: the supplier's own upload, else the material image, else the generated one. */
+  displayImageUrl: string;
+  status: ListingStatus;
+  /** Other suppliers offering the same material in the same city. */
+  competitors: number;
+  bestCompetitorPrice: number | null;
+  /** True when this offer is the lowest supplier price for the material in its city. */
+  isCheapest: boolean;
+  /** Units sold through the platform in the last 30 days. */
+  sold30d: number;
+  updatedAt: string;
+}
+
+export interface SupplierProductsResponse extends Paginated<SupplierProduct> {
+  summary: { total: number; active: number; paused: number; outOfStock: number; expired: number; cheapest: number };
+  cities: string[];
+}
+
+export interface SupplierProductPatch {
+  price?: number;
+  stock?: number | null;
+  minQty?: number;
+  leadTimeDays?: number;
+  validUntil?: string | null;
+  active?: boolean;
 }

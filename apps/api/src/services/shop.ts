@@ -42,6 +42,8 @@ export interface Enrichment {
   inStock: boolean;
   isDeal: boolean;
   lastUpdated: string | null;
+  /** First supplier-uploaded photo among the listings (used when the material has no image of its own). */
+  listingImageUrl: string | null;
 }
 
 /** Loads all active listings for a set of materials and computes storefront fields per material. */
@@ -76,13 +78,14 @@ export async function enrichMaterials(materialIds: string[], city?: string): Pro
       inStock: purchasable.length > 0,
       isDeal: Boolean(best && avg && best.price <= avg * (1 - DEAL_THRESHOLD)),
       lastUpdated: ls.length ? ls.reduce((m, l) => (l.updatedAt > m ? l.updatedAt : m), ls[0].updatedAt).toISOString() : null,
+      listingImageUrl: ls.find((l) => l.imageUrl)?.imageUrl ?? null,
     });
   }
   return map;
 }
 
 export const emptyEnrichment: Enrichment = {
-  bestOffer: null, offerCount: 0, minPrice: null, avgPrice: null, maxPrice: null, supplierCount: 0, inStock: false, isDeal: false, lastUpdated: null,
+  bestOffer: null, offerCount: 0, minPrice: null, avgPrice: null, maxPrice: null, supplierCount: 0, inStock: false, isDeal: false, lastUpdated: null, listingImageUrl: null,
 };
 
 export function deliveryFee(supplierCity: string, deliveryCity: string): number {

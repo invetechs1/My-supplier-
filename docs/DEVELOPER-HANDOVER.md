@@ -1,6 +1,6 @@
 # MySupplier Developer Handover
 
-_Date: 24 September 2026. Repository: invetechs1/My-supplier-, branch claude/building-materials-ecommerce-ktfxj3._
+_Date: 25 September 2026. Repository: invetechs1/My-supplier-, branch claude/building-materials-ecommerce-ktfxj3._
 
 Companion documents: deploy/GO-LIVE.md, docs/API.md, docs/ARCHITECTURE.md, docs/ROADMAP.md, README.md.
 
@@ -155,6 +155,7 @@ Redeploying after a code change is the same deploy.sh command. Migrations run au
 
 ### Supplier portal (multi-tenant)
 
+- **My products:** every offer the supplier has in the marketplace as buyers see it, with photo, price, stock, minimum quantity and lead time editable in place, pause and resume, competitor price and cheapest-in-city flag, units sold in 30 days, and a link to the public product page. Available on web and mobile.
 - Dashboard with revenue, orders, response time, rating and stock alerts; order list with status changes, events timeline, delivery notes, shipments and messages.
 - Inventory: per-material stock, stock movements, low-stock alerts; price list editing; bulk price imports by PDF, Excel, photo or web page with an AI-extracted review queue before publishing.
 - Company profile and verification documents (CR, VAT), branches, team members with roles, finance page with commission due, payout history and statement export.

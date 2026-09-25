@@ -1,4 +1,6 @@
 import type {
+  SupplierProduct,
+  SupplierProductsResponse,
   AdminPaymentsResponse,
   AdminReports,
   AdminReview,
@@ -331,6 +333,7 @@ export interface SupplierPricePatch {
   minQty?: number;
   leadTimeDays?: number;
   validUntil?: string | null;
+  active?: boolean;
 }
 
 /** Row-level error returned by catalogue / feed imports (shape is loose on purpose). */
@@ -581,6 +584,13 @@ export const api = {
   bids: (query: { status?: string; page?: number } = {}) => request<Paginated<Bid>>("/bids", { query }),
   withdrawBid: (id: string) => request<Bid>(`/bids/${encodeURIComponent(id)}/withdraw`, { method: "POST" }),
   supplierPrices: (page = 1) => request<Paginated<SupplierListing>>("/supplier/prices", { query: { page } }),
+  supplierProducts: (query: { q?: string; status?: string; city?: string; categoryId?: string; sort?: string; page?: number } = {}) => request<SupplierProductsResponse>("/supplier/products", { query }),
+  uploadListingImage: (listingId: string, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    return requestForm<SupplierProduct>(`/supplier/prices/${encodeURIComponent(listingId)}/image`, fd);
+  },
+  deleteListingImage: (listingId: string) => request<SupplierProduct>(`/supplier/prices/${encodeURIComponent(listingId)}/image`, { method: "DELETE" }),
   upsertPrice: (payload: UpsertPricePayload) =>
     request<PriceListing>("/supplier/prices", { method: "POST", body: payload }),
   bulkPrices: (items: UpsertPricePayload[]) =>

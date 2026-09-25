@@ -79,6 +79,7 @@ export const buyerNav: NavItem[] = [
 
 export const supplierNav: NavItem[] = [
   { href: "/supplier", labelKey: "dash.overview", exact: true, icon: <Icon>{I.home}</Icon>, area: "overview" },
+  { href: "/supplier/products", labelKey: "sup.products", icon: <Icon>{I.grid}</Icon>, group: "sup.group.sell", area: "sell" },
   { href: "/supplier/marketplace", labelKey: "sup.marketplace", icon: <Icon>{I.store}</Icon>, group: "sup.group.sell", area: "sell" },
   { href: "/supplier/bids", labelKey: "sup.bids", icon: <Icon>{I.gavel}</Icon>, group: "sup.group.sell", area: "sell" },
   { href: "/supplier/prices", labelKey: "sup.prices", icon: <Icon>{I.tag}</Icon>, group: "sup.group.sell", area: "sell" },

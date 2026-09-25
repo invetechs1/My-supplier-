@@ -16,6 +16,7 @@ const ICONS: Record<NotificationType, keyof typeof Ionicons.glyphMap> = {
   BID_REJECTED: "close-circle-outline",
   ORDER_UPDATE: "cube-outline",
   SYSTEM: "information-circle-outline",
+  ANNOUNCEMENT: "megaphone-outline",
 };
 
 /** Map API `link` values (e.g. "/rfqs/abc", "/orders/xyz") to app routes. */

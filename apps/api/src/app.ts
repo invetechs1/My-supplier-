@@ -31,6 +31,7 @@ import otpRoutes from "./routes/otp";
 import shippingRoutes from "./routes/shipping";
 import einvoiceRoutes from "./routes/einvoice";
 import adminCommerceRoutes from "./routes/adminCommerce";
+import supplierProductRoutes from "./routes/supplierProducts";
 
 export function createApp() {
   initSentry();
@@ -68,6 +69,7 @@ export function createApp() {
   api.use("/auth", otpRoutes);
   api.use(rfqRoutes);
   api.use(supplierPriceRoutes);
+  api.use(supplierProductRoutes);
   api.use(orderRoutes);
   api.use(notificationRoutes);
   api.use(adminRoutes);

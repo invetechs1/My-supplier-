@@ -103,7 +103,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const companyId = requireCompany(req);
     const data = z
-      .object({ price: z.coerce.number().positive().optional(), stock: z.coerce.number().int().nonnegative().nullable().optional(), minQty: z.coerce.number().positive().optional(), leadTimeDays: z.coerce.number().int().min(0).optional(), validUntil: z.coerce.date().nullable().optional() })
+      .object({ price: z.coerce.number().positive().optional(), stock: z.coerce.number().int().nonnegative().nullable().optional(), minQty: z.coerce.number().positive().optional(), leadTimeDays: z.coerce.number().int().min(0).optional(), validUntil: z.coerce.date().nullable().optional(), active: z.boolean().optional() })
       .parse(req.body);
     const listing = await prisma.priceListing.findUnique({ where: { id: req.params.id } });
     if (!listing || listing.companyId !== companyId) throw notFound("Listing not found");

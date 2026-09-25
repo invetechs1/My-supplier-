@@ -5,6 +5,7 @@ import { percentChange, round2, summarize } from "./pricing";
 /** Only listings that are still valid (no validUntil or in the future). */
 export const activeListingWhere = (city?: string): Prisma.PriceListingWhereInput => ({
   AND: [
+    { active: true },
     { OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }] },
     city ? { city } : {},
   ],

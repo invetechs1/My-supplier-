@@ -242,6 +242,14 @@ Verification documents are now served only through `GET /supplier/company/docume
 | DELETE | `/admin/materials/:id` | `{ ok: true }` |
 | POST | `/admin/prices/import` | `{ sourceName, items: Array<{ sku, price, city, minQty?, leadTimeDays? }> }` -> imports MARKET listings from external price sources |
 
+## Supplier "My products" (role SUPPLIER)
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/supplier/products?q=&status=ACTIVE|PAUSED|OUT_OF_STOCK|EXPIRED&city=&categoryId=&sort=updated|name|price|stock&page=` | `SupplierProductsResponse`: every offer the supplier has in the marketplace with `displayImageUrl`, computed `status`, `competitors`, `bestCompetitorPrice`, `isCheapest`, `sold30d`, plus `summary` counts across the whole catalogue and the supplier's `cities` |
+| PATCH | `/supplier/prices/:id` | now also accepts `active: boolean` (pause/resume: paused offers are hidden from every public listing, search, BOQ match and shop page) |
+| POST | `/supplier/prices/:id/image` | multipart `file` (JPEG/PNG/WebP, 3 MB): supplier photo for the offer; shown in the shop when the material has no catalogue image |
+| DELETE | `/supplier/prices/:id/image` | remove the supplier photo |
+
 ## Admin commerce back office (role ADMIN)
 | Method | Path | Notes |
 |---|---|---|

@@ -16,7 +16,10 @@ const productInclude = { category: true } satisfies Prisma.MaterialInclude;
 async function products(where: Prisma.MaterialWhereInput, orderBy: Prisma.MaterialOrderByWithRelationInput | Prisma.MaterialOrderByWithRelationInput[], take: number, city?: string) {
   const rows = await prisma.material.findMany({ where: { active: true, ...where }, include: productInclude, orderBy, take });
   const enrich = await enrichMaterials(rows.map((r) => r.id), city);
-  return rows.map((r) => ({ ...r, ...(enrich.get(r.id) ?? emptyEnrichment) }));
+  return rows.map((r) => {
+    const e = enrich.get(r.id) ?? emptyEnrichment;
+    return { ...r, ...e, imageUrl: r.imageUrl ?? e.listingImageUrl };
+  });
 }
 
 router.get(
@@ -129,7 +132,7 @@ router.get(
     prisma.material.update({ where: { id: material.id }, data: { popularity: { increment: 1 } } }).catch(() => undefined);
     res.json(
       serialize({
-        ...material, ...enrich, offers,
+        ...material, ...enrich, offers, imageUrl: material.imageUrl ?? enrich.listingImageUrl,
         summary: { materialId: material.id, ...summary },
         history: history.map((h) => ({ date: h.date.toISOString().slice(0, 10), avg: Number(h.avg), min: Number(h.min), max: Number(h.max) })),
         related: relatedRows.map((r) => ({ ...r, ...(relatedEnrich.get(r.id) ?? emptyEnrichment) })),
