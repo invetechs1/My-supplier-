@@ -43,9 +43,7 @@ const nextConfig = {
   poweredByHeader: false,
   transpilePackages: ["@mysupplier/shared"],
   output: "standalone",
-  experimental: {
-    outputFileTracingRoot: new URL("../../", import.meta.url).pathname,
-  },
+  outputFileTracingRoot: new URL("../../", import.meta.url).pathname,
   // next/image is not used; plain <img> tags load from the API origin and external CDNs.
   images: { unoptimized: true },
   async headers() {
