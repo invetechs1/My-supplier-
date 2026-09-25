@@ -30,6 +30,9 @@ Read this document top to bottom once, then work through section 6 in the order 
 | Web app (Next.js, 45+ routes, Arabic and English content, SEO, legal pages) | **DONE** | Legal pages contain placeholders for the real company details |
 | Mobile app (Expo, iOS and Android, same features as web) | **CREDENTIALS** | Code done; needs Apple and Google developer accounts and EAS builds |
 | Deployment (Docker Compose, Caddy HTTPS, backups, CI) | **DONE** | Needs a server, domain and the deploy/.env file |
+| Product discovery: spec facets, fuzzy search, autocomplete, brands, reviews, Q&A, wishlists, price alerts | **DONE** | Category attribute definitions drive filters and spec tables |
+| B2B commerce: quantity tiers, sale prices, address book, credit terms, buy again, returns (RMA), recurring orders | **DONE** | Credit lines are approved per company by the admin |
+| ERP integration: scoped API keys, /integrations/v1 sync API, signed webhooks, OpenAPI spec, integration guide | **DONE** | Suppliers and buyers manage keys and webhooks in their consoles |
 | Security audit fixes | **DONE** | See section 8 for the small optional backlog |
 
 
@@ -150,6 +153,8 @@ Redeploying after a code change is the same deploy.sh command. Migrations run au
 - **RFQ and bidding:** buyers post an RFQ with items, delivery city and deadline; matching suppliers are notified, bid per line, and the buyer awards. Awarding creates an order.
 - **Shop:** Amazon-style storefront (construction materials only), product pages with offers from all suppliers, cart split by supplier, delivery quotes per supplier, checkout with cash on delivery, bank transfer or card, buyer quotations, order tracking, messaging with the supplier, reviews, invoices (with ZATCA QR) and refunds.
 - **Accounts:** email and password, phone OTP login, forgot and reset password, company invites, notification centre, push notifications, account deletion.
+- **Discovery:** filters built from per-category attribute definitions (sizes, grades, power, capacity, resolution and so on) with counts, brand and price facets, fuzzy search with suggestions, brands directory, product reviews with verified-purchase badges and supplier replies, questions and answers, frequently bought together, recommendations and recently viewed, saved lists and price or back-in-stock alerts.
+- **B2B buying:** quantity price tiers and time-limited sale prices, saved site addresses, purchase-order numbers, credit terms (net days against an approved limit), buy again and reorder, returns with approval, receipt and refund, recurring orders for consumables.
 - **Content:** about, help, contact, terms, privacy, refund policy, sitemap, robots, PWA manifest.
 
 
@@ -172,6 +177,7 @@ Redeploying after a code change is the same deploy.sh command. Migrations run au
 
 ### Integrations already coded
 
+- **ERP integration:** scoped API keys per company, a versioned sync API (catalogue, bulk price and stock push, order pull and status update, purchases, e-invoices, RFQs and bids), outbound webhooks signed with HMAC and retried with backoff, an OpenAPI 3 specification (docs/openapi.yaml) and an integration guide with SAP, Oracle, Dynamics, Odoo and Zoho field mappings (docs/INTEGRATIONS.md).
 - **Moyasar** payments: intent creation bound to the order, client verification, signed webhooks, refunds, hosted pay page for mobile.
 - **Unifonic** SMS for OTP; **SMTP** email with HTML templates; **Expo** push; **Sentry** error reporting on API, web and mobile; **Anthropic Claude** for document extraction.
 - **Carriers:** zone model (Riyadh, Jeddah, Dammam and Eastern, other), rate cards by weight and pallet, quotes at checkout, shipment records with tracking timeline, generic REST adapter skeletons for TruKKer, Trella, SMSA, Aramex and SPL, inbound status webhook.

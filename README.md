@@ -54,6 +54,9 @@ Docs: [API contract](docs/API.md) · [Architecture](docs/ARCHITECTURE.md) · [Ro
   city (or who stock the items) are notified, bid per line, and the buyer awards the best bid.
   Awarding creates an order with a delivery status timeline.
 * **Supplier tools** – price-list manager with bulk upload, open-RFQ marketplace, bids, orders.
+* **Product discovery** – attribute facets per category, fuzzy search with autocomplete, brands, product reviews & Q&A, frequently bought together, recommendations, saved lists, price alerts.
+* **B2B commerce** – quantity price tiers, sale prices, address book, PO numbers, credit terms, buy again, returns (RMA), recurring orders.
+* **ERP integration** – scoped API keys, `/integrations/v1` sync API, signed webhooks, OpenAPI spec (`docs/openapi.yaml`) and guide (`docs/INTEGRATIONS.md`).
 * **Admin** – full e-commerce back office: reports & analytics, orders, payments ledger & refunds, coupons & promotions, review moderation, support inbox, catalogue CRUD, AI imports, outreach, feeds, users & roles, supplier verification, payouts, shipping rates, announcements, audit log and settings.
 
 ## Quick start (local)
