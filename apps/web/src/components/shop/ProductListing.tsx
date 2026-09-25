@@ -243,9 +243,11 @@ export function ProductListing({
                   ))}
                 </div>
               )}
-              <Card className="mt-4">
-                <Pagination page={products.data?.page ?? filters.page} pageSize={products.data?.pageSize ?? PAGE_SIZE} total={total} onChange={(p) => update({ page: p })} />
-              </Card>
+              {total > (products.data?.pageSize ?? PAGE_SIZE) && (
+                <Card className="mt-4">
+                  <Pagination page={products.data?.page ?? filters.page} pageSize={products.data?.pageSize ?? PAGE_SIZE} total={total} onChange={(p) => update({ page: p })} />
+                </Card>
+              )}
             </div>
           )}
         </section>

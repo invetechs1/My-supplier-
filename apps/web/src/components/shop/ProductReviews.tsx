@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ProductReview, ProductReviewSummary } from "@mysupplier/shared";
 import { errorMessage } from "@/lib/api";
 import { marketplaceApi, type ReviewSort } from "@/lib/api/marketplace";
@@ -111,7 +111,8 @@ export function ProductReviews({ productId, initialSummary, onSummaryChange }: {
   const { user } = useAuth();
   const [sort, setSort] = useState<ReviewSort>("recent");
   const [page, setPage] = useState(1);
-  const [voted, setVoted] = useState<Set<string>>(() => (typeof window === "undefined" ? new Set() : readHelpful()));
+  const [voted, setVoted] = useState<Set<string>>(() => new Set());
+  useEffect(() => setVoted(readHelpful()), []);
   const [writeOpen, setWriteOpen] = useState(false);
   const [rating, setRating] = useState(0);
   const [title, setTitle] = useState("");

@@ -457,7 +457,7 @@ export default function ShopProductPage() {
                 </Alert>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
-                <WishlistButton materialId={p.id} listingId={purchasable ? best.listingId : null} quantity={qty} />
+                <WishlistButton key={p.id} materialId={p.id} listingId={purchasable ? best.listingId : null} quantity={qty} />
                 <PriceAlertButton materialId={p.id} currentPrice={best.effectivePrice} inStock={p.inStock} unit={p.unit} className="flex-1" />
               </div>
             </>
@@ -465,7 +465,7 @@ export default function ShopProductPage() {
             <>
               <EmptyState title="No offers yet" description="No supplier has listed this product. Request quotes or set an alert to hear when it is available." action={<Link href={`/dashboard/rfqs/new?materialId=${p.id}`} className="text-sm font-semibold text-brand-700 hover:underline">Request quotes →</Link>} />
               <div className="flex flex-wrap gap-2">
-                <WishlistButton materialId={p.id} />
+                <WishlistButton key={p.id} materialId={p.id} />
                 <PriceAlertButton materialId={p.id} inStock={false} unit={p.unit} className="flex-1" />
               </div>
             </>
@@ -474,7 +474,7 @@ export default function ShopProductPage() {
       </div>
 
       <div className="mt-10 space-y-6">
-        {p.frequentlyBoughtTogether?.length > 0 && <FrequentlyBought product={p} items={p.frequentlyBoughtTogether} />}
+        {p.frequentlyBoughtTogether?.length > 0 && <FrequentlyBought key={p.id} product={p} items={p.frequentlyBoughtTogether} />}
 
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
@@ -505,8 +505,8 @@ export default function ShopProductPage() {
           <Table columns={offerColumns} rows={others} rowKey={(o) => o.listingId} empty={<EmptyState title="No other sellers" description="Only one offer is available for this product right now." />} />
         </Card>
 
-        <ProductReviews productId={p.id} initialSummary={p.reviewSummary} onSummaryChange={setReviewSummary} />
-        <ProductQuestions productId={p.id} initialCount={p.questionsCount} />
+        <ProductReviews key={p.id} productId={p.id} initialSummary={p.reviewSummary} onSummaryChange={setReviewSummary} />
+        <ProductQuestions key={p.id} productId={p.id} initialCount={p.questionsCount} />
       </div>
 
       <section className="mt-12">
