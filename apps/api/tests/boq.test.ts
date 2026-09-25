@@ -87,6 +87,22 @@ describe("equipment vocabulary", () => {
   });
 });
 
+describe("MRO / facility vocabulary", () => {
+  it("maps Arabic maintenance and facility words to the English catalogue token", () => {
+    expect(tokenize("فلتر هواء للمكيف").words).toContain("filter");
+    expect(tokenize("صمام بوابة 2 بوصة نحاس").words).toContain("valve");
+    expect(tokenize("كاميرا مراقبة 4 ميجا").words).toContain("camera");
+    expect(tokenize("تأجير حفار 20 طن").words).toEqual(expect.arrayContaining(["rental", "excavator"]));
+    expect(tokenize("زيارة صيانة تكييف").words).toEqual(expect.arrayContaining(["visit", "maintenance", "ac"]));
+  });
+  it("maps English plurals and brand-neutral spellings to the same token", () => {
+    expect(tokenize("Ball valves 1 inch brass").words).toContain("valve");
+    expect(tokenize("CCTV dome camera 4MP").words).toEqual(expect.arrayContaining(["camera"]));
+    expect(tokenize("Hydraulic oil ISO 46 drum").words).toContain("oil");
+    expect(tokenize("معايرة عداد ضغط").words).toEqual(expect.arrayContaining(["calibration", "meter"]));
+  });
+});
+
 describe("optimise", () => {
   const offer = (supplierId: string, price: number, lead = 3) => ({ listingId: `${supplierId}-${price}`, supplierId, supplierName: supplierId.toUpperCase(), verified: true, city: "Riyadh", price, minQty: 1, leadTimeDays: lead, source: "SUPPLIER" });
   it("builds cheapest basket and best single supplier", () => {

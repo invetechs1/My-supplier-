@@ -2,6 +2,7 @@
 import { PrismaClient, Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { DEFAULT_RATES } from "../src/services/shipping";
+import { extraCategories, extraMaterials, extraSuppliers, supplierCategoryExtensions, categoryAttributes, specPatches, reviewTexts, questionTexts, type M } from "./seed-data";
 
 const prisma = new PrismaClient();
 
@@ -41,7 +42,7 @@ const categories = [
   { slug: "solar-energy", name: "Solar & Energy Systems", nameAr: "الطاقة الشمسية وأنظمة الطاقة", icon: "🔆" },
 ];
 
-type M = { sku: string; name: string; nameAr: string; unit: string; cat: string; brand?: string; base: number; specs?: Record<string, string | number>; featured?: boolean; tags?: string[] };
+// `M` (product row shape) lives in ./seed-data/types so the MRO / facility data modules share it.
 const materials: M[] = [
   // Cement & concrete
   { featured: true, sku: "CEM-OPC-50", name: "Ordinary Portland Cement Type I (50kg bag)", nameAr: "أسمنت بورتلاندي عادي نوع 1 (50 كجم)", unit: "bag", cat: "cement-concrete", brand: "Yamama Cement", base: 15.5, specs: { standard: "SASO 2847", weight_kg: 50 } },
@@ -351,6 +352,18 @@ const materials: M[] = [
   { sku: "SC-GNDL", name: "Suspended Platform (Gondola) 6m 630kg", nameAr: "جندول سقالة معلقة 6 م", unit: "piece", cat: "scaffolding-access", base: 32000, tags: ["gondola", "جندول"] },
 ];
 
+// Construction categories/products above + MRO, facility-management, rental and services catalogue from ./seed-data.
+const allCategories = [...categories, ...extraCategories];
+const allMaterials: M[] = [...materials, ...extraMaterials];
+{
+  const seen = new Set<string>();
+  for (const m of allMaterials) {
+    if (seen.has(m.sku)) throw new Error(`Duplicate SKU in seed data: ${m.sku}`);
+    seen.add(m.sku);
+    if (!allCategories.some((c) => c.slug === m.cat)) throw new Error(`Unknown category ${m.cat} on ${m.sku}`);
+  }
+}
+
 const suppliers = [
   { name: "Al Rajhi Building Materials", nameAr: "الراجحي لمواد البناء", city: "Riyadh", region: "Central", verified: true, rating: 4.7, ratingCount: 212, factor: 1.0, cats: ["cement-concrete", "steel-rebar", "blocks-bricks", "aggregates-sand", "timber-formwork"] },
   { name: "Binladin Trading & Supply", nameAr: "بن لادن للتجارة والتوريد", city: "Jeddah", region: "Western", verified: true, rating: 4.5, ratingCount: 148, factor: 1.03, cats: ["cement-concrete", "steel-rebar", "blocks-bricks", "insulation-waterproofing", "gypsum-ceilings"] },
@@ -376,6 +389,11 @@ const suppliers = [
   { name: "Saudi Solar & Elevator Technologies", nameAr: "السعودية لتقنيات الطاقة الشمسية والمصاعد", city: "Riyadh", region: "Central", verified: false, rating: 4.1, ratingCount: 21, factor: 1.02, cats: ["solar-energy", "elevators-gates", "electrical", "fire-safety", "lighting"] },
   { name: "Eastern Heavy Equipment Traders", nameAr: "الشرقية لتجارة المعدات الثقيلة", city: "Khobar", region: "Eastern", verified: true, rating: 4.5, ratingCount: 39, factor: 0.98, cats: ["heavy-equipment", "concrete-compaction", "lifting-rigging", "surveying-instruments", "site-facilities"] },
 ];
+// Existing suppliers pick up the MRO categories they plausibly stock; specialist suppliers are appended.
+const allSuppliers = [
+  ...suppliers.map((s) => ({ ...s, cats: [...new Set([...s.cats, ...(supplierCategoryExtensions[s.name] ?? [])])] })),
+  ...extraSuppliers,
+];
 
 // Deterministic pseudo-random so the seed is reproducible.
 function rng(seed: number) {
@@ -391,6 +409,22 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 async function main() {
   console.log("Seeding MySupplier…");
+  // Product-experience and commerce tables first (they reference users, materials and listings).
+  await prisma.productReview.deleteMany();
+  await prisma.productQuestion.deleteMany();
+  await prisma.listingTier.deleteMany();
+  await prisma.categoryAttribute.deleteMany();
+  await prisma.wishlistItem.deleteMany();
+  await prisma.wishlist.deleteMany();
+  await prisma.recentlyViewed.deleteMany();
+  await prisma.priceAlert.deleteMany();
+  await prisma.return.deleteMany();
+  await prisma.recurringOrder.deleteMany();
+  await prisma.webhookDelivery.deleteMany();
+  await prisma.webhookEndpoint.deleteMany();
+  await prisma.apiKey.deleteMany();
+  await prisma.payment.deleteMany();
+  await prisma.address.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.review.deleteMany();
   await prisma.orderMessage.deleteMany();
@@ -430,17 +464,19 @@ async function main() {
   await prisma.counter.deleteMany();
 
   const catBySlug = new Map<string, string>();
-  for (const c of categories) {
+  for (const c of allCategories) {
     const created = await prisma.category.create({ data: c });
     catBySlug.set(c.slug, created.id);
   }
 
   const materialRows: Array<M & { id: string }> = [];
-  for (const m of materials) {
+  for (const m of allMaterials) {
+    // Existing construction products get the filterable keys their category declares (see seed-data/extras.ts).
+    const specs = specPatches[m.sku] ? { ...specPatches[m.sku], ...(m.specs ?? {}) } : m.specs;
     const created = await prisma.material.create({
       data: {
         sku: m.sku, name: m.name, nameAr: m.nameAr, unit: m.unit, brand: m.brand,
-        categoryId: catBySlug.get(m.cat)!, specs: m.specs ?? Prisma.JsonNull,
+        categoryId: catBySlug.get(m.cat)!, specs: specs && Object.keys(specs).length ? specs : Prisma.JsonNull,
         description: `${m.name} — market reference price around SAR ${m.base} per ${m.unit}.`,
         featured: m.featured ?? false, tags: m.tags ?? [], popularity: Math.floor(rand() * 500),
       },
@@ -449,7 +485,7 @@ async function main() {
   }
 
   const companyIds: { id: string; name: string; city: string; factor: number; cats: string[] }[] = [];
-  for (const s of suppliers) {
+  for (const s of allSuppliers) {
     const { cats, factor, ...data } = s;
     const slug = s.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     const created = await prisma.company.create({
@@ -475,11 +511,13 @@ async function main() {
   const buyer = await prisma.user.create({ data: { email: "buyer@mysupplier.sa", passwordHash: password("Buyer123!"), name: "Fahad Al-Otaibi", phone: "+966501234567", role: "BUYER", companyId: contractor.id } });
   await prisma.user.create({ data: { email: "supplier@mysupplier.sa", passwordHash: password("Supplier123!"), name: "Sara Al-Ghamdi", phone: "+966557654321", role: "SUPPLIER", companyId: demoSupplier.id, companyRole: "OWNER" } });
   await prisma.user.create({ data: { email: "warehouse@mysupplier.sa", passwordHash: password("Supplier123!"), name: "Khalid Warehouse", role: "SUPPLIER", companyId: demoSupplier.id, companyRole: "WAREHOUSE" } });
-  // One staff user per other supplier so notifications have recipients.
+  // One staff user per other supplier so notifications have recipients (and so product Q&A has answerers).
+  const supplierUserByCompany = new Map<string, string>();
   for (const c of companyIds) {
     if (c.id === demoSupplier.id) continue;
     const slug = c.name.toLowerCase().replace(/[^a-z]+/g, "-").replace(/(^-|-$)/g, "");
-    await prisma.user.create({ data: { email: `sales@${slug}.sa`, passwordHash: password("Supplier123!"), name: `${c.name} Sales`, role: "SUPPLIER", companyId: c.id, companyRole: "OWNER" } });
+    const staff = await prisma.user.create({ data: { email: `sales@${slug}.sa`, passwordHash: password("Supplier123!"), name: `${c.name} Sales`, role: "SUPPLIER", companyId: c.id, companyRole: "OWNER" } });
+    supplierUserByCompany.set(c.id, staff.id);
   }
 
   // Price listings: each supplier lists most materials in its categories, in its own city
@@ -487,15 +525,15 @@ async function main() {
   const listings: Prisma.PriceListingCreateManyInput[] = [];
   const neighbours: Record<string, string[]> = { Makkah: ["Makkah", "Jeddah"], Riyadh: ["Riyadh"], Jeddah: ["Jeddah", "Makkah"], Dammam: ["Dammam", "Khobar"], Khobar: ["Khobar", "Dammam"], Madinah: ["Madinah", "Yanbu"], Tabuk: ["Tabuk"], Abha: ["Abha", "Khamis Mushait"], Jubail: ["Jubail", "Dammam"], Buraidah: ["Buraidah", "Riyadh"] };
   const now = Date.now();
-  for (const c of companyIds) {
-    for (const m of materialRows) {
-      if (!c.cats.includes(m.cat)) continue;
-      if (rand() < 0.15) continue; // not every supplier stocks everything
-      for (const city of neighbours[c.city] ?? [c.city]) {
+  const supplierOffers = new Map<string, number>(); // materialId -> number of suppliers listing it
+  const skipped: Array<[typeof companyIds[number], typeof materialRows[number]]> = [];
+  const listFor = (c: typeof companyIds[number], m: typeof materialRows[number]) => {
+    supplierOffers.set(m.id, (supplierOffers.get(m.id) ?? 0) + 1);
+    for (const city of neighbours[c.city] ?? [c.city]) {
         listings.push({
           materialId: m.id, companyId: c.id, city,
           price: round2(m.base * c.factor * jitter(0.06) * (city === c.city ? 1 : 1.03)),
-          minQty: m.unit === "ton" || m.unit === "m3" ? 5 : m.unit === "piece" ? (m.base >= 50 ? 1 : m.base >= 20 ? 10 : 100) : m.base >= 100 ? 1 : 10,
+          minQty: ["day", "job", "visit", "set"].includes(m.unit) ? 1 : m.unit === "ton" || m.unit === "m3" ? 5 : m.unit === "piece" ? (m.base >= 50 ? 1 : m.base >= 20 ? 10 : 100) : m.base >= 100 ? 1 : 10,
           leadTimeDays: 1 + Math.floor(rand() * 6),
           stock: rand() < 0.2 ? null : m.base >= 20000 ? 1 + Math.floor(rand() * 5) : m.base >= 1000 ? 5 + Math.floor(rand() * 40) : Math.floor(rand() * 5000) + 20,
           source: "SUPPLIER",
@@ -503,8 +541,16 @@ async function main() {
           validUntil: new Date(now + (30 + Math.floor(rand() * 60)) * 86400000),
         });
       }
+  };
+  for (const c of companyIds) {
+    for (const m of materialRows) {
+      if (!c.cats.includes(m.cat)) continue;
+      if (rand() < 0.15) { skipped.push([c, m]); continue; } // not every supplier stocks everything
+      listFor(c, m);
     }
   }
+  // …but every product should have at least two supplier offers to compare, so restore skipped pairs where needed.
+  for (const [c, m] of skipped) if ((supplierOffers.get(m.id) ?? 0) < 2) listFor(c, m);
   // Market reference prices imported from external sources (published indices / catalogues).
   for (const m of materialRows) {
     for (const [sourceName, city, f] of [["GASTAT Building Materials Index", "Riyadh", 1.0], ["Souq Al-Bina Catalogue", "Jeddah", 1.02], ["Eastern Traders Bulletin", "Dammam", 0.99]] as const) {
@@ -626,6 +672,142 @@ async function main() {
     { userId: admin.id, type: "SYSTEM", title: "Welcome to MySupplier", body: "Seed data loaded. Verify new suppliers under Admin → Companies." },
   ] });
 
+  // ---------------------------------------------------------------- product experience: attributes, buyers, reviews, Q&A, tiers, sales, addresses
+  const day = 86400000;
+  const pick = <T,>(arr: T[]) => arr[Math.floor(rand() * arr.length)];
+
+  // Filterable spec keys per category (the storefront builds facets from these + Material.specs).
+  const attributeRows: Prisma.CategoryAttributeCreateManyInput[] = [];
+  for (const [slug, attrs] of Object.entries(categoryAttributes)) {
+    const categoryId = catBySlug.get(slug);
+    if (!categoryId) continue;
+    attrs.forEach((a, i) => attributeRows.push({ categoryId, key: a.key, label: a.label, labelAr: a.labelAr, type: a.type, unit: a.unit, options: a.options ?? [], filterable: a.filterable ?? true, sortOrder: i }));
+  }
+  await prisma.categoryAttribute.createMany({ data: attributeRows });
+
+  // Supplier listings in a deterministic order (material order in the seed, then supplier order, then city).
+  const materialIndex = new Map(materialRows.map((m, i) => [m.id, i]));
+  const companyIndex = new Map(companyIds.map((c, i) => [c.id, i]));
+  const supplierListings = (await prisma.priceListing.findMany({ where: { source: "SUPPLIER" }, select: { id: true, materialId: true, companyId: true, city: true, price: true, minQty: true } }))
+    .sort((a, b) => (materialIndex.get(a.materialId)! - materialIndex.get(b.materialId)!) || (companyIndex.get(a.companyId!)! - companyIndex.get(b.companyId!)!) || a.city.localeCompare(b.city));
+  const listingsByMaterial = new Map<string, typeof supplierListings>();
+  for (const l of supplierListings) listingsByMaterial.set(l.materialId, [...(listingsByMaterial.get(l.materialId) ?? []), l]);
+
+  // Volume tiers on cheap consumables: 10+ −3%, 50+ −7%, 200+ −12% (scaled up when the listing's minQty is already large).
+  const tierRows: Prisma.ListingTierCreateManyInput[] = [];
+  const consumableUnits = new Set(["piece", "box", "roll", "bag", "litre", "kg", "set"]);
+  let tieredListings = 0;
+  for (const m of materialRows) {
+    if (tieredListings >= 60) break;
+    if (m.base >= 150 || !consumableUnits.has(m.unit)) continue;
+    const l = (listingsByMaterial.get(m.id) ?? [])[0];
+    if (!l) continue;
+    const price = Number(l.price);
+    const steps: [number, number][] = [[Math.max(10, l.minQty * 2), 0.03], [Math.max(50, l.minQty * 5), 0.07], [Math.max(200, l.minQty * 20), 0.12]];
+    for (const [minQty, off] of steps) tierRows.push({ listingId: l.id, minQty, price: round2(price * (1 - off)) });
+    tieredListings += 1;
+  }
+  await prisma.listingTier.createMany({ data: tierRows });
+
+  // Time-limited sale prices (5–20% off, ending 10–30 days out) on ~40 listings.
+  let saleListings = 0;
+  for (const m of materialRows) {
+    if (saleListings >= 40) break;
+    if (m.base < 50 || rand() > 0.12) continue;
+    const l = (listingsByMaterial.get(m.id) ?? [])[0];
+    if (!l) continue;
+    const price = Number(l.price);
+    await prisma.priceListing.update({ where: { id: l.id }, data: { salePrice: round2(price * (1 - (0.05 + rand() * 0.15))), saleEndsAt: new Date(now + (10 + Math.floor(rand() * 21)) * day) } });
+    saleListings += 1;
+  }
+
+  // Additional buyers (facility managers, hotel maintenance, industrial services) with delivered orders, so
+  // reviews can be marked as verified purchases.
+  const buyerSeeds = [
+    { email: "procurement@alnahda-fm.sa", name: "Noura Al-Shehri", phone: "+966502345678", company: { name: "Al Nahda Facility Management", nameAr: "النهضة لإدارة المرافق", type: "OTHER" as const, city: "Riyadh", region: "Central" } },
+    { email: "maintenance@gulfcoast-hotels.sa", name: "Omar Bakhsh", phone: "+966503456789", company: { name: "Gulf Coast Hotels", nameAr: "فنادق ساحل الخليج", type: "OTHER" as const, city: "Jeddah", region: "Western" } },
+    { email: "mep@eastern-industrial.sa", name: "Yousef Al-Dossary", phone: "+966504567890", company: { name: "Eastern Industrial Services", nameAr: "الشرقية للخدمات الصناعية", type: "CONTRACTOR" as const, city: "Dammam", region: "Eastern" } },
+    { email: "sites@madinah-build.sa", name: "Abdullah Al-Harbi", phone: "+966505678901", company: { name: "Madinah Build Co.", nameAr: "شركة المدينة للبناء", type: "CONTRACTOR" as const, city: "Madinah", region: "Western" } },
+    { email: "ops@makkah-towers.sa", name: "Reem Al-Qahtani", phone: "+966506789012", company: { name: "Makkah Towers Operations", nameAr: "تشغيل أبراج مكة", type: "OTHER" as const, city: "Makkah", region: "Western" } },
+    { email: "buyer2@mysupplier.sa", name: "Turki Al-Mutairi", phone: "+966507890123", company: null },
+  ];
+  const reviewers: { id: string; name: string }[] = [{ id: buyer.id, name: buyer.name }];
+  const ordered = new Set<string>([`${buyer.id}:${byPk("RMC-C30").id}`, `${buyer.id}:${helmet.id}`]);
+  const orderable = materialRows.filter((m) => m.featured && (listingsByMaterial.get(m.id) ?? []).length > 0);
+  for (const [i, b] of buyerSeeds.entries()) {
+    const company = b.company ? await prisma.company.create({ data: { ...b.company, verified: true, crNumber: `10${(20000000 + i * 1111).toString()}` } }) : null;
+    const user = await prisma.user.create({ data: { email: b.email, passwordHash: password("Buyer123!"), name: b.name, phone: b.phone, role: "BUYER", companyId: company?.id ?? contractor.id } });
+    reviewers.push({ id: user.id, name: user.name });
+    // One delivered direct order per buyer with 2–3 popular items from a single supplier.
+    const first = orderable[(i * 5) % orderable.length];
+    const firstListing = listingsByMaterial.get(first.id)![0];
+    const items = [first, ...orderable.filter((m) => m.id !== first.id && (listingsByMaterial.get(m.id) ?? []).some((l) => l.companyId === firstListing.companyId)).slice(0, 2)]
+      .map((m) => {
+        const l = listingsByMaterial.get(m.id)!.find((x) => x.companyId === firstListing.companyId)!;
+        const quantity = Math.max(l.minQty, m.base >= 1000 ? 1 : m.base >= 100 ? 5 : 50);
+        return { materialId: m.id, listingId: l.id, name: m.name, unit: m.unit, unitPrice: Number(l.price), quantity, lineTotal: round2(Number(l.price) * quantity) };
+      });
+    const subtotal = round2(items.reduce((s, it) => s + it.lineTotal, 0));
+    const placed = new Date(now - (20 + i * 7) * day);
+    await prisma.order.create({
+      data: {
+        reference: ref("ORD"), type: "DIRECT", buyerId: user.id, companyId: firstListing.companyId!, subtotal, vat: round2(subtotal * 0.15), deliveryFee: 150, total: round2(subtotal * 1.15 + 150),
+        status: "DELIVERED", paymentStatus: "PAID", paymentMethod: i % 2 ? "BANK_TRANSFER" : "COD", deliveryCity: b.company?.city ?? "Riyadh", deliveryAddress: `${b.company?.name ?? "Riyadh Horizon Contracting"} site store`, contactPhone: b.phone, createdAt: placed,
+        items: { create: items },
+        events: { create: [
+          { type: "CREATED", status: "PENDING", message: "Order placed", userId: user.id, createdAt: placed },
+          { type: "STATUS", status: "CONFIRMED", createdAt: new Date(placed.getTime() + day) },
+          { type: "STATUS", status: "DELIVERED", createdAt: new Date(placed.getTime() + 4 * day) },
+        ] },
+      },
+    });
+    for (const it of items) ordered.add(`${user.id}:${it.materialId}`);
+  }
+
+  // Product reviews (one per user per material) on featured products plus a slice of the wider catalogue.
+  const popular = [...materialRows.filter((m) => m.featured), ...materialRows.filter((m, i) => !m.featured && i % 23 === 0)];
+  const reviewRows: Prisma.ProductReviewCreateManyInput[] = [];
+  for (const m of popular) {
+    if (reviewRows.length >= 130) break;
+    const count = 1 + Math.floor(rand() * 3); // 1–3 reviews per product
+    // Buyers who actually ordered the product review it first (verified purchase), then a random few others.
+    const verifiedFirst = reviewers.filter((u) => ordered.has(`${u.id}:${m.id}`));
+    const others = reviewers.filter((u) => !verifiedFirst.includes(u)).sort(() => rand() - 0.5);
+    const who = [...verifiedFirst, ...others].slice(0, Math.max(count, verifiedFirst.length));
+    for (const u of who) {
+      let t = pick(reviewTexts);
+      if (t.rating <= 2 && rand() < 0.6) t = pick(reviewTexts.filter((x) => x.rating >= 4)); // keep low ratings rare
+      reviewRows.push({ materialId: m.id, userId: u.id, rating: t.rating, title: t.title, body: t.body, verified: ordered.has(`${u.id}:${m.id}`), helpful: Math.floor(rand() * 12), createdAt: new Date(now - Math.floor(rand() * 90) * day) });
+    }
+  }
+  await prisma.productReview.createMany({ data: reviewRows, skipDuplicates: true });
+  const ratingByMaterial = new Map<string, number[]>();
+  for (const r of reviewRows) ratingByMaterial.set(r.materialId, [...(ratingByMaterial.get(r.materialId) ?? []), r.rating]);
+  for (const [materialId, ratings] of ratingByMaterial) {
+    await prisma.material.update({ where: { id: materialId }, data: { ratingAvg: round2(ratings.reduce((s, r) => s + r, 0) / ratings.length), ratingCount: ratings.length } });
+  }
+
+  // Product Q&A answered by the supplier staff who list the product.
+  const questionRows: Prisma.ProductQuestionCreateManyInput[] = [];
+  for (const m of popular.slice(0, 22)) {
+    if (questionRows.length >= 44) break;
+    const l = (listingsByMaterial.get(m.id) ?? []).find((x) => x.companyId && supplierUserByCompany.has(x.companyId));
+    for (let k = 0; k < 2; k += 1) {
+      const q = questionTexts[(materialIndex.get(m.id)! + k * 3) % questionTexts.length];
+      const asked = new Date(now - (5 + Math.floor(rand() * 60)) * day);
+      const answerer = l ? supplierUserByCompany.get(l.companyId!) : supplierUser.id;
+      questionRows.push({ materialId: m.id, userId: pick(reviewers).id, question: q.question, answer: q.answer, answeredById: answerer, answeredAt: new Date(asked.getTime() + day), createdAt: asked });
+    }
+  }
+  await prisma.productQuestion.createMany({ data: questionRows });
+
+  // Saved site addresses for the demo buyer.
+  await prisma.address.createMany({ data: [
+    { userId: buyer.id, companyId: contractor.id, label: "Al Narjis villas site", recipient: "Fahad Al-Otaibi", phone: "+966501234567", city: "Riyadh", district: "Al Narjis", street: "Anas Ibn Malik Road", building: "Plot 233", notes: "Gate closes at 10:00 – call site engineer before arrival", isDefault: true },
+    { userId: buyer.id, companyId: contractor.id, label: "Head office", recipient: "Riyadh Horizon Contracting – Procurement", phone: "+966112345678", city: "Riyadh", district: "Al Olaya", street: "King Fahd Road", building: "Tower 4, 7th floor", isDefault: false },
+    { userId: buyer.id, companyId: contractor.id, label: "Warehouse – 2nd Industrial City", recipient: "Khalid Storekeeper", phone: "+966555512345", city: "Riyadh", district: "2nd Industrial City", street: "Street 145", building: "Warehouse 12", notes: "Forklift available on site", isDefault: false },
+  ] });
+
   await prisma.counter.createMany({ data: [{ key: `RFQ-${new Date().getFullYear()}`, value: counters.RFQ }, { key: `ORD-${new Date().getFullYear()}`, value: counters.ORD }] });
 
   // Promotions and a few support messages so the admin console has data to show.
@@ -643,7 +825,7 @@ async function main() {
       { name: "Ali Contracting", email: "procurement@ali-contracting.example", subject: "VAT invoice missing QR", message: "The invoice PDF for our last order does not scan with the ZATCA app.", status: "RESOLVED", notes: "Invoice regenerated; QR verified.", resolvedAt: new Date(now - 2 * 86400000) },
     ],
   });
-  console.log(`Seeded ${categories.length} categories, ${materials.length} materials, ${suppliers.length} suppliers, ${listings.length} price listings, ${history.length} history points.`);
+  console.log(`Seeded ${allCategories.length} categories, ${allMaterials.length} materials, ${allSuppliers.length} suppliers, ${listings.length} price listings, ${history.length} history points, ${attributeRows.length} category attributes, ${tierRows.length} listing tiers, ${saleListings} sale prices, ${reviewRows.length} reviews, ${questionRows.length} questions.`);
 }
 
 main()
