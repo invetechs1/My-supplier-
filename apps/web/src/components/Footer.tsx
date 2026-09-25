@@ -95,7 +95,7 @@ export function Footer() {
       </div>
       <div className="border-t border-slate-100">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 py-4 text-xs text-slate-400 sm:flex-row sm:px-6 lg:px-8">
-          <p>© 2026 MySupplier · Riyadh, Saudi Arabia · Prices in SAR</p>
+          <p>© 2026 MySupplier · {t("brand.tagline")} · Riyadh, Saudi Arabia · Prices in SAR</p>
           <ApiStatusDot />
         </div>
       </div>

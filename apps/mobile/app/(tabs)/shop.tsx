@@ -103,7 +103,7 @@ export default function ShopScreen() {
         style={({ pressed }) => [styles.banner, pressed && { opacity: 0.93 }]}
       >
         <View style={{ flex: 1 }}>
-          <Text style={styles.bannerKicker}>MySupplier</Text>
+          <Text style={styles.bannerKicker}>MySupplier · {t("brandTagline")}</Text>
           <Text style={styles.bannerTitle}>{t("shopBannerTitle")}</Text>
           <Text style={styles.bannerSub}>{t("shopBannerSubtitle")}</Text>
           {home?.stats ? (

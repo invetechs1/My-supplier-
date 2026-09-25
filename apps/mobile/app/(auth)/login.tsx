@@ -177,6 +177,7 @@ export default function LoginScreen() {
     <Screen scroll keyboard edges={["bottom", "left", "right"]}>
       <View style={styles.hero}>
         <Text style={styles.logo}>MySupplier</Text>
+        <Text style={styles.brandTagline}>{t("brandTagline")}</Text>
         <Text style={styles.tagline}>Build for less — live building-material prices, RFQs and bids across Saudi Arabia</Text>
       </View>
 
@@ -349,6 +350,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   hero: { paddingVertical: spacing.xl, alignItems: "center" },
   logo: { fontSize: 30, fontWeight: "800", color: colors.primary, letterSpacing: -0.5 },
+  brandTagline: { fontSize: 14, fontWeight: "700", color: colors.accent ?? "#D18F00", marginTop: 2, letterSpacing: 0.3 },
   tagline: { ...typography.bodySmall, textAlign: "center", marginTop: spacing.sm, maxWidth: 280 },
   segment: { flexDirection: "row", backgroundColor: colors.neutralLight, borderRadius: radius.md, padding: 3, marginBottom: spacing.lg },
   segmentItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 9, borderRadius: radius.sm },

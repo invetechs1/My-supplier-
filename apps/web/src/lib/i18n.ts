@@ -7,6 +7,7 @@ const LANG_KEY = "ms_lang";
 
 const dictionary = {
   en: {
+    "brand.tagline": "Build for less",
     "nav.shop": "Shop",
     "nav.cart": "Cart",
     "nav.searchPlaceholder": "Search products…",
@@ -181,6 +182,7 @@ const dictionary = {
     "footer.tagline": "Build for less. Transparent building-material pricing for the Kingdom.",
   },
   ar: {
+    "brand.tagline": "البناء بأقل تكلفة",
     "nav.shop": "المتجر",
     "nav.cart": "السلة",
     "nav.searchPlaceholder": "ابحث عن المنتجات…",

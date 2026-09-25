@@ -219,7 +219,7 @@ export default function ProfileScreen() {
         <Row icon="help-circle-outline" label="Help & support" onPress={() => openWeb("/contact")} />
       </View>
 
-      <Text style={styles.version}>MySupplier · v{Constants.expoConfig?.version ?? "1.0.0"}</Text>
+      <Text style={styles.version}>MySupplier · {t("brandTagline")} · v{Constants.expoConfig?.version ?? "1.0.0"}</Text>
     </Screen>
   );
 }

@@ -10,16 +10,25 @@ import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/format";
 import { SearchAutocomplete } from "@/components/shop/SearchAutocomplete";
 
-export function Logo({ light }: { light?: boolean }) {
+/** Brand lock-up: the wordmark always carries the promise "Build for less" so users see it on every page. */
+export function Logo({ light, tagline = true }: { light?: boolean; tagline?: boolean }) {
+  const { t } = useI18n();
   return (
-    <Link href="/" className="flex items-center gap-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white shadow-sm">
+    <Link href="/" className="flex items-center gap-2" aria-label={`MySupplier – ${t("brand.tagline")}`}>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white shadow-sm">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden>
           <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 11h.01M15 11h.01" />
         </svg>
       </span>
-      <span className={cn("text-lg font-semibold tracking-tight", light ? "text-white" : "text-slate-900")}>
-        My<span className="text-brand-600">Supplier</span>
+      <span className="flex flex-col leading-none">
+        <span className={cn("text-lg font-semibold tracking-tight leading-none", light ? "text-white" : "text-slate-900")}>
+          My<span className="text-brand-600">Supplier</span>
+        </span>
+        {tagline && (
+          <span className={cn("mt-0.5 text-[11px] font-semibold leading-none tracking-wide", light ? "text-amber-300" : "text-amber-600")}>
+            {t("brand.tagline")}
+          </span>
+        )}
       </span>
     </Link>
   );
