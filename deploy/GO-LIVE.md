@@ -102,6 +102,9 @@ Store listing needs: privacy policy URL (`https://mysupplier.sa/privacy`), suppo
 | Secrets rotation | change in `.env`, `docker compose up -d` (JWT rotation logs everyone out) |
 
 ## 8. Launch checklist
+
+Before ticking anything below, run `WEB=https://<domain> API=https://api.<domain> bash deploy/scripts/verify-deployment.sh` (0 FAIL expected) and work through `docs/DEPLOYMENT-VERIFICATION.pdf`, which lists every module the platform contains and the sign-off table.
+
 - [ ] Legal entity, VAT number and bank details set in `.env` (they print on every invoice)
 - [ ] Terms, privacy and refund pages reviewed by counsel (`/terms`, `/privacy`, `/refund-policy`)
 - [ ] Admin account created, default demo accounts removed (or seeded only on staging)
