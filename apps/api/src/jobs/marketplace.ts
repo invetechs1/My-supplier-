@@ -1,6 +1,7 @@
 import { runPriceAlerts } from "../services/marketplace";
 import { runRecurringOrders } from "../services/commerce";
 import { dispatchWebhooks } from "../services/webhooks";
+import { refreshDemandCoverage, sendDemandDigestIfDue } from "../services/demand";
 
 /**
  * Marketplace background jobs. Cheap enough to run every hour on a single instance;
@@ -10,6 +11,8 @@ export async function runMarketplaceJobs() {
   const results: Record<string, unknown> = {};
   results.priceAlerts = await runPriceAlerts().catch((e) => ({ error: String(e) }));
   results.recurringOrders = await runRecurringOrders().catch((e) => ({ error: String(e) }));
+  results.demandCoverage = await refreshDemandCoverage().catch((e) => ({ error: String(e) }));
+  results.demandDigest = await sendDemandDigestIfDue().catch((e) => ({ error: String(e) }));
   return results;
 }
 

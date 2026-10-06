@@ -9,6 +9,7 @@ import { serialize } from "../lib/serialize";
 import { nextReference } from "../lib/reference";
 import { activeListingWhere } from "../services/catalog";
 import { companyUserIds, notify } from "../services/notifications";
+import { recordDemand } from "../services/demand";
 import {
   matchLine, materialTokens, normaliseUnit, optimise, parseBoqText, round2,
   type CatalogueMaterial, type LineForOptimiser, type OfferLike,
@@ -121,6 +122,13 @@ router.post(
         offers: offers.slice(0, 15).map((o) => ({ ...o, lineTotal: round2(o.price * m.input.quantity) })),
       };
     });
+
+    // Demand intelligence: every analysed line is a signal (matched or not), recorded off the request path.
+    void recordDemand(lines.map((l) => ({
+      source: "BOQ" as const, rawText: l.description, quantity: l.quantity, unit: l.unit, city: body.city ?? null,
+      materialId: l.match && l.match.confidence >= 0.45 ? l.match.material.id : null, confidence: l.match?.confidence ?? null,
+      offerCount: l.match && l.match.confidence >= 0.45 ? l.supplierCount : null, userId: req.user?.id ?? null, companyId: req.user?.companyId ?? null,
+    })));
 
     res.json(
       serialize({

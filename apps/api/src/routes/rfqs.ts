@@ -9,6 +9,7 @@ import { serialize } from "../lib/serialize";
 import { paged, paginate } from "../lib/pagination";
 import { nextReference } from "../lib/reference";
 import { companyUserIds, notify } from "../services/notifications";
+import { recordDemand } from "../services/demand";
 import { bidTotal, rankBids } from "../services/pricing";
 import { recordOrderEvent } from "../services/portal";
 import { companyIdsOfUsers, emitOrderWebhook, emitWebhook } from "../services/webhooks";
@@ -87,6 +88,12 @@ router.post(
       },
       include: rfqInclude,
     });
+
+    // Demand intelligence: what buyers put in RFQs is the strongest signal of what to list next.
+    const requestedIds = body.items.map((i) => i.materialId).filter((x): x is string => Boolean(x));
+    const offerCounts = requestedIds.length ? await prisma.priceListing.groupBy({ by: ["materialId"], where: { materialId: { in: requestedIds }, source: "SUPPLIER", active: true }, _count: { _all: true } }) : [];
+    const offersBy = new Map(offerCounts.map((o) => [o.materialId, o._count._all]));
+    void recordDemand(body.items.map((i) => ({ source: "RFQ" as const, rawText: i.description, quantity: i.quantity, unit: i.unit, city: body.deliveryCity, materialId: i.materialId ?? null, offerCount: i.materialId ? offersBy.get(i.materialId) ?? 0 : null, userId: req.user!.id, companyId: req.user!.companyId ?? null })));
 
     // Notify suppliers in the delivery city (and those who list any requested material).
     const materialIds = body.items.map((i) => i.materialId).filter((x): x is string => Boolean(x));

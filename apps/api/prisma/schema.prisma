@@ -247,6 +247,7 @@ model Material {
   featured    Boolean        @default(false)
   source      MaterialSource @default(CURATED)
   popularity  Int            @default(0)
+  demand      DemandCluster[]
   weightKg    Float?
   volumeM3    Float?
   hazardous   Boolean        @default(false)
@@ -1273,4 +1274,72 @@ model WebhookDelivery {
 
   @@index([status, nextAttemptAt])
   @@index([endpointId, createdAt])
+}
+
+// ------------------------------------------------------------------ demand intelligence
+// Every BOQ line, RFQ item and zero-result search is a demand signal. Signals are clustered per
+// product (listed or not) so the admin sees which products to add or recruit suppliers for next.
+enum DemandSource {
+  BOQ
+  RFQ
+  SEARCH
+}
+
+enum DemandGapType {
+  UNLISTED       // no catalogue product matched the request
+  NO_OFFERS      // product exists but has no active supplier offer
+  THIN_COVERAGE  // fewer than 3 active supplier offers
+  COVERED        // 3+ active supplier offers
+}
+
+enum DemandStatus {
+  NEW
+  PLANNED
+  ADDED
+  IGNORED
+}
+
+model DemandSignal {
+  id         String        @id @default(cuid())
+  clusterId  String
+  cluster    DemandCluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  source     DemandSource
+  rawText    String
+  quantity   Float?
+  unit       String?
+  city       String?
+  materialId String?
+  confidence Float?
+  offerCount Int?
+  userId     String?
+  companyId  String?
+  createdAt  DateTime      @default(now())
+
+  @@index([clusterId, createdAt])
+  @@index([createdAt])
+}
+
+model DemandCluster {
+  id               String         @id @default(cuid())
+  key              String         @unique
+  label            String
+  unit             String?
+  materialId       String?
+  material         Material?      @relation(fields: [materialId], references: [id], onDelete: SetNull)
+  gapType          DemandGapType  @default(UNLISTED)
+  status           DemandStatus   @default(NEW)
+  note             String?
+  requests         Int            @default(0)
+  totalQuantity    Float          @default(0)
+  buyerKeys        Json           @default("[]")
+  cities           Json           @default("{}")
+  examples         Json           @default("[]")
+  offerCount       Int            @default(0)
+  notifiedLevel    Int            @default(0)
+  firstRequestedAt DateTime       @default(now())
+  lastRequestedAt  DateTime       @default(now())
+  signals          DemandSignal[]
+
+  @@index([gapType, status, requests])
+  @@index([lastRequestedAt])
 }

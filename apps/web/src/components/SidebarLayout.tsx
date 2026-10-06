@@ -127,6 +127,7 @@ export const adminNav: NavItem[] = [
   { href: "/admin/support", labelKey: "admin.support", icon: <Icon>{I.inbox}</Icon>, group: "admin.group.commerce" },
   { href: "/admin/returns", labelKey: "admin.returns", icon: <Icon>{I.undo}</Icon>, group: "admin.group.commerce" },
   { href: "/admin/product-reviews", labelKey: "admin.productReviews", icon: <Icon>{I.star}</Icon>, group: "admin.group.commerce" },
+  { href: "/admin/demand", labelKey: "admin.demand", icon: <Icon>{I.bolt}</Icon>, badge: "NEW", group: "admin.group.catalogue" },
   { href: "/admin/materials", labelKey: "admin.materials", icon: <Icon>{I.grid}</Icon>, group: "admin.group.catalogue" },
   { href: "/admin/categories", labelKey: "admin.categories", icon: <Icon>{I.tag}</Icon>, group: "admin.group.catalogue" },
   { href: "/admin/attributes", labelKey: "admin.attributes", icon: <Icon>{I.sliders}</Icon>, group: "admin.group.catalogue" },

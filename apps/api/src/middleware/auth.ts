@@ -48,7 +48,7 @@ async function loadUser(req: Request): Promise<AuthUser | null> {
 
 /** Download tokens are bound to the API path without the version prefix (what clients request). */
 export const downloadPathOf = (p: string) => p.replace(/^\/api\/v1(?=\/)/, "");
-const DOWNLOAD_ROUTE = /\/(invoice\.html|delivery-note\.html|einvoice\.xml|export\.csv|statement\.csv|page|file)$/;
+const DOWNLOAD_ROUTE = /\/(invoice\.html|delivery-note\.html|einvoice\.xml|export\.csv|statement\.csv|launch-list\.csv|page|file)$/;
 
 /**
  * Verifies a JWT and loads the active user behind it. Session tokens are accepted only in the

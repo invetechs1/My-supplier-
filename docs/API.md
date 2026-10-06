@@ -352,6 +352,20 @@ Volume tiers & sales, address book, credit terms (net terms), reorder / buy agai
 | POST | `/recurring/:id/run-now` | places the orders immediately -> `RecurringRunResult & { total, recurringOrder }` |
 | — | scheduler | `runRecurringOrders(now)` (services/commerce.ts) creates one DIRECT order per supplier for every active due schedule exactly like checkout, skips lines no longer purchasable, sets `lastRunAt` / `lastOrderId` / `nextRunAt` and notifies the buyer (also on failure, e.g. credit exceeded) |
 
+## Demand intelligence (role ADMIN)
+Every BOQ line (`POST /boq/analyze`), RFQ item (`POST /rfqs`) and shop search with zero results (`GET /shop/products?q=`) is recorded as a *demand signal* and grouped into a cluster per product: the matched catalogue material, or a normalised text key when nothing matched ("rebar 16mm" and "16 mm deformed rebar" share a cluster). Clusters are classified `UNLISTED` (no product), `NO_OFFERS`, `THIN_COVERAGE` (< 3 active supplier offers) or `COVERED`. Admins are notified (in-app + email, link `/admin/demand?gap=<id>`) when an open gap reaches 3, 10, 25 and 50 requests, and get a weekly digest on Sundays. Coverage is re-counted hourly.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/admin/demand/overview?days=30` | Signals by source, unmatched %, open gaps by type, top cities, top ranked gaps |
+| GET | `/admin/demand/gaps?gapType=OPEN|LISTED|UNLISTED|NO_OFFERS|THIN_COVERAGE|COVERED&status=&source=&city=&q=&days=&sort=score|requests|buyers|recent&page=` | `Paginated<DemandCluster>` with `requests`, `buyers` (distinct signed-in buyers), `totalQuantity`, `topCities`, `examples`, `score`, `suggestion` |
+| GET | `/admin/demand/gaps/:id` | Cluster + latest 50 signals (source, raw text, qty, city, buyer) |
+| PATCH | `/admin/demand/gaps/:id` | `{ status?: NEW|PLANNED|ADDED|IGNORED, note?, materialId? }` – linking a material re-classifies the cluster and back-fills its signals (audited) |
+| POST | `/admin/demand/gaps/:id/material` | `{ sku, name, nameAr, unit, categoryId, brand?, description? }` → creates the product, links the cluster (status ADDED, gap NO_OFFERS) |
+| GET | `/admin/demand/launch-list?city=&size=200&freshDays=14&status=` | Products ranked by demand + popularity with per-city coverage: `offers`, `freshOffers`, `suppliers`, `status READY|NEEDS_SUPPLIERS|NO_OFFERS`, `needed`; `summary.coveragePct` and `launchReady` (≥ 80 % of the list with 3 fresh offers) |
+| GET | `/admin/demand/launch-list.csv?city=&size=` | Same as CSV (download token) |
+| POST | `/admin/demand/refresh` | Re-count coverage now and send the weekly digest if due |
+
 ## Product discovery
 Amazon-class search, browse and engagement on top of the shop. Offers everywhere (`bestOffer`, `offers[]`, cart) now carry `OfferPricing`: `salePrice` (live only: `saleEndsAt` null or in the future), `compareAtPrice` (list price while a sale is live), `effectivePrice` (what the buyer pays) and `tiers: [{ minQty, price }]` sorted by `minQty`. Product enrichment (`bestOffer`, `minPrice`, `avgPrice`, `isDeal`, price sorts/filters) uses effective prices. Shared types live in `packages/shared/src/marketplace.ts`.
 

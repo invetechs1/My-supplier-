@@ -1273,3 +1273,4 @@ export interface SupplierProductPatch {
 export * from "./marketplace";
 export * from "./commerce";
 export * from "./integrations";
+export * from "./demand";

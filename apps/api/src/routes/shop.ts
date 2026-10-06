@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { recordDemand } from "../services/demand";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
@@ -145,6 +146,10 @@ router.get(
     list = sortProducts(list, qy.sort);
     const attributes = categoryIds ? await attributesForCategories(categoryIds) : [];
     const facets = computeFacets(list, attributes, { truncated, fuzzy });
+    // A search that finds nothing is demand we cannot serve yet; record it (anonymous allowed, no PII).
+    if (qy.q && qy.q.length >= 3 && list.length === 0 && !specFilters.length && qy.minPrice === undefined && qy.maxPrice === undefined) {
+      void recordDemand([{ source: "SEARCH", rawText: qy.q, city: qy.city ?? null, userId: req.user?.id ?? null, companyId: req.user?.companyId ?? null }]);
+    }
     res.json({ ...paged(serialize(list.slice(skip, skip + take)), page, pageSize, list.length), facets: serialize(facets) });
   }),
 );

@@ -167,6 +167,7 @@ Redeploying after a code change is the same deploy.sh command. Migrations run au
 
 
 ### Admin console
+- **Demand intelligence** (`services/demand.ts`, `routes/demand.ts`, admin page `/admin/demand`): BOQ lines, RFQ items and zero-result searches are clustered per product; admins are notified at 3/10/25/50 requests and weekly; the launch list ranks products by demand and shows per-city coverage against the "3 fresh offers per SKU" rule.
 
 - **Overview and reports:** KPIs, GMV and order trends with period-over-period change, average order value, RFQ conversion, top products, suppliers, categories and cities, payment-method split, CSV export.
 - **Commerce:** order oversight, payments ledger with refunds and outstanding balances, coupons and promotions (percent or fixed, minimum order, cap, validity window, usage limit; applied at checkout and split across supplier orders), review moderation (hide, reply, delete), support inbox fed by the public contact form.
