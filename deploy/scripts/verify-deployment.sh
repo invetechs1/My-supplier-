@@ -77,6 +77,8 @@ if [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_PASSWORD:-}" ]; then
     [ "$(code -H "Authorization: Bearer $tok" "$API_BASE/admin/stats")" = "200" ] && ok "admin stats" || bad "admin/stats failed with a valid token"
     [ "$(code -H "Authorization: Bearer $tok" "$API_BASE/admin/reports")" = "200" ] && ok "admin reports" || wr "admin/reports not 200"
     [ "$(code -H "Authorization: Bearer $tok" "$API_BASE/admin/audit")" = "200" ] && ok "audit log" || wr "admin/audit not 200"
+    [ "$(code -H "Authorization: Bearer $tok" "$API_BASE/admin/demand/overview")" = "200" ] && ok "demand intelligence (admin/demand)" || bad "admin/demand/overview not 200 → migration 20261006090000_demand_intelligence or router missing"
+    [ "$(code -H "Authorization: Bearer $tok" "$API_BASE/admin/demand/launch-list?size=10")" = "200" ] && ok "launch list" || wr "admin/demand/launch-list not 200"
     demo=$(body -X POST -H 'Content-Type: application/json' -d '{"email":"admin@mysupplier.sa","password":"Admin123!"}' "$API_BASE/auth/login" | num token)
     [ -z "$demo" ] && ok "demo admin account (admin@mysupplier.sa / Admin123!) is NOT usable" || bad "demo admin account still logs in with the seed password → change or delete it before launch"
   else

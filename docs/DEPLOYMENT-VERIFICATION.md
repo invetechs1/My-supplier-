@@ -1,6 +1,6 @@
 # MySupplier — System Inventory & Deployment Verification
 
-**Purpose.** This document lists everything the MySupplier platform consists of, what must exist on the production server after a correct deployment, and how the developer proves that nothing was left out. Work through Part 3 and Part 4 in order and sign the checklist in Part 6. Reference build: branch `claude/building-materials-ecommerce-ktfxj3`, commit `f7b12dc` (29 Sep 2026).
+**Purpose.** This document lists everything the MySupplier platform consists of, what must exist on the production server after a correct deployment, and how the developer proves that nothing was left out. Work through Part 3 and Part 4 in order and sign the checklist in Part 6. Reference build: branch `claude/building-materials-ecommerce-ktfxj3`, commit `5105139` (15 Oct 2026).
 
 **How to use it in 15 minutes.** (1) Confirm the deployed commit matches the reference (Part 3, step 1). (2) Run `deploy/scripts/verify-deployment.sh` against the live domains (Part 4.1): every FAIL is a missing piece. (3) Do the 10-minute manual walkthrough (Part 4.3). (4) Go through Part 5, the list of things that are most often forgotten. If all four are clean, the deployment is complete.
 
@@ -13,7 +13,7 @@
 | Reverse proxy | Caddy 2 | `caddy` container | HTTPS (Let's Encrypt), HSTS, routes `DOMAIN` → web, `API_DOMAIN` → api, `www` redirect |
 | Web app | Next.js 15.5 (React 19), Tailwind | `web` container, port 3000 | Public site, shop, buyer dashboard, supplier portal, admin console (EN/AR) |
 | API | Node 20, Express 4, Prisma 5, TypeScript | `api` container, port 4000 | REST API `/api/v1`, background jobs, uploads, generated images, printable documents |
-| Database | PostgreSQL 16 (+ `pg_trgm`) | `db` container, volume `pgdata` | All data (55 tables) |
+| Database | PostgreSQL 16 (+ `pg_trgm`) | `db` container, volume `pgdata` | All data (57 tables) |
 | Backups | pg_dump loop | `backup` container, `deploy/backups/` | Nightly dump, 14-day retention |
 | Uploads | Local disk (or S3/CDN via `UPLOAD_BASE_URL`) | volume `uploads` | Logos, product photos (public), verification documents (private) |
 | Mobile app | Expo SDK 51 / React Native | App Store / Play Store build (EAS) | Buyer and supplier features on iOS/Android |
@@ -23,13 +23,13 @@
 
 | Measure | Count |
 |---|---|
-| API endpoints | 245 across 27 route modules |
-| Web routes (pages) | 96 |
+| API endpoints | 253 across 28 route modules |
+| Web routes (pages) | 97 |
 | Mobile screens | 42 |
-| Database models | 55 |
-| Database migrations | 12 (all must be applied) |
-| Background jobs | 3 (daily price snapshot, hourly price alerts + recurring orders, webhook dispatcher every minute) |
-| Automated tests | 104 API unit tests, API smoke script, Playwright browser e2e (10 checks), 178-page render sweep |
+| Database models | 57 |
+| Database migrations | 13 (all must be applied) |
+| Background jobs | 3 (daily price snapshot; hourly price alerts, recurring orders, demand-coverage refresh and weekly demand digest; webhook dispatcher every minute) |
+| Automated tests | 111 API unit tests, API smoke script, Playwright browser e2e (10 checks), 178-page render sweep |
 | Standard catalogue (seed) | 62 categories, 1,305 products, 185 category attributes, 39 demo suppliers, ~12,000 price listings |
 | Languages | English and Arabic (RTL) on web and mobile |
 
@@ -84,7 +84,7 @@ Everything below exists in the code and must work on the server. Use it as the d
 - Returns handling, reviews & questions (reply/answer), company profile & storefront (logo, description, cities served), verification documents (CR, VAT), branches, team (invites, roles), finance (gross, commission, net, payouts, statement CSV, bank details), notifications, ERP & API page.
 
 ### 2.5 Admin console (`/admin/**`)
-- Overview KPIs, reports (range, CSV), orders and order detail, payments, payouts, returns, credit-terms approvals, coupons, category attributes, product reviews and questions moderation, supplier reviews, support inbox (contact messages), announcements (targeted by role), audit log, users (role, activation), companies (verification, documents, commission override), categories (create/edit/delete), materials (create/edit/delete, specs), price imports, external price feeds (AI scraping), supplier outreach, shipping rate cards and carriers, platform settings (commission %, payout day, low-stock default), notifications.
+- Overview KPIs, reports (range, CSV), orders and order detail, payments, payouts, returns, credit-terms approvals, coupons, category attributes, product reviews and questions moderation, supplier reviews, support inbox (contact messages), announcements (targeted by role), audit log, users (role, activation), companies (verification, documents, commission override), categories (create/edit/delete), materials (create/edit/delete, specs), price imports, external price feeds (AI scraping), supplier outreach, shipping rate cards and carriers, platform settings (commission %, payout day, low-stock default), notifications, **Demand & gaps** (what buyers asked for in BOQs/RFQs/searches that is unlisted or lacks suppliers, threshold notifications, weekly digest, one-click product creation, launch list with per-city coverage and CSV).
 
 ### 2.6 Integrations & platform services
 - **Payments**: Moyasar (Mada, Visa/Mastercard, Apple Pay) with intents, webhooks, refunds; bank transfer with instructions on the invoice; COD; credit terms.
@@ -110,7 +110,7 @@ The deployed code must be the reference commit or newer on the same branch. On t
 cd <repo> && git fetch origin && git rev-parse --short HEAD && git status --short
 git log --oneline -1 origin/claude/building-materials-ecommerce-ktfxj3
 ```
-Both hashes must match (`f7b12dc` at the time of writing). If the server is behind, run `deploy/scripts/deploy.sh` (pulls, rebuilds, restarts). A partial deployment usually means an older commit: e.g. the supplier "My products" page, returns, credit terms, wishlists, the ERP API, the Arabic product page and the security hardening all arrived in the last 12 commits.
+Both hashes must match (`5105139` at the time of writing). If the server is behind, run `deploy/scripts/deploy.sh` (pulls, rebuilds, restarts). A partial deployment usually means an older commit: e.g. the supplier "My products" page, returns, credit terms, wishlists, the ERP API, the Arabic product page and the security hardening all arrived in the last 12 commits.
 
 ### 3.2 Containers and DNS
 `docker compose -f deploy/docker-compose.prod.yml ps` must show five services **Up** (`caddy`, `db` (healthy), `api` (healthy), `web`, `backup`). DNS A records for `DOMAIN`, `API_DOMAIN` and `www.DOMAIN` point at the server; ports 80 and 443 open; Caddy has obtained certificates (`docker compose logs caddy | grep -i certificate`).
@@ -141,7 +141,7 @@ Copy from `deploy/.env.production.example`. The API refuses to start without the
 Never commit `deploy/.env`; rotate any key that was ever pasted into chat or a ticket.
 
 ### 3.4 Database
-- All **12 migrations applied**: `docker compose exec api npx prisma migrate status` must print "Database schema is up to date". The api container runs `prisma migrate deploy` on every start; if it fails, the api never becomes healthy — read `docker compose logs api`.
+- All **13 migrations applied**: `docker compose exec api npx prisma migrate status` must print "Database schema is up to date". The api container runs `prisma migrate deploy` on every start; if it fails, the api never becomes healthy — read `docker compose logs api`.
 - Extension `pg_trgm` installed (created by migration `pg_trgm_search`) — fuzzy search depends on it.
 - **Catalogue present**: 62 categories and the standard products. Decide explicitly: run `deploy/scripts/seed-demo.sh` for a first launch / staging (creates the catalogue **and** demo accounts and demo suppliers), or load the production catalogue only. An empty shop means the seed was never run.
 - Demo accounts (`admin@mysupplier.sa / Admin123!`, `buyer@…`, `supplier@…`, `warehouse@…`, `sales@<supplier>.sa`) **must be deleted or given new passwords** before the public launch; create the real admin account.
@@ -228,9 +228,9 @@ docker compose -f deploy/docker-compose.prod.yml exec caddy caddy list-certifica
 
 | # | Check | Evidence | Done by | Date |
 |---|---|---|---|---|
-| 1 | Deployed commit = reference commit (`f7b12dc` or newer) | `git rev-parse --short HEAD` output | | |
+| 1 | Deployed commit = reference commit (`5105139` or newer) | `git rev-parse --short HEAD` output | | |
 | 2 | 5 containers Up, db and api healthy | `docker compose ps` output | | |
-| 3 | `prisma migrate status` = up to date (12 migrations) | log line | | |
+| 3 | `prisma migrate status` = up to date (13 migrations) | log line | | |
 | 4 | `verify-deployment.sh` → 0 FAIL | script summary line | | |
 | 5 | Catalogue counts (categories ≥ 62, products > 0) | SQL output | | |
 | 6 | Demo accounts removed / passwords changed; real admin created | admin user list | | |
@@ -246,7 +246,7 @@ docker compose -f deploy/docker-compose.prod.yml exec caddy caddy list-certifica
 
 ---
 
-## Appendix A — All API endpoints (245, base path `/api/v1`)
+## Appendix A — All API endpoints (253, base path `/api/v1`)
 
 **Admin: users, companies, categories, materials** (`admin.ts`, 12 endpoints)
 
@@ -360,6 +360,19 @@ docker compose -f deploy/docker-compose.prod.yml exec caddy caddy list-certifica
 | PATCH | `/recurring/:id` |
 | DELETE | `/recurring/:id` |
 | POST | `/recurring/:id/run-now` |
+
+**Demand intelligence: signals, gaps, launch list** (`demand.ts`, 8 endpoints)
+
+| Method | Path |
+|---|---|
+| GET | `/admin/demand/overview` |
+| GET | `/admin/demand/gaps` |
+| GET | `/admin/demand/gaps/:id` |
+| PATCH | `/admin/demand/gaps/:id` |
+| POST | `/admin/demand/gaps/:id/material` |
+| GET | `/admin/demand/launch-list` |
+| GET | `/admin/demand/launch-list.csv` |
+| POST | `/admin/demand/refresh` |
 
 **Push devices** (`devices.ts`, 2 endpoints)
 
@@ -628,11 +641,11 @@ docker compose -f deploy/docker-compose.prod.yml exec caddy caddy list-certifica
 | POST | `/supplier/prices/:id/image` |
 | DELETE | `/supplier/prices/:id/image` |
 
-## Appendix B — All web routes (96)
+## Appendix B — All web routes (97)
 
 **Public** (22 routes)
 
-`/about`, `/boq`, `/brands`, `/brands/[brand]`, `/compare`, `/contact`, `/forgot-password`, `/help`, `/join`, `/login`, `/materials`, `/materials/[id]`, `/`, `/privacy`, `/refund-policy`, `/register`, `/reset-password`, `/shop`, `/shop/products`, `/shop/products/[id]`, `/terms`, `/update-prices/[token]`
+`/about`, `/boq`, `/brands`, `/brands/[brand]`, `/compare`, `/contact`, `/forgot-password`, `/help`, `/join`, `/login`, `/materials`, `/materials/[id]`, `/page.tsx`, `/privacy`, `/refund-policy`, `/register`, `/reset-password`, `/shop`, `/shop/products`, `/shop/products/[id]`, `/terms`, `/update-prices/[token]`
 
 **Buyer (signed in)** (22 routes)
 
@@ -642,15 +655,15 @@ docker compose -f deploy/docker-compose.prod.yml exec caddy caddy list-certifica
 
 `/supplier`, `/supplier/bids`, `/supplier/branches`, `/supplier/catalog`, `/supplier/company`, `/supplier/documents`, `/supplier/finance`, `/supplier/imports`, `/supplier/imports/[id]`, `/supplier/integrations`, `/supplier/inventory`, `/supplier/marketplace`, `/supplier/marketplace/[id]`, `/supplier/notifications`, `/supplier/orders`, `/supplier/orders/[id]`, `/supplier/prices`, `/supplier/products`, `/supplier/returns`, `/supplier/returns/[id]`, `/supplier/reviews`, `/supplier/team`, `/suppliers`, `/suppliers/[id]`
 
-**Admin console** (28 routes)
+**Admin console** (29 routes)
 
-`/admin`, `/admin/announcements`, `/admin/attributes`, `/admin/audit`, `/admin/categories`, `/admin/companies`, `/admin/companies/[id]`, `/admin/coupons`, `/admin/credit`, `/admin/feeds`, `/admin/imports`, `/admin/imports/[id]`, `/admin/materials`, `/admin/notifications`, `/admin/orders`, `/admin/orders/[id]`, `/admin/outreach`, `/admin/payments`, `/admin/payouts`, `/admin/product-reviews`, `/admin/reports`, `/admin/returns`, `/admin/returns/[id]`, `/admin/reviews`, `/admin/settings`, `/admin/shipping`, `/admin/support`, `/admin/users`
+`/admin`, `/admin/announcements`, `/admin/attributes`, `/admin/audit`, `/admin/categories`, `/admin/companies`, `/admin/companies/[id]`, `/admin/coupons`, `/admin/credit`, `/admin/demand`, `/admin/feeds`, `/admin/imports`, `/admin/imports/[id]`, `/admin/materials`, `/admin/notifications`, `/admin/orders`, `/admin/orders/[id]`, `/admin/outreach`, `/admin/payments`, `/admin/payouts`, `/admin/product-reviews`, `/admin/reports`, `/admin/returns`, `/admin/returns/[id]`, `/admin/reviews`, `/admin/settings`, `/admin/shipping`, `/admin/support`, `/admin/users`
 
 ## Appendix C — Mobile screens (42)
 `/(auth)/forgot-password`, `/(auth)/login`, `/(auth)/register`, `/(tabs)/index`, `/(tabs)/orders`, `/(tabs)/profile`, `/(tabs)/rfqs`, `/(tabs)/search`, `/(tabs)/shop`, `/+not-found`, `/account`, `/addresses`, `/alerts`, `/boq`, `/buy-again`, `/cart`, `/checkout`, `/imports/[id]`, `/imports/index`, `/imports/new`, `/lists/[id]`, `/lists/index`, `/material/[id]`, `/notifications`, `/order/[id]`, `/payment`, `/recurring/index`, `/recurring/new`, `/returns/[id]`, `/returns/index`, `/rfq/[id]`, `/rfq/new`, `/shop/product/[id]`, `/shop/search`, `/supplier/company`, `/supplier/dashboard`, `/supplier/finance`, `/supplier/inventory`, `/supplier/inventory/[listingId]`, `/supplier/prices`, `/supplier/products`, `/supplier/team`
 
-## Appendix D — Database models (55)
-`User`, `Company`, `Category`, `Material`, `PriceListing`, `PriceHistory`, `Rfq`, `RfqItem`, `Bid`, `BidItem`, `Order`, `OrderItem`, `Cart`, `CartItem`, `Feed`, `Notification`, `Counter`, `Payment`, `Device`, `PasswordResetToken`, `PriceImport`, `PriceImportRow`, `PriceUpdateRequest`, `CompanyInvite`, `CompanyDocument`, `Branch`, `StockMovement`, `OrderEvent`, `OrderMessage`, `Review`, `Payout`, `PlatformSetting`, `OtpCode`, `Shipment`, `ShipmentEvent`, `ShippingRate`, `EInvoiceRecord`, `Coupon`, `AuditLog`, `ContactMessage`, `CategoryAttribute`, `ProductReview`, `ReviewVote`, `ProductQuestion`, `Wishlist`, `WishlistItem`, `RecentlyViewed`, `PriceAlert`, `ListingTier`, `Address`, `Return`, `RecurringOrder`, `ApiKey`, `WebhookEndpoint`, `WebhookDelivery`
+## Appendix D — Database models (57)
+`User`, `Company`, `Category`, `Material`, `PriceListing`, `PriceHistory`, `Rfq`, `RfqItem`, `Bid`, `BidItem`, `Order`, `OrderItem`, `Cart`, `CartItem`, `Feed`, `Notification`, `Counter`, `Payment`, `Device`, `PasswordResetToken`, `PriceImport`, `PriceImportRow`, `PriceUpdateRequest`, `CompanyInvite`, `CompanyDocument`, `Branch`, `StockMovement`, `OrderEvent`, `OrderMessage`, `Review`, `Payout`, `PlatformSetting`, `OtpCode`, `Shipment`, `ShipmentEvent`, `ShippingRate`, `EInvoiceRecord`, `Coupon`, `AuditLog`, `ContactMessage`, `CategoryAttribute`, `ProductReview`, `ReviewVote`, `ProductQuestion`, `Wishlist`, `WishlistItem`, `RecentlyViewed`, `PriceAlert`, `ListingTier`, `Address`, `Return`, `RecurringOrder`, `ApiKey`, `WebhookEndpoint`, `WebhookDelivery`, `DemandSignal`, `DemandCluster`
 
 ## Appendix E — Migrations (apply in order; `prisma migrate deploy` does this automatically)
 
@@ -668,6 +681,7 @@ docker compose -f deploy/docker-compose.prod.yml exec caddy caddy list-certifica
 | 10 | `20260925140000_pg_trgm_search` |
 | 11 | `20260925180000_token_version` |
 | 12 | `20260925190000_review_votes` |
+| 13 | `20261006090000_demand_intelligence` |
 
 ## Appendix F — Where to read more
 `deploy/GO-LIVE.md` (step-by-step launch), `docs/DEVELOPER-HANDOVER.pdf` (architecture and remaining work), `docs/API.md` (endpoint reference), `docs/INTEGRATIONS.md` + `docs/openapi.yaml` (ERP), `docs/SUPPLIER-GUIDE-EN.pdf` (what suppliers see), `README.md` (local development).
