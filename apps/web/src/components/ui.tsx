@@ -3,6 +3,7 @@
 import Link from "next/link";
 import React from "react";
 import { cn } from "@/lib/format";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 // ---------------------------------------------------------------------------
 // Button
@@ -166,7 +167,9 @@ export function Badge({ children, tone, className, title }: { children: React.Re
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  return <Badge tone={statusTone[status] ?? "slate"}>{status.replace(/_/g, " ")}</Badge>;
+  const { t, has } = useI18n();
+  const key = `status.${status}` as TranslationKey;
+  return <Badge tone={statusTone[status] ?? "slate"}>{has(key) ? t(key) : status.replace(/_/g, " ")}</Badge>;
 }
 
 const SOURCE_LABEL: Record<string, string> = {

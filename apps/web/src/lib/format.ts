@@ -27,21 +27,32 @@ export function formatDateTime(value: string | null | undefined, lang: Lang = "e
   }).format(d);
 }
 
-export function timeAgo(value: string | null | undefined): string {
+const AGO = {
+  en: { now: "just now", m: "m ago", h: "h ago", d: "d ago", mo: "mo ago", y: "y ago" },
+  ar: { now: "الآن", m: " د", h: " س", d: " يوم", mo: " شهر", y: " سنة" },
+} as const;
+
+/** Relative time; Arabic when the stored UI language is Arabic (reads `ms_lang` so call sites need no change). */
+export function timeAgo(value: string | null | undefined, lang?: Lang): string {
   if (!value) return "—";
   const d = new Date(value).getTime();
   if (Number.isNaN(d)) return "—";
+  let l: Lang = lang ?? "en";
+  if (!lang && typeof window !== "undefined") { try { if (window.localStorage.getItem("ms_lang") === "ar") l = "ar"; } catch { /* ignore */ } }
+  const w = AGO[l];
+  const pre = l === "ar" ? "قبل" : "";
+  const fmt = (n: number, unit: string) => (l === "ar" ? `${pre} ${n}${unit}` : `${n}${unit}`);
   const diff = Date.now() - d;
   const mins = Math.round(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return w.now;
+  if (mins < 60) return fmt(mins, w.m);
   const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return fmt(hours, w.h);
   const days = Math.round(hours / 24);
-  if (days < 30) return `${days}d ago`;
+  if (days < 30) return fmt(days, w.d);
   const months = Math.round(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  return `${Math.round(months / 12)}y ago`;
+  if (months < 12) return fmt(months, w.mo);
+  return fmt(Math.round(months / 12), w.y);
 }
 
 export function formatNumber(value: number | null | undefined, lang: Lang = "en"): string {
