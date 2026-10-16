@@ -1,4 +1,4 @@
-import type { CreateMaterialFromDemandPayload, DemandCluster, DemandClusterDetail, DemandGapType, DemandOverview, DemandSource, DemandStatus, LaunchList, LaunchStatus, Material, Paginated } from "@mysupplier/shared";
+import type { CreateMaterialFromDemandPayload, DemandCluster, DemandClusterDetail, DemandGapType, DemandOverview, DemandSource, DemandStatus, LaunchList, LaunchStatus, Material, OutreachCandidates, OutreachSendResult, Paginated } from "@mysupplier/shared";
 import { request } from "../api";
 
 const enc = encodeURIComponent;
@@ -23,5 +23,7 @@ export const demandApi = {
   createMaterial: (id: string, body: CreateMaterialFromDemandPayload) => request<Material>(`/admin/demand/gaps/${enc(id)}/material`, { method: "POST", body }),
   launchList: (query: { city?: string; size?: number; freshDays?: number; status?: LaunchStatus } = {}) => request<LaunchList>("/admin/demand/launch-list", { query }),
   launchListCsvPath: () => "/admin/demand/launch-list.csv",
+  outreachCandidates: (materialIds: string[], city?: string, limit = 25) => request<OutreachCandidates>("/admin/demand/outreach/candidates", { query: { materialIds: materialIds.join(","), city: city || undefined, limit } }),
+  sendOutreach: (body: { materialIds: string[]; city?: string; channel: "EMAIL" | "WHATSAPP" | "LINK"; companyIds?: string[]; note?: string }) => request<OutreachSendResult>("/admin/demand/outreach", { method: "POST", body }),
   refresh: () => request<{ updated: number; digest: { sent: boolean } }>("/admin/demand/refresh", { method: "POST", body: {} }),
 };

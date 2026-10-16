@@ -42,18 +42,34 @@ export async function outreachSuppliers(staleDays = 14, q?: string) {
     .sort((a, b) => (b.staleDays ?? 9999) - (a.staleDays ?? 9999));
 }
 
-export async function createUpdateRequest(companyId: string, channel: "EMAIL" | "WHATSAPP" | "LINK", createdById?: string, message?: string) {
+export interface OutreachRequestOptions {
+  /** Products buyers asked for that this supplier is invited to price (demand-driven outreach). */
+  requestedMaterialIds?: string[];
+  requestedCity?: string | null;
+  note?: string | null;
+}
+
+export async function createUpdateRequest(companyId: string, channel: "EMAIL" | "WHATSAPP" | "LINK", createdById?: string, message?: string, opts: OutreachRequestOptions = {}) {
   const company = await prisma.company.findUniqueOrThrow({ where: { id: companyId }, include: { users: { where: { active: true }, take: 1 } } });
+  const requestedIds = [...new Set(opts.requestedMaterialIds ?? [])].slice(0, 50);
+  const requested = requestedIds.length ? await prisma.material.findMany({ where: { id: { in: requestedIds } }, select: { id: true, name: true, unit: true } }) : [];
   const token = crypto.randomBytes(24).toString("hex");
-  await prisma.priceUpdateRequest.create({ data: { companyId, tokenHash: hash(token), channel, createdById, expiresAt: new Date(Date.now() + 14 * 86400000) } });
+  await prisma.priceUpdateRequest.create({ data: { companyId, tokenHash: hash(token), channel, createdById, expiresAt: new Date(Date.now() + 14 * 86400000), requestedMaterialIds: requested.map((m) => m.id), requestedCity: opts.requestedCity ?? null, note: opts.note ?? null } });
   const link = `${env.webUrl}/update-prices/${token}`;
-  const text = message ?? `Hello ${company.name}, please update your prices on MySupplier (takes 2 minutes, no login): ${link}`;
+  const where = opts.requestedCity ? ` in ${opts.requestedCity}` : "";
+  const productLines = requested.slice(0, 8).map((m) => `• ${m.name} (${m.unit})`).join("\n");
+  const text = message ?? (requested.length
+    ? `Hello ${company.name}, contractors on MySupplier are asking for these products${where} and we have no price from you yet:\n${productLines}${requested.length > 8 ? `\n…and ${requested.length - 8} more` : ""}\nAdd your prices in 2 minutes, no login: ${link}`
+    : `Hello ${company.name}, please update your prices on MySupplier (takes 2 minutes, no login): ${link}`);
   const phone = (company.phone ?? company.users[0]?.phone ?? "").replace(/[^\d]/g, "");
   const whatsappUrl = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : null;
   let emailed = false;
   const email = company.users[0]?.email;
   if (channel === "EMAIL" && email && mailEnabled) {
-    await sendMail(email, "Please update your prices on MySupplier", layout("Update your prices", `<p>Hello ${escapeHtml(company.name)},</p><p>Contractors are searching for your products right now. Keep your prices current so you appear in comparisons, BOQ pricing and the shop.</p><p>This link needs no login and takes about 2 minutes.</p>`, { label: "Update prices", url: link }), text);
+    const intro = requested.length
+      ? `<p>Hello ${escapeHtml(company.name)},</p><p>Contractors on MySupplier are asking for the products below${escapeHtml(where)} and we do not have a price from you yet:</p><ul>${requested.map((m) => `<li>${escapeHtml(m.name)} <span style="color:#6b7280">(${escapeHtml(m.unit)})</span></li>`).join("")}</ul><p>Add your prices in about 2 minutes, no login needed. Suppliers with live prices appear in comparisons, BOQ pricing and the shop.</p>`
+      : `<p>Hello ${escapeHtml(company.name)},</p><p>Contractors are searching for your products right now. Keep your prices current so you appear in comparisons, BOQ pricing and the shop.</p><p>This link needs no login and takes about 2 minutes.</p>`;
+    await sendMail(email, requested.length ? "Buyers are asking for your products on MySupplier" : "Please update your prices on MySupplier", layout(requested.length ? "Buyers are asking for these products" : "Update your prices", intro, { label: requested.length ? "Add my prices" : "Update prices", url: link }), text);
     emailed = true;
   }
   return { companyId, companyName: company.name, link, whatsappUrl, emailed };
@@ -91,8 +107,12 @@ router.get(
   asyncHandler(async (req, res) => {
     const r = await requestByToken(req.params.token);
     const listings = await prisma.priceListing.findMany({ where: { companyId: r.companyId }, include: { material: { include: { category: true } } }, orderBy: { material: { name: "asc" } } });
+    const listed = new Set(listings.map((l) => l.materialId));
+    const requested = r.requestedMaterialIds.length
+      ? (await prisma.material.findMany({ where: { id: { in: r.requestedMaterialIds }, active: true }, include: { category: true } })).filter((m) => !listed.has(m.id))
+      : [];
     const { id, name, nameAr, city, verified } = r.company;
-    res.json(serialize({ company: { id, name, nameAr, city, verified }, expiresAt: r.expiresAt, completedAt: r.completedAt, listings }));
+    res.json(serialize({ company: { id, name, nameAr, city, verified }, expiresAt: r.expiresAt, completedAt: r.completedAt, listings, requested, requestedCity: r.requestedCity, note: r.note }));
   }),
 );
 
@@ -103,6 +123,8 @@ router.post(
     const body = z.object({
       items: z.array(z.object({ listingId: z.string(), price: z.coerce.number().positive(), stock: z.coerce.number().int().nonnegative().nullable().optional(), leadTimeDays: z.coerce.number().int().min(0).optional() })).default([]),
       newItems: z.array(z.object({ name: z.string().min(2), nameAr: z.string().optional(), categorySlug: z.string(), unit: z.string(), brand: z.string().optional(), price: z.coerce.number().positive(), city: z.string().min(2), stock: z.coerce.number().int().nonnegative().optional() })).optional(),
+      // Prices for catalogue products the supplier was invited to list (demand-driven outreach).
+      requestedItems: z.array(z.object({ materialId: z.string(), price: z.coerce.number().positive(), city: z.string().min(2), stock: z.coerce.number().int().nonnegative().nullable().optional(), leadTimeDays: z.coerce.number().int().min(0).optional(), minQty: z.coerce.number().positive().optional() })).max(50).optional(),
       contactName: z.string().optional(),
     }).parse(req.body);
     let updated = 0;
@@ -115,6 +137,18 @@ router.post(
       updated++;
     }
     let added = 0;
+    if (body.requestedItems?.length) {
+      const allowed = new Set(r.requestedMaterialIds);
+      for (const item of body.requestedItems) {
+        if (!allowed.has(item.materialId)) continue;
+        const existing = await prisma.priceListing.findFirst({ where: { companyId: r.companyId, materialId: item.materialId, city: item.city, source: "SUPPLIER" } });
+        const data = { price: item.price, stock: item.stock ?? null, leadTimeDays: item.leadTimeDays ?? 0, minQty: item.minQty ?? 1, validUntil: new Date(Date.now() + 90 * 86400000), active: true };
+        if (existing) await prisma.priceListing.update({ where: { id: existing.id }, data });
+        else await prisma.priceListing.create({ data: { ...data, companyId: r.companyId, materialId: item.materialId, city: item.city, source: "SUPPLIER" } });
+        touched.add(item.materialId);
+        added++;
+      }
+    }
     if (body.newItems?.length) {
       const rows: ImportRow[] = body.newItems.map(({ categorySlug, ...rest }) => ({ ...rest, category: categorySlug }));
       const result = await importCatalog(rows, { companyId: r.companyId, sourceName: r.company.name, materialSource: "SUPPLIER" });

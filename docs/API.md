@@ -101,6 +101,7 @@ Prices enter the platform four ways: supplier self-service, AI-read documents, A
 `POST /admin/feeds` accepts `format: "html"` plus optional `companyId`, `city`, `autoPublish`. Running such a feed fetches the page, extracts prices with AI and creates a `PriceImport` (kind WEB_PAGE) in REVIEW — or publishes directly when `autoPublish` is true. `POST /admin/feeds/:id/run` then returns `{ importId, extracted, published }`. `Feed` gains `format: "json" | "csv" | "html"`, `companyId?`, `city?`, `autoPublish`.
 
 ### Supplier outreach & magic-link price updates
+Magic-link requests may carry `requestedMaterialIds` (demand-driven outreach): `GET /price-update/:token` then returns `requested` (catalogue products the supplier does not list yet) plus `requestedCity`/`note`, and `POST /price-update/:token` accepts `requestedItems: [{ materialId, price, city, stock?, leadTimeDays?, minQty? }]` which creates or refreshes the supplier's listings for those products.
 | GET | `/admin/outreach?staleDays=14&q=` | `OutreachSupplier[]` sorted by staleness |
 | POST | `/admin/outreach/requests` | `{ companyIds: string[], channel: "EMAIL"|"WHATSAPP"|"LINK", message? }` -> `OutreachRequestResult[]` (EMAIL sends the link; WHATSAPP returns a wa.me URL to open; LINK just returns the link). Links expire in 14 days |
 | GET | `/price-update/:token` | public -> `PriceUpdateRequestInfo` (supplier's current listings) |
@@ -364,6 +365,8 @@ Every BOQ line (`POST /boq/analyze`), RFQ item (`POST /rfqs`) and shop search wi
 | POST | `/admin/demand/gaps/:id/material` | `{ sku, name, nameAr, unit, categoryId, brand?, description? }` → creates the product, links the cluster (status ADDED, gap NO_OFFERS) |
 | GET | `/admin/demand/launch-list?city=&size=200&freshDays=14&status=` | Products ranked by demand + popularity with per-city coverage: `offers`, `freshOffers`, `suppliers`, `status READY|NEEDS_SUPPLIERS|NO_OFFERS`, `needed`; `summary.coveragePct` and `launchReady` (≥ 80 % of the list with 3 fresh offers) |
 | GET | `/admin/demand/launch-list.csv?city=&size=` | Same as CSV (download token) |
+| GET | `/admin/demand/outreach/candidates?materialIds=a,b&city=&limit=` | Suppliers worth asking to price those products: serve the city, sell in the same categories, verified first; excludes companies that already list them all |
+| POST | `/admin/demand/outreach` | `{ materialIds, city?, channel: EMAIL|WHATSAPP|LINK, companyIds?, note? }` → one price-update request per supplier (top 10 candidates when `companyIds` is omitted) with the products pre-filled on the magic-link page; matching demand groups become PLANNED |
 | POST | `/admin/demand/refresh` | Re-count coverage now and send the weekly digest if due |
 
 ## Product discovery

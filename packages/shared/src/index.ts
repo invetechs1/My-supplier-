@@ -707,11 +707,17 @@ export interface PriceUpdateRequestInfo {
   expiresAt: string;
   completedAt: string | null;
   listings: Array<PriceListing & { material: Material }>;
+  /** Catalogue products buyers asked for that this supplier is invited to price (demand-driven outreach). */
+  requested?: Material[];
+  requestedCity?: string | null;
+  note?: string | null;
 }
 
 export interface PriceUpdateSubmission {
   items: Array<{ listingId: string; price: number; stock?: number | null; leadTimeDays?: number }>;
   newItems?: SupplierCatalogItem[];
+  /** Prices for the invited catalogue products. */
+  requestedItems?: Array<{ materialId: string; price: number; city: string; stock?: number | null; leadTimeDays?: number; minQty?: number }>;
   contactName?: string;
 }
 

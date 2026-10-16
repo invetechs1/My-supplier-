@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { Suspense, useEffect, useState } from "react";
-import { SAUDI_CITIES, type Category, type DemandCluster, type DemandClusterDetail, type DemandGapType, type DemandStatus, type LaunchList, type LaunchStatus, type Material } from "@mysupplier/shared";
+import { SAUDI_CITIES, type Category, type DemandCluster, type DemandClusterDetail, type DemandGapType, type DemandStatus, type LaunchList, type LaunchStatus, type Material, type OutreachSendResult } from "@mysupplier/shared";
 import { api, errorMessage, openDownload } from "@/lib/api";
 import { demandApi, type GapQuery } from "@/lib/api/demand";
 import { useAsync, useFlash, type Flash } from "@/lib/hooks";
@@ -31,9 +31,77 @@ function GapBadge({ type }: { type: DemandGapType }) {
 }
 
 // ---------------------------------------------------------------------------
+// Outreach modal: ask the right suppliers to price the selected products
+// ---------------------------------------------------------------------------
+function OutreachModal({ materialIds, city, onClose, onSent }: { materialIds: string[] | null; city?: string; onClose: () => void; onSent: () => void }) {
+  const open = Boolean(materialIds && materialIds.length);
+  const state = useAsync(() => (open ? demandApi.outreachCandidates(materialIds!, city, 30) : Promise.resolve(null)), [open, materialIds?.join(","), city]);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [channel, setChannel] = useState<"EMAIL" | "WHATSAPP" | "LINK">("LINK");
+  const [note, setNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<OutreachSendResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { setPicked(new Set((state.data?.candidates ?? []).slice(0, 10).map((c) => c.id))); setResult(null); setError(null); }, [state.data]);
+  const toggle = (id: string) => setPicked((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const send = async () => {
+    if (!materialIds || !picked.size) return;
+    setSending(true); setError(null);
+    try {
+      const r = await demandApi.sendOutreach({ materialIds, city, channel, companyIds: [...picked], note: note.trim() || undefined });
+      setResult(r); onSent();
+    } catch (err) { setError(errorMessage(err)); } finally { setSending(false); }
+  };
+  const copy = (text: string) => { void navigator.clipboard?.writeText(text); };
+  return (
+    <Modal open={open} title={`Request prices from suppliers (${materialIds?.length ?? 0} product${(materialIds?.length ?? 0) === 1 ? "" : "s"}${city ? ` · ${city}` : ""})`} onClose={onClose} footer={result ? <Button onClick={onClose}>Done</Button> : <><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={send} loading={sending} disabled={!picked.size}>Send to {picked.size} supplier{picked.size === 1 ? "" : "s"}</Button></>}>
+      {state.loading && !state.data ? <LoadingBlock /> : state.error ? <Alert onRetry={state.reload}>{state.error}</Alert> : result ? (
+        <div className="space-y-3">
+          <Alert kind="success">{result.sent} price request{result.sent === 1 ? "" : "s"} created. Each link opens a no-login form pre-filled with the requested products; it is valid for 14 days. Matching demand groups were marked as planned.</Alert>
+          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+            {result.results.map((r) => (
+              <li key={r.companyId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+                <span className="font-medium text-slate-800">{r.companyName}{r.emailed && <Badge tone="green" className="ms-2">emailed</Badge>}</span>
+                <span className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => copy(r.link)}>Copy link</Button>
+                  {r.whatsappUrl && <a href={r.whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100">WhatsApp</a>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : state.data ? (
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">Products: <span className="font-medium text-slate-900">{state.data.materials.map((m) => m.name).join(", ")}</span></p>
+          {state.data.candidates.length === 0 ? <EmptyState title="No suitable suppliers" description="No supplier serves this city or sells in these categories yet. Recruit suppliers from the Companies page or widen the city." /> : (
+            <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
+              {state.data.candidates.map((c) => (
+                <li key={c.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                  <input type="checkbox" checked={picked.has(c.id)} onChange={() => toggle(c.id)} className="h-4 w-4 rounded border-slate-300 text-brand-600" aria-label={`Select ${c.name}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-slate-900">{c.name} {c.verified && <Badge tone="green" className="ms-1">Verified</Badge>}</p>
+                    <p className="text-xs text-slate-500">{c.city} · {c.categoryListings} listing{c.categoryListings === 1 ? "" : "s"} in these categories · missing {c.missingMaterialIds.length}/{materialIds!.length}{c.contactEmail ? ` · ${c.contactEmail}` : ""}{c.pendingRequestSentAt ? ` · pending request ${timeAgo(c.pendingRequestSentAt)}` : ""}</p>
+                  </div>
+                  <span className="text-xs font-semibold tabular-nums text-brand-700">{c.score}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Select label="Channel" name="channel" value={channel} onChange={(e) => setChannel(e.target.value as typeof channel)} options={[{ value: "LINK", label: "Create links (I will send them)" }, { value: "EMAIL", label: "Email the supplier" }, { value: "WHATSAPP", label: "WhatsApp (opens chat with the message)" }]} />
+            <Input label="Note to suppliers (optional)" name="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Several contractors need these this month" />
+          </div>
+          {error && <Alert>{error}</Alert>}
+        </div>
+      ) : null}
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Gap detail modal: signals, status, note, link to an existing product or create one
 // ---------------------------------------------------------------------------
-function GapModal({ id, onClose, onChanged, onFlash }: { id: string | null; onClose: () => void; onChanged: (c: DemandCluster) => void; onFlash: (f: Flash) => void }) {
+function GapModal({ id, onClose, onChanged, onFlash, onOutreach }: { id: string | null; onClose: () => void; onChanged: (c: DemandCluster) => void; onFlash: (f: Flash) => void; onOutreach: (materialIds: string[], city?: string) => void }) {
   const { lang } = useI18n();
   const state = useAsync(() => (id ? demandApi.gap(id) : Promise.resolve(null)), [id]);
   const categories = useAsync(() => api.categories(), []);
@@ -132,6 +200,12 @@ function GapModal({ id, onClose, onChanged, onFlash }: { id: string | null; onCl
           </div>
           <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-900"><strong>Suggestion:</strong> {gap.suggestion}.{gap.material && <> Product: <Link href={`/shop/products/${gap.material.id}`} target="_blank" className="font-semibold underline">{gap.material.name}</Link> ({gap.material.sku}), {gap.offerCount} live offer{gap.offerCount === 1 ? "" : "s"}.</>}</p>
 
+          {gap.material && gap.gapType !== "COVERED" && mode === "view" && (
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => onOutreach([gap.material!.id], gap.topCities[0]?.city)}>Ask suppliers for prices</Button>
+              <Link href="/admin/outreach" className="inline-flex items-center text-sm font-semibold text-brand-700 hover:underline">Open outreach →</Link>
+            </div>
+          )}
           {gap.gapType === "UNLISTED" && mode === "view" && (
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={() => setMode("create")}>Create this product</Button>
@@ -266,15 +340,19 @@ function GapsTab({ gapType, onOpen, version }: { gapType: "UNLISTED" | "LISTED";
   );
 }
 
-function LaunchTab() {
+function LaunchTab({ onOutreach, version }: { onOutreach: (materialIds: string[], city?: string) => void; version: number }) {
   const { lang } = useI18n();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [city, setCity] = useState("Riyadh");
   const [size, setSize] = useState("200");
   const [freshDays, setFreshDays] = useState("14");
   const [status, setStatus] = useState<LaunchStatus | "">("");
-  const state = useAsync(() => demandApi.launchList({ city: city || undefined, size: Number(size), freshDays: Number(freshDays), status: status || undefined }), [city, size, freshDays, status]);
+  const state = useAsync(() => demandApi.launchList({ city: city || undefined, size: Number(size), freshDays: Number(freshDays), status: status || undefined }), [city, size, freshDays, status, version]);
   const list = state.data as LaunchList | null;
+  const toggleSel = (id: string) => setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const selectGaps = () => setSelected(new Set((list?.items ?? []).filter((i) => i.status !== "READY").slice(0, 50).map((i) => i.id)));
   const columns: Column<LaunchList["items"][number]>[] = [
+    { key: "sel", header: "", render: (i) => <input type="checkbox" checked={selected.has(i.id)} onChange={() => toggleSel(i.id)} className="h-4 w-4 rounded border-slate-300 text-brand-600" aria-label={`Select ${i.name}`} /> },
     { key: "rank", header: "#", render: (i) => <span className="tabular-nums text-slate-500">{list ? list.items.indexOf(i) + 1 : ""}</span> },
     { key: "name", header: "Product", render: (i) => (
       <div className="max-w-[280px]"><Link href={`/shop/products/${i.id}`} target="_blank" className="block truncate font-medium text-brand-700 hover:underline">{i.name}</Link><span className="block text-xs text-slate-500"><span className="font-mono" dir="ltr">{i.sku}</span> · {i.category.name}</span></div>
@@ -293,7 +371,11 @@ function LaunchTab() {
           <Select label="List size" name="size" value={size} onChange={(e) => setSize(e.target.value)} options={["100", "200", "300", "500", "1000"].map((s) => ({ value: s, label: `${s} products` }))} className="w-40" />
           <Select label="Fresh within" name="fresh" value={freshDays} onChange={(e) => setFreshDays(e.target.value)} options={[{ value: "7", label: "7 days" }, { value: "14", label: "14 days" }, { value: "30", label: "30 days" }]} className="w-36" />
           <Select label="Show" name="status" value={status} onChange={(e) => setStatus(e.target.value as LaunchStatus | "")} placeholder="All" options={(["READY", "NEEDS_SUPPLIERS", "NO_OFFERS"] as LaunchStatus[]).map((s) => ({ value: s, label: LAUNCH_LABEL[s] }))} className="w-44" />
-          <Button variant="outline" className="ms-auto" onClick={() => void openDownload(demandApi.launchListCsvPath(), "_blank", { city: city || undefined, size })}>Download CSV</Button>
+          <div className="ms-auto flex flex-wrap items-end gap-2">
+            <Button variant="ghost" onClick={selectGaps}>Select not-ready (max 50)</Button>
+            <Button onClick={() => onOutreach([...selected], city || undefined)} disabled={!selected.size}>Request prices ({selected.size})</Button>
+            <Button variant="outline" onClick={() => void openDownload(demandApi.launchListCsvPath(), "_blank", { city: city || undefined, size })}>Download CSV</Button>
+          </div>
         </div>
       </Card>
       {state.loading && !list ? <LoadingBlock /> : state.error ? <Alert onRetry={state.reload}>{state.error}</Alert> : list ? (
@@ -326,6 +408,7 @@ function AdminDemandInner() {
   const [flash, setFlash] = useFlash(6000);
   const [version, setVersion] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [outreach, setOutreach] = useState<{ materialIds: string[]; city?: string } | null>(null);
 
   useEffect(() => {
     const next = new URLSearchParams();
@@ -368,8 +451,9 @@ function AdminDemandInner() {
       {tab === "overview" && <OverviewTab key={version} days={days} onOpen={setOpenId} />}
       {tab === "unlisted" && <GapsTab gapType="UNLISTED" onOpen={setOpenId} version={version} />}
       {tab === "suppliers" && <GapsTab gapType="LISTED" onOpen={setOpenId} version={version} />}
-      {tab === "launch" && <LaunchTab />}
-      <GapModal id={openId} onClose={() => setOpenId(null)} onChanged={() => setVersion((v) => v + 1)} onFlash={setFlash} />
+      {tab === "launch" && <LaunchTab onOutreach={(materialIds, c) => setOutreach({ materialIds, city: c })} version={version} />}
+      <GapModal id={openId} onClose={() => setOpenId(null)} onChanged={() => setVersion((v) => v + 1)} onFlash={setFlash} onOutreach={(materialIds, c) => setOutreach({ materialIds, city: c })} />
+      <OutreachModal materialIds={outreach?.materialIds ?? null} city={outreach?.city} onClose={() => setOutreach(null)} onSent={() => { setVersion((v) => v + 1); setFlash({ kind: "success", message: "Price requests sent." }); }} />
     </div>
   );
 }

@@ -92,6 +92,31 @@ export interface LaunchList {
   items: LaunchListItem[];
 }
 
+export interface OutreachCandidate {
+  id: string;
+  name: string;
+  nameAr: string | null;
+  city: string;
+  verified: boolean;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  categoryListings: number;
+  alreadyListed: number;
+  missingMaterialIds: string[];
+  score: number;
+  pendingRequestSentAt: string | null;
+}
+
+export interface OutreachCandidates {
+  materials: { id: string; name: string; categoryId: string }[];
+  candidates: OutreachCandidate[];
+}
+
+export interface OutreachSendResult {
+  sent: number;
+  results: { companyId: string; companyName: string; link: string; whatsappUrl: string | null; emailed: boolean }[];
+}
+
 export interface CreateMaterialFromDemandPayload {
   sku: string;
   name: string;

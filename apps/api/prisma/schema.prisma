@@ -655,6 +655,10 @@ model PriceUpdateRequest {
   expiresAt   DateTime
   completedAt DateTime?
   updatedRows Int             @default(0)
+  // Demand-driven outreach: products buyers asked for that this supplier is invited to price.
+  requestedMaterialIds String[] @default([])
+  requestedCity        String?
+  note                 String?
 
   @@index([companyId])
 }

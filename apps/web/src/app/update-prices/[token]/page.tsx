@@ -39,6 +39,8 @@ export default function UpdatePricesPage() {
 
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [newRows, setNewRows] = useState<NewRow[]>([]);
+  // Products buyers asked for (demand-driven outreach): one draft row per invited product, blank price = skip.
+  const [reqDrafts, setReqDrafts] = useState<Record<string, { price: string; city: string; stock: string; leadTimeDays: string }>>({});
   const [contactName, setContactName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +55,9 @@ export default function UpdatePricesPage() {
       next[l.id] = { price: String(l.price), stock: stock === null || stock === undefined ? "" : String(stock), leadTimeDays: String(l.leadTimeDays ?? 0) };
     });
     setDrafts(next);
+    const rq: Record<string, { price: string; city: string; stock: string; leadTimeDays: string }> = {};
+    (info.requested ?? []).forEach((m) => { rq[m.id] = { price: "", city: info.requestedCity ?? info.company.city ?? "Riyadh", stock: "", leadTimeDays: "2" }; });
+    setReqDrafts(rq);
   }, [info]);
 
   const expired = useMemo(() => !!info && new Date(info.expiresAt).getTime() < Date.now(), [info]);
@@ -105,9 +110,21 @@ export default function UpdatePricesPage() {
         stock: r.stock.trim() === "" ? undefined : Math.max(0, Math.floor(Number(r.stock))),
       });
     }
+    const requestedItems: NonNullable<PriceUpdateSubmission["requestedItems"]> = [];
+    for (const m of info.requested ?? []) {
+      const d = reqDrafts[m.id];
+      if (!d || !d.price.trim()) continue; // not priced this time
+      const price = Number(d.price);
+      if (!Number.isFinite(price) || price <= 0 || !d.city) {
+        setError(`Enter a valid price and city for ${m.name}.`);
+        return;
+      }
+      const lead = Number(d.leadTimeDays);
+      requestedItems.push({ materialId: m.id, price, city: d.city, stock: d.stock.trim() === "" ? null : Math.max(0, Math.floor(Number(d.stock))), leadTimeDays: Number.isFinite(lead) && lead >= 0 ? lead : undefined });
+    }
     setSubmitting(true);
     try {
-      const res = await api.submitPriceUpdate(token, { items, newItems: newItems.length ? newItems : undefined, contactName: contactName.trim() || undefined });
+      const res = await api.submitPriceUpdate(token, { items, newItems: newItems.length ? newItems : undefined, requestedItems: requestedItems.length ? requestedItems : undefined, contactName: contactName.trim() || undefined });
       setDone(res);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
@@ -202,6 +219,34 @@ export default function UpdatePricesPage() {
       </div>
 
       {error && <Alert kind="error">{error}</Alert>}
+
+      {(info.requested?.length ?? 0) > 0 && (
+        <Card className="border-amber-300 ring-1 ring-amber-200">
+          <CardHeader title="Buyers are asking for these products" subtitle={`Contractors${info.requestedCity ? ` in ${info.requestedCity}` : ""} requested these and we have no price from you yet. Fill in a price to appear in their comparisons today; leave blank to skip.`} />
+          {info.note && <p className="border-b border-slate-100 px-5 py-2 text-sm text-slate-600">{info.note}</p>}
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2 text-start">Product</th><th className="px-4 py-2 text-start">Unit</th><th className="px-4 py-2 text-start">Price (SAR, excl. VAT)</th><th className="px-4 py-2 text-start">City</th><th className="px-4 py-2 text-start">Stock</th><th className="px-4 py-2 text-start">Lead time (days)</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {(info.requested ?? []).map((m) => {
+                  const d = reqDrafts[m.id] ?? { price: "", city: info.company.city ?? "Riyadh", stock: "", leadTimeDays: "2" };
+                  const set = (patch: Partial<typeof d>) => setReqDrafts({ ...reqDrafts, [m.id]: { ...d, ...patch } });
+                  return (
+                    <tr key={m.id} className={cn(d.price.trim() && "bg-emerald-50/40")}>
+                      <td className="px-4 py-3"><p className="font-medium text-slate-900">{m.name}</p><p className="text-xs text-slate-500" dir="rtl">{m.nameAr}</p></td>
+                      <td className="px-4 py-3 text-slate-600">{m.unit}</td>
+                      <td className="px-4 py-3"><input type="number" min={0} step="0.01" value={d.price} onChange={(e) => set({ price: e.target.value })} dir="ltr" placeholder="0.00" aria-label={`Price for ${m.name}`} className={cn(control, "w-28 text-end tabular-nums")} /></td>
+                      <td className="px-4 py-3"><select value={d.city} onChange={(e) => set({ city: e.target.value })} aria-label="City" className={cn(control, "w-36")}>{SAUDI_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></td>
+                      <td className="px-4 py-3"><input type="number" min={0} value={d.stock} onChange={(e) => set({ stock: e.target.value })} dir="ltr" placeholder="on request" aria-label="Stock" className={cn(control, "w-24 text-end tabular-nums")} /></td>
+                      <td className="px-4 py-3"><input type="number" min={0} value={d.leadTimeDays} onChange={(e) => set({ leadTimeDays: e.target.value })} dir="ltr" aria-label="Lead time in days" className={cn(control, "w-20 text-end tabular-nums")} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       <Card>
         <CardHeader title="Your listings" subtitle={`${info.listings.length} item${info.listings.length === 1 ? "" : "s"} · ${changedCount} changed`} />
@@ -345,7 +390,7 @@ export default function UpdatePricesPage() {
             <span className="text-xs text-slate-500">
               {changedCount} price{changedCount === 1 ? "" : "s"} changed · {newRows.length} new item{newRows.length === 1 ? "" : "s"}
             </span>
-            <Button size="lg" variant="accent" onClick={submit} loading={submitting} disabled={info.listings.length === 0 && newRows.length === 0}>
+            <Button size="lg" variant="accent" onClick={submit} loading={submitting} disabled={info.listings.length === 0 && newRows.length === 0 && Object.values(reqDrafts).every((d) => !d.price.trim())}>
               Save my prices
             </Button>
           </div>

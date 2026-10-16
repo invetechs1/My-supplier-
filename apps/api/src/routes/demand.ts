@@ -12,6 +12,7 @@ import { serialize } from "../lib/serialize";
 import { paged, paginate } from "../lib/pagination";
 import { audit } from "../lib/audit";
 import { demandOverview, gapWhere, gapTypeFor, launchList, refreshDemandCoverage, sendDemandDigestIfDue, shapeCluster } from "../services/demand";
+import { createUpdateRequest } from "./outreach";
 
 const router = Router();
 const admin = requireAuth("ADMIN");
@@ -105,6 +106,72 @@ router.get("/admin/demand/launch-list.csv", admin, asyncHandler(async (req, res)
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="launch-list-${qy.city ?? "all"}.csv"`);
   res.send([header.join(","), ...lines].join("\n"));
+}));
+
+// ------------------------------------------------------------------ demand-driven supplier outreach
+
+const idList = z.preprocess((v) => (typeof v === "string" ? v.split(",").map((x) => x.trim()).filter(Boolean) : v), z.array(z.string()).min(1).max(50));
+
+/**
+ * Suppliers worth asking to price the given products: companies serving the city (or based there) that
+ * already sell in the same categories rank first; verified companies and companies with more listings
+ * in those categories rank higher. Companies that already list every requested product are excluded.
+ */
+async function outreachCandidates(materialIds: string[], city?: string, limit = 25) {
+  const materials = await prisma.material.findMany({ where: { id: { in: materialIds } }, select: { id: true, name: true, categoryId: true } });
+  const categoryIds = [...new Set(materials.map((m) => m.categoryId))];
+  const companies = await prisma.company.findMany({
+    where: { type: "SUPPLIER", ...(city ? { OR: [{ city }, { citiesServed: { has: city } }] } : {}) },
+    select: { id: true, name: true, nameAr: true, city: true, citiesServed: true, verified: true, phone: true, users: { where: { active: true }, select: { email: true, phone: true }, take: 1 }, updateRequests: { where: { completedAt: null, expiresAt: { gt: new Date() } }, select: { sentAt: true, requestedMaterialIds: true }, orderBy: { sentAt: "desc" }, take: 1 } },
+  });
+  if (!companies.length) return { materials, candidates: [] as unknown[] };
+  const ids = companies.map((c) => c.id);
+  const [inCategory, already] = await Promise.all([
+    prisma.priceListing.groupBy({ by: ["companyId"], where: { companyId: { in: ids }, source: "SUPPLIER", active: true, material: { categoryId: { in: categoryIds } } }, _count: { _all: true } }),
+    prisma.priceListing.findMany({ where: { companyId: { in: ids }, materialId: { in: materialIds }, source: "SUPPLIER", active: true }, select: { companyId: true, materialId: true } }),
+  ]);
+  const catCount = new Map(inCategory.map((r) => [r.companyId, r._count._all]));
+  const listedBy = new Map<string, Set<string>>();
+  for (const l of already) { if (!l.companyId) continue; const set = listedBy.get(l.companyId) ?? new Set<string>(); set.add(l.materialId); listedBy.set(l.companyId, set); }
+  const candidates = companies.map((c) => {
+    const listed = listedBy.get(c.id) ?? new Set<string>();
+    const missing = materialIds.filter((id) => !listed.has(id));
+    const categoryListings = catCount.get(c.id) ?? 0;
+    const score = (c.verified ? 20 : 0) + Math.min(50, categoryListings * 2) + (c.city === city ? 10 : 0) + missing.length;
+    const pending = c.updateRequests[0];
+    return { id: c.id, name: c.name, nameAr: c.nameAr, city: c.city, verified: c.verified, contactEmail: c.users[0]?.email ?? null, contactPhone: c.phone ?? c.users[0]?.phone ?? null, categoryListings, alreadyListed: materialIds.length - missing.length, missingMaterialIds: missing, score, pendingRequestSentAt: pending?.sentAt ?? null };
+  }).filter((c) => c.missingMaterialIds.length > 0).sort((a, b) => b.score - a.score).slice(0, limit);
+  return { materials, candidates };
+}
+
+router.get("/admin/demand/outreach/candidates", admin, asyncHandler(async (req, res) => {
+  const qy = z.object({ materialIds: idList, city: z.string().optional(), limit: z.coerce.number().int().min(1).max(100).default(25) }).parse(req.query);
+  res.json(serialize(await outreachCandidates(qy.materialIds, qy.city, qy.limit)));
+}));
+
+/** Sends price-request links (email / WhatsApp / copy link) for the given products to the chosen suppliers. */
+router.post("/admin/demand/outreach", admin, asyncHandler(async (req, res) => {
+  const body = z.object({
+    materialIds: z.array(z.string()).min(1).max(50),
+    city: z.string().optional(),
+    channel: z.enum(["EMAIL", "WHATSAPP", "LINK"]).default("LINK"),
+    companyIds: z.array(z.string()).max(100).optional(),
+    note: z.string().max(500).optional(),
+  }).parse(req.body);
+  let targets = body.companyIds;
+  if (!targets?.length) {
+    const { candidates } = await outreachCandidates(body.materialIds, body.city, 10);
+    targets = (candidates as { id: string }[]).map((c) => c.id);
+  }
+  if (!targets.length) throw badRequest("No suitable suppliers found for these products in this city");
+  const results = [];
+  for (const companyId of targets) {
+    results.push(await createUpdateRequest(companyId, body.channel, req.user!.id, undefined, { requestedMaterialIds: body.materialIds, requestedCity: body.city ?? null, note: body.note ?? null }));
+  }
+  // Mark the matching demand clusters as planned so they stop re-notifying while suppliers respond.
+  await prisma.demandCluster.updateMany({ where: { materialId: { in: body.materialIds }, status: "NEW" }, data: { status: "PLANNED", note: `Price requests sent to ${results.length} supplier(s) on ${new Date().toISOString().slice(0, 10)}` } });
+  await audit(req, "demand.outreach", "DemandOutreach", body.materialIds.join(","), { suppliers: results.length, channel: body.channel, city: body.city ?? null });
+  res.status(201).json({ sent: results.length, results });
 }));
 
 /** Manual trigger for the maintenance jobs (they also run hourly). */
