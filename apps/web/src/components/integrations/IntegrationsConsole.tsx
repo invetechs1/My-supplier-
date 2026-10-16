@@ -57,16 +57,16 @@ export function IntegrationsConsole({ perspective }: { perspective: Perspective 
     <Card>
       <CardBody>
         <Alert kind="info">
-          <p className="font-semibold">Integration keys are issued per company.</p>
+          <p className="font-semibold">{t("integrations.perCompany")}</p>
           <p className="mt-1">
             {perspective === "buyer"
-              ? "Your account is not linked to a company yet. Add your company details (name, CR and VAT numbers) in your account settings, then come back here to create API keys and webhooks for your procurement system."
-              : "Your account is not linked to a company yet. Complete your company profile first, then come back here to create API keys and webhooks."}
+              ? t("integrations.noCompanyBuyer")
+              : t("integrations.noCompanySupplier")}
           </p>
         </Alert>
         <div className="mt-4 flex flex-wrap gap-2">
-          <LinkButton href="/account" variant="primary">Go to account settings</LinkButton>
-          <button type="button" onClick={() => changeTab("guide")} className="inline-flex h-10 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">Read the developer guide</button>
+          <LinkButton href="/account" variant="primary">{t("integrations.goToAccount")}</LinkButton>
+          <button type="button" onClick={() => changeTab("guide")} className="inline-flex h-10 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">{t("integrations.readGuide")}</button>
         </div>
       </CardBody>
     </Card>
@@ -74,11 +74,11 @@ export function IntegrationsConsole({ perspective }: { perspective: Perspective 
     <Card>
       <CardBody>
         <Alert kind="warning">
-          <p className="font-semibold">Only company owners and managers can manage API keys and webhooks.</p>
-          <p className="mt-1">Your role in {user?.company?.name ?? "your company"} is {COMPANY_ROLE_LABEL[role]}. Ask an owner or manager to create the key for your ERP, or to change your role. You can still read the developer guide.</p>
+          <p className="font-semibold">{t("integrations.ownersOnly")}</p>
+          <p className="mt-1">{t("integrations.yourRoleIn")} {user?.company?.name ?? t("integrations.yourCompany")} {t("integrations.is")} {COMPANY_ROLE_LABEL[role]}. {t("integrations.askOwner")}</p>
         </Alert>
         <div className="mt-4">
-          <button type="button" onClick={() => changeTab("guide")} className="inline-flex h-10 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">Open the developer guide</button>
+          <button type="button" onClick={() => changeTab("guide")} className="inline-flex h-10 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">{t("integrations.openGuide")}</button>
         </div>
       </CardBody>
     </Card>
@@ -90,8 +90,8 @@ export function IntegrationsConsole({ perspective }: { perspective: Perspective 
         title={title}
         subtitle={
           perspective === "supplier"
-            ? "Connect SAP, Oracle Fusion, Dynamics 365, Odoo, Zoho or a custom system: push prices and stock, pull sales orders, push fulfilment status and receive events by webhook."
-            : "Connect your procurement or accounting system: look up best offers, raise RFQs, pull purchases and ZATCA e-invoices, and receive order events by webhook."
+            ? t("integrations.supplierSubtitle")
+            : t("integrations.buyerSubtitle")
         }
       />
 
@@ -100,33 +100,33 @@ export function IntegrationsConsole({ perspective }: { perspective: Perspective 
         <div className="grid gap-4 p-5 lg:grid-cols-5">
           <div className="space-y-3 lg:col-span-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold text-slate-900">Connection</h3>
-              <Badge tone={isLocal ? "amber" : "green"}>{isLocal ? "Local development" : "Production"}</Badge>
+              <h3 className="text-sm font-semibold text-slate-900">{t("integrations.connection")}</h3>
+              <Badge tone={isLocal ? "amber" : "green"}>{isLocal ? t("integrations.localDev") : t("integrations.production")}</Badge>
               {user?.company?.name && <Badge tone="slate">{user.company.name}</Badge>}
             </div>
             <div>
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Base URL</p>
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">{t("integrations.baseUrl")}</p>
               <div dir="ltr" className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <code className="min-w-0 flex-1 truncate font-mono text-xs text-slate-800" title={INTEGRATION_API_URL}>{INTEGRATION_API_URL}</code>
                 <CopyButton text={INTEGRATION_API_URL} />
               </div>
             </div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-600">
-              <dt className="font-medium text-slate-700">Auth header</dt>
+              <dt className="font-medium text-slate-700">{t("integrations.authHeader")}</dt>
               <dd><Mono>X-API-Key: msk_live_…</Mono></dd>
-              <dt className="font-medium text-slate-700">Rate limit</dt>
-              <dd>600 requests / minute per key</dd>
-              <dt className="font-medium text-slate-700">Bulk size</dt>
-              <dd>1000 rows per call, 2 MB JSON</dd>
-              <dt className="font-medium text-slate-700">Spec</dt>
-              <dd>OpenAPI 3.0 (Developer guide tab)</dd>
+              <dt className="font-medium text-slate-700">{t("integrations.rateLimit")}</dt>
+              <dd>{t("integrations.rateLimitValue")}</dd>
+              <dt className="font-medium text-slate-700">{t("integrations.bulkSize")}</dt>
+              <dd>{t("integrations.bulkSizeValue")}</dd>
+              <dt className="font-medium text-slate-700">{t("integrations.spec")}</dt>
+              <dd>{t("integrations.specValue")}</dd>
             </dl>
           </div>
           <div className="lg:col-span-3">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Test with curl</p>
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">{t("integrations.testWithCurl")}</p>
             <CodeBlock title="bash" code={pingCurl} />
             <p className="mt-2 text-xs text-slate-500">
-              A valid key answers <Mono>{'{ "ok": true, "company": …, "keyName", "scopes", "serverTime" }'}</Mono>. Keep <Mono>serverTime</Mono> as the watermark for <Mono>since=</Mono> pulls.
+              {t("integrations.validKeyAnswers")} <Mono>{'{ "ok": true, "company": …, "keyName", "scopes", "serverTime" }'}</Mono>. {t("integrations.keep")} <Mono>serverTime</Mono> {t("integrations.asWatermarkFor")} <Mono>since=</Mono> {t("integrations.pulls")}
             </p>
           </div>
         </div>
@@ -137,9 +137,9 @@ export function IntegrationsConsole({ perspective }: { perspective: Perspective 
         value={tab}
         onChange={changeTab}
         tabs={[
-          { key: "keys", label: "API keys" },
-          { key: "webhooks", label: "Webhooks" },
-          { key: "guide", label: "Developer guide" },
+          { key: "keys", label: t("integrations.apiKeys") },
+          { key: "webhooks", label: t("integrations.webhooks") },
+          { key: "guide", label: t("integrations.devGuide") },
         ]}
       />
 

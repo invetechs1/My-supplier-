@@ -48,6 +48,7 @@ function ProductImage({ src, sku, alt }: { src: string; sku: string; alt: string
 
 /** Small inline form used for both review replies and question answers. */
 function ReplyBox({ label, placeholder, initial = "", submitLabel, onSubmit, onCancel }: { label: string; placeholder: string; initial?: string; submitLabel: string; onSubmit: (text: string) => Promise<void>; onCancel?: () => void }) {
+  const { t } = useI18n();
   const [text, setText] = useState(initial);
   const [saving, setSaving] = useState(false);
   const submit = async () => {
@@ -63,7 +64,7 @@ function ReplyBox({ label, placeholder, initial = "", submitLabel, onSubmit, onC
     <div className="mt-2 rounded-xl border border-brand-200 bg-brand-50/40 p-3">
       <Textarea label={label} name={`reply-${label}`} rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} disabled={saving} className="[&_textarea]:min-h-[72px]" />
       <div className="mt-2 flex justify-end gap-2">
-        {onCancel && <Button size="sm" variant="ghost" onClick={onCancel} disabled={saving}>Cancel</Button>}
+        {onCancel && <Button size="sm" variant="ghost" onClick={onCancel} disabled={saving}>{t("common.cancel")}</Button>}
         <Button size="sm" onClick={submit} loading={saving} disabled={text.trim().length < 2}>{submitLabel}</Button>
       </div>
     </div>
@@ -71,7 +72,7 @@ function ReplyBox({ label, placeholder, initial = "", submitLabel, onSubmit, onC
 }
 
 function ReviewItem({ review, onReply }: { review: ProductReview; onReply: (id: string, reply: string) => Promise<void> }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const [editing, setEditing] = useState(false);
   const showForm = !review.supplierReply || editing;
   return (
@@ -79,29 +80,29 @@ function ReviewItem({ review, onReply }: { review: ProductReview; onReply: (id: 
       <div className="flex flex-wrap items-center gap-2">
         <Stars value={review.rating} />
         {review.title && <span className="text-sm font-semibold text-slate-900">{review.title}</span>}
-        {review.verified && <Badge tone="green">Verified purchase</Badge>}
-        {!review.supplierReply && <Badge tone="amber">Needs reply</Badge>}
+        {review.verified && <Badge tone="green">{t("reviews.verifiedPurchase")}</Badge>}
+        {!review.supplierReply && <Badge tone="amber">{t("sup.reviews.needsReply")}</Badge>}
       </div>
       {review.body && <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{review.body}</p>}
       <p className="mt-1 text-xs text-slate-500">
-        {review.user?.name ?? "Buyer"}{review.user?.companyName ? ` · ${review.user.companyName}` : ""} · <span title={formatDateTime(review.createdAt, lang)}>{timeAgo(review.createdAt)}</span>
-        {review.helpful > 0 && <> · {review.helpful} found this helpful</>}
+        {review.user?.name ?? t("reviews.buyer")}{review.user?.companyName ? ` · ${review.user.companyName}` : ""} · <span title={formatDateTime(review.createdAt, lang)}>{timeAgo(review.createdAt)}</span>
+        {review.helpful > 0 && <> · {review.helpful} {t("sup.reviews.foundHelpful")}</>}
       </p>
       {review.supplierReply && !editing && (
         <div className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your reply</span>
-            <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-brand-700 hover:underline">Edit</button>
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("sup.reviews.yourReply")}</span>
+            <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-brand-700 hover:underline">{t("common.edit")}</button>
           </div>
           <p className="mt-0.5 whitespace-pre-wrap text-slate-700">{review.supplierReply}</p>
         </div>
       )}
       {showForm && (
         <ReplyBox
-          label={review.supplierReply ? "Edit your reply" : "Reply publicly"}
-          placeholder="Thank you for your feedback…"
+          label={review.supplierReply ? t("sup.reviews.editReply") : t("sup.reviews.replyPublicly")}
+          placeholder={t("sup.reviews.replyPlaceholder")}
           initial={review.supplierReply ?? ""}
-          submitLabel={review.supplierReply ? "Update reply" : "Post reply"}
+          submitLabel={review.supplierReply ? t("sup.reviews.updateReply") : t("sup.reviews.postReply")}
           onSubmit={async (text) => {
             await onReply(review.id, text);
             setEditing(false);
@@ -114,7 +115,7 @@ function ReviewItem({ review, onReply }: { review: ProductReview; onReply: (id: 
 }
 
 function QuestionItem({ question, onAnswer }: { question: ProductQuestion; onAnswer: (id: string, answer: string) => Promise<void> }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const [editing, setEditing] = useState(false);
   const showForm = !question.answer || editing;
   return (
@@ -124,16 +125,16 @@ function QuestionItem({ question, onAnswer }: { question: ProductQuestion; onAns
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-slate-900">{question.question}</p>
           <p className="mt-0.5 text-xs text-slate-500">
-            {question.user?.name ?? "Buyer"}{question.user?.companyName ? ` · ${question.user.companyName}` : ""} · <span title={formatDateTime(question.createdAt, lang)}>{timeAgo(question.createdAt)}</span>
+            {question.user?.name ?? t("reviews.buyer")}{question.user?.companyName ? ` · ${question.user.companyName}` : ""} · <span title={formatDateTime(question.createdAt, lang)}>{timeAgo(question.createdAt)}</span>
           </p>
         </div>
-        {!question.answer && <Badge tone="amber">Unanswered</Badge>}
+        {!question.answer && <Badge tone="amber">{t("sup.reviews.unanswered")}</Badge>}
       </div>
       {question.answer && !editing && (
         <div className="ms-7 mt-2 rounded-xl bg-emerald-50/60 px-3 py-2 text-sm">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Answer{question.answeredBy ? ` · ${question.answeredBy.name}` : ""}{question.answeredAt ? ` · ${timeAgo(question.answeredAt)}` : ""}</span>
-            <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-brand-700 hover:underline">Edit</button>
+            <span className="text-xs font-semibold uppercase tracking-wide text-emerald-800">{t("sup.reviews.answer")}{question.answeredBy ? ` · ${question.answeredBy.name}` : ""}{question.answeredAt ? ` · ${timeAgo(question.answeredAt)}` : ""}</span>
+            <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-brand-700 hover:underline">{t("common.edit")}</button>
           </div>
           <p className="mt-0.5 whitespace-pre-wrap text-slate-700">{question.answer}</p>
         </div>
@@ -141,10 +142,10 @@ function QuestionItem({ question, onAnswer }: { question: ProductQuestion; onAns
       {showForm && (
         <div className="ms-7">
           <ReplyBox
-            label={question.answer ? "Edit answer" : "Answer"}
-            placeholder="Yes – this product is compatible with…"
+            label={question.answer ? t("sup.reviews.editAnswer") : t("sup.reviews.answer")}
+            placeholder={t("sup.reviews.answerPlaceholder")}
             initial={question.answer ?? ""}
-            submitLabel={question.answer ? "Update answer" : "Post answer"}
+            submitLabel={question.answer ? t("sup.reviews.updateAnswer") : t("sup.reviews.postAnswer")}
             onSubmit={async (text) => {
               await onAnswer(question.id, text);
               setEditing(false);
@@ -166,40 +167,40 @@ function ProductPanel({ row, engagement, onRetry, onReply, onAnswer, onLoadMoreR
   onLoadMoreReviews: () => Promise<void>;
   onLoadMoreQuestions: () => Promise<void>;
 }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const [moreReviews, setMoreReviews] = useState(false);
   const [moreQuestions, setMoreQuestions] = useState(false);
-  if (engagement.loading && !engagement.loaded) return <LoadingBlock label="Loading reviews and questions…" className="py-6" />;
+  if (engagement.loading && !engagement.loaded) return <LoadingBlock label={t("sup.reviews.loadingPanel")} className="py-6" />;
   if (engagement.error) return <Alert onRetry={onRetry} className="m-4">{engagement.error}</Alert>;
   return (
     <div className="grid gap-4 border-t border-slate-100 bg-slate-50/40 p-4 lg:grid-cols-2">
       <section>
         <div className="mb-1 flex items-center justify-between gap-2">
-          <h4 className="text-sm font-semibold text-slate-900">Reviews <span className="font-normal text-slate-500">({formatNumber(engagement.reviewsTotal, lang)})</span></h4>
+          <h4 className="text-sm font-semibold text-slate-900">{t("admin.reviews")} <span className="font-normal text-slate-500">({formatNumber(engagement.reviewsTotal, lang)})</span></h4>
           {engagement.summary && engagement.summary.count > 0 && <Stars value={engagement.summary.average} count={engagement.summary.count} />}
         </div>
         {engagement.reviews.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500">No reviews yet.</p>
+          <p className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500">{t("reviews.none")}.</p>
         ) : (
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white px-3">
             {engagement.reviews.map((r) => <ReviewItem key={r.id} review={r} onReply={onReply} />)}
           </ul>
         )}
         {engagement.reviews.length < engagement.reviewsTotal && (
-          <Button size="sm" variant="ghost" className="mt-2" loading={moreReviews} onClick={async () => { setMoreReviews(true); try { await onLoadMoreReviews(); } finally { setMoreReviews(false); } }}>Load more reviews</Button>
+          <Button size="sm" variant="ghost" className="mt-2" loading={moreReviews} onClick={async () => { setMoreReviews(true); try { await onLoadMoreReviews(); } finally { setMoreReviews(false); } }}>{t("sup.reviews.loadMoreReviews")}</Button>
         )}
       </section>
       <section>
-        <h4 className="mb-1 text-sm font-semibold text-slate-900">Questions <span className="font-normal text-slate-500">({formatNumber(engagement.questionsTotal, lang)})</span></h4>
+        <h4 className="mb-1 text-sm font-semibold text-slate-900">{t("sup.reviews.questions")} <span className="font-normal text-slate-500">({formatNumber(engagement.questionsTotal, lang)})</span></h4>
         {engagement.questions.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500">No questions yet.</p>
+          <p className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500">{t("questions.none")}.</p>
         ) : (
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white px-3">
             {engagement.questions.map((q) => <QuestionItem key={q.id} question={q} onAnswer={onAnswer} />)}
           </ul>
         )}
         {engagement.questions.length < engagement.questionsTotal && (
-          <Button size="sm" variant="ghost" className="mt-2" loading={moreQuestions} onClick={async () => { setMoreQuestions(true); try { await onLoadMoreQuestions(); } finally { setMoreQuestions(false); } }}>Load more questions</Button>
+          <Button size="sm" variant="ghost" className="mt-2" loading={moreQuestions} onClick={async () => { setMoreQuestions(true); try { await onLoadMoreQuestions(); } finally { setMoreQuestions(false); } }}>{t("sup.reviews.loadMoreQuestions")}</Button>
         )}
       </section>
     </div>
@@ -207,7 +208,7 @@ function ProductPanel({ row, engagement, onRetry, onReply, onAnswer, onLoadMoreR
 }
 
 function SupplierReviewsInner() {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const products = useAsync(() => supplierCommerceApi.allSupplierProducts(), []);
   const [flash, setFlash] = useFlash(6000);
   const [q, setQ] = useState("");
@@ -280,7 +281,7 @@ function SupplierReviewsInner() {
     try {
       const updated = await supplierCommerceApi.replyToReview(reviewId, text);
       patch(materialId, (e) => ({ ...e, reviews: e.reviews.map((r) => (r.id === reviewId ? { ...r, ...updated, supplierReply: updated.supplierReply ?? text } : r)) }));
-      setFlash({ kind: "success", message: "Reply posted. The reviewer has been notified." });
+      setFlash({ kind: "success", message: t("sup.reviews.replyPosted") });
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
       throw err;
@@ -290,7 +291,7 @@ function SupplierReviewsInner() {
     try {
       const updated = await supplierCommerceApi.answerQuestion(questionId, text);
       patch(materialId, (e) => ({ ...e, questions: e.questions.map((qq) => (qq.id === questionId ? { ...qq, ...updated, answer: updated.answer ?? text } : qq)) }));
-      setFlash({ kind: "success", message: "Answer posted. The buyer has been notified." });
+      setFlash({ kind: "success", message: t("sup.reviews.answerPosted") });
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
       throw err;
@@ -351,39 +352,39 @@ function SupplierReviewsInner() {
   return (
     <div>
       <PageHeader
-        title="Reviews & questions"
-        subtitle="What buyers say and ask about the products you sell. Reply to reviews and answer questions publicly – both appear on the product page and notify the buyer."
-        action={<LinkButton href="/supplier/products" variant="outline">← My products</LinkButton>}
+        title={t("sup.reviews")}
+        subtitle={t("sup.reviews.subtitle")}
+        action={<LinkButton href="/supplier/products" variant="outline">{t("sup.reviews.backToProducts")}</LinkButton>}
       />
       <FlashMessage flash={flash} className="mb-4" />
 
       {products.loading && !products.data ? <LoadingBlock /> : products.error ? <Alert onRetry={products.reload}>{products.error}</Alert> : rows.length === 0 ? (
         <Card>
-          <EmptyState title="No products yet" description="Reviews and questions arrive once you sell products on MySupplier." action={<LinkButton href="/supplier/prices">+ Add product / price</LinkButton>} />
+          <EmptyState title={t("sup.reviews.noProducts")} description={t("sup.reviews.noProductsDesc")} action={<LinkButton href="/supplier/prices">{t("sup.reviews.addProduct")}</LinkButton>} />
         </Card>
       ) : (
         <>
           <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatTile label="Products" value={formatNumber(rows.length, lang)} sub={`${formatNumber(products.data?.length ?? 0, lang)} offers across cities`} />
-            <StatTile label="Catalogue rating" value={catalogueAverage === null ? "—" : <span className="inline-flex items-center gap-2">{catalogueAverage.toFixed(1)}<Stars value={catalogueAverage} size="md" /></span>} sub={ratedCount > 0 ? `${formatNumber(ratedCount, lang)} ratings` : "No ratings yet"} />
-            <StatTile label="Reviews · questions" value={loadedEntries.length ? `${formatNumber(totals.reviews, lang)} · ${formatNumber(totals.questions, lang)}` : "—"} sub={loadedEntries.length ? `Across ${formatNumber(loadedEntries.length, lang)} loaded ${loadedEntries.length === 1 ? "product" : "products"}` : "Expand a product to load"} />
-            <StatTile label="Needs your reply" value={loadedEntries.length ? formatNumber(totals.pending, lang) : "—"} tone={totals.pending > 0 ? "amber" : "default"} sub="Unanswered reviews and questions" />
+            <StatTile label={t("sup.reviews.products")} value={formatNumber(rows.length, lang)} sub={`${formatNumber(products.data?.length ?? 0, lang)} ${t("sup.reviews.offersAcrossCities")}`} />
+            <StatTile label={t("sup.reviews.catalogueRating")} value={catalogueAverage === null ? "—" : <span className="inline-flex items-center gap-2">{catalogueAverage.toFixed(1)}<Stars value={catalogueAverage} size="md" /></span>} sub={ratedCount > 0 ? `${formatNumber(ratedCount, lang)} ${t("sup.reviews.ratings")}` : t("sup.reviews.noRatings")} />
+            <StatTile label={t("sup.reviews.reviewsQuestions")} value={loadedEntries.length ? `${formatNumber(totals.reviews, lang)} · ${formatNumber(totals.questions, lang)}` : "—"} sub={loadedEntries.length ? `${t("sup.reviews.across")} ${formatNumber(loadedEntries.length, lang)} ${loadedEntries.length === 1 ? t("sup.reviews.loadedProductOne") : t("sup.reviews.loadedProductMany")}` : t("sup.reviews.expandToLoad")} />
+            <StatTile label={t("sup.reviews.needsYourReply")} value={loadedEntries.length ? formatNumber(totals.pending, lang) : "—"} tone={totals.pending > 0 ? "amber" : "default"} sub={t("sup.reviews.unansweredSub")} />
           </div>
 
           <Card className="mb-4 p-4">
             <div className="flex flex-wrap items-center gap-3">
-              <Input name="q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, SKU, brand…" aria-label="Search products" className="min-w-[220px] flex-1" />
+              <Input name="q" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("sup.reviews.searchPlaceholder")} aria-label={t("sup.reviews.searchProducts")} className="min-w-[220px] flex-1" />
               <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
-                <Toggle checked={needsOnly} onChange={setNeeds} label="Only products that need a reply or answer" />
-                Needs reply / answer
-                {scanning && <span className="inline-flex items-center gap-1 text-xs font-normal text-slate-500"><Spinner size="sm" /> checking products…</span>}
+                <Toggle checked={needsOnly} onChange={setNeeds} label={t("sup.reviews.onlyNeedsLabel")} />
+                {t("sup.reviews.needsReplyAnswer")}
+                {scanning && <span className="inline-flex items-center gap-1 text-xs font-normal text-slate-500"><Spinner size="sm" /> {t("sup.reviews.checkingProducts")}</span>}
               </label>
             </div>
           </Card>
 
           <Card className="overflow-hidden">
             {visible.length === 0 ? (
-              <EmptyState title={needsOnly ? "Nothing waiting for you" : "No products match"} description={needsOnly ? "Every loaded review has a reply and every question an answer." : "Try a different search."} />
+              <EmptyState title={needsOnly ? t("sup.reviews.nothingWaiting") : t("sup.reviews.noMatch")} description={needsOnly ? t("sup.reviews.allHandled") : t("sup.reviews.tryDifferentSearch")} />
             ) : (
               <ul className="divide-y divide-slate-100">
                 {visible.map((row) => {
@@ -403,15 +404,15 @@ function SupplierReviewsInner() {
                             <span className="font-mono">{row.material.sku}</span>{row.material.brand ? ` · ${row.material.brand}` : ""} · {row.cities.join(", ")}
                           </span>
                           <span className="mt-1 flex flex-wrap items-center gap-2">
-                            {ratingCount && ratingAvg !== null ? <Stars value={ratingAvg} count={ratingCount} /> : <span className="text-xs text-slate-400">No ratings yet</span>}
-                            {e.loaded && <Badge tone="slate">{formatNumber(e.reviewsTotal, lang)} reviews · {formatNumber(e.questionsTotal, lang)} questions</Badge>}
-                            {pending !== null && pending > 0 && <Badge tone="amber">{pending} need{pending === 1 ? "s" : ""} reply</Badge>}
-                            {pending === 0 && e.loaded && (e.reviewsTotal > 0 || e.questionsTotal > 0) && <Badge tone="green">All answered</Badge>}
+                            {ratingCount && ratingAvg !== null ? <Stars value={ratingAvg} count={ratingCount} /> : <span className="text-xs text-slate-400">{t("sup.reviews.noRatings")}</span>}
+                            {e.loaded && <Badge tone="slate">{formatNumber(e.reviewsTotal, lang)} {t("reviews.many")} · {formatNumber(e.questionsTotal, lang)} {t("sup.reviews.questionsLower")}</Badge>}
+                            {pending !== null && pending > 0 && <Badge tone="amber">{pending} {pending === 1 ? t("sup.reviews.needReplyOne") : t("sup.reviews.needReplyMany")}</Badge>}
+                            {pending === 0 && e.loaded && (e.reviewsTotal > 0 || e.questionsTotal > 0) && <Badge tone="green">{t("sup.reviews.allAnswered")}</Badge>}
                           </span>
                         </span>
                         <span className="flex items-center gap-2">
                           {e.loading && <Spinner size="sm" />}
-                          <Link href={`/shop/products/${row.materialId}`} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()} className="hidden text-xs font-medium text-brand-700 hover:underline sm:inline">View ↗</Link>
+                          <Link href={`/shop/products/${row.materialId}`} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()} className="hidden text-xs font-medium text-brand-700 hover:underline sm:inline">{t("sup.reviews.viewExternal")}</Link>
                           <svg viewBox="0 0 20 20" fill="currentColor" className={cn("h-5 w-5 text-slate-400 transition", open && "rotate-180")} aria-hidden><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
                         </span>
                       </button>

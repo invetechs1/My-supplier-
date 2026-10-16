@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ApiScope, WebhookDeliveryStatus, WebhookEvent } from "@mysupplier/shared";
 import { cn } from "@/lib/format";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { Badge } from "@/components/ui";
 
 export type Perspective = "supplier" | "buyer";
@@ -22,16 +23,25 @@ export const INTEGRATIONS_GUIDE_URL = `${REPO_URL}/blob/HEAD/docs/INTEGRATIONS.m
 export type ScopeGroup = "Catalogue" | "Supplier sync" | "Orders" | "Invoices" | "RFQs & bids" | "Webhooks";
 export const SCOPE_GROUPS: readonly ScopeGroup[] = ["Catalogue", "Supplier sync", "Orders", "Invoices", "RFQs & bids", "Webhooks"] as const;
 
-export const SCOPE_META: Record<ApiScope, { label: string; description: string; group: ScopeGroup; audience: Audience }> = {
-  "catalog:read": { label: "Read catalogue", description: "Categories, materials (product master for SKU mapping) and best offers per SKU.", group: "Catalogue", audience: "both" },
-  "prices:write": { label: "Push prices", description: "PUT /integrations/v1/prices – bulk upsert the company's price listings (up to 1000 rows).", group: "Supplier sync", audience: "supplier" },
-  "stock:write": { label: "Push stock", description: "PUT /integrations/v1/stock – set absolute on-hand quantities of the company's listings.", group: "Supplier sync", audience: "supplier" },
-  "orders:read": { label: "Read orders", description: "GET /integrations/v1/orders (sales orders) and /purchases (orders placed by the company).", group: "Orders", audience: "both" },
-  "orders:write": { label: "Update order status", description: "PATCH /integrations/v1/orders/:reference/status – confirm, ship, deliver or cancel.", group: "Orders", audience: "supplier" },
-  "invoices:read": { label: "Read invoices", description: "GET /integrations/v1/invoices – ZATCA e-invoice records with order totals (UBL XML optional).", group: "Invoices", audience: "both" },
-  "rfqs:read": { label: "Read RFQs", description: "GET /integrations/v1/rfqs – open RFQs to bid on (supplier) or the company's own RFQs (buyer).", group: "RFQs & bids", audience: "both" },
-  "rfqs:write": { label: "Create RFQs / bid", description: "POST /integrations/v1/rfqs (buyer) and POST /integrations/v1/rfqs/:id/bids (supplier).", group: "RFQs & bids", audience: "both" },
-  "webhooks:manage": { label: "Manage webhooks", description: "Create and edit webhook endpoints with the key instead of a user login.", group: "Webhooks", audience: "both" },
+export const SCOPE_GROUP_KEY: Record<ScopeGroup, TranslationKey> = {
+  Catalogue: "integrations.grpCatalogue",
+  "Supplier sync": "integrations.grpSupplierSync",
+  Orders: "integrations.grpOrders",
+  Invoices: "integrations.grpInvoices",
+  "RFQs & bids": "integrations.grpRfqsBids",
+  Webhooks: "integrations.grpWebhooks",
+};
+
+export const SCOPE_META: Record<ApiScope, { labelKey: TranslationKey; descriptionKey: TranslationKey; group: ScopeGroup; audience: Audience }> = {
+  "catalog:read": { labelKey: "integrations.scCatalogRead", descriptionKey: "integrations.scCatalogReadDesc", group: "Catalogue", audience: "both" },
+  "prices:write": { labelKey: "integrations.scPricesWrite", descriptionKey: "integrations.scPricesWriteDesc", group: "Supplier sync", audience: "supplier" },
+  "stock:write": { labelKey: "integrations.scStockWrite", descriptionKey: "integrations.scStockWriteDesc", group: "Supplier sync", audience: "supplier" },
+  "orders:read": { labelKey: "integrations.scOrdersRead", descriptionKey: "integrations.scOrdersReadDesc", group: "Orders", audience: "both" },
+  "orders:write": { labelKey: "integrations.scOrdersWrite", descriptionKey: "integrations.scOrdersWriteDesc", group: "Orders", audience: "supplier" },
+  "invoices:read": { labelKey: "integrations.scInvoicesRead", descriptionKey: "integrations.scInvoicesReadDesc", group: "Invoices", audience: "both" },
+  "rfqs:read": { labelKey: "integrations.scRfqsRead", descriptionKey: "integrations.scRfqsReadDesc", group: "RFQs & bids", audience: "both" },
+  "rfqs:write": { labelKey: "integrations.scRfqsWrite", descriptionKey: "integrations.scRfqsWriteDesc", group: "RFQs & bids", audience: "both" },
+  "webhooks:manage": { labelKey: "integrations.scWebhooksManage", descriptionKey: "integrations.scWebhooksManageDesc", group: "Webhooks", audience: "both" },
 };
 
 export const DEFAULT_SCOPES: Record<Perspective, ApiScope[]> = {
@@ -47,19 +57,19 @@ export function scopeTone(scope: ApiScope): "green" | "amber" | "blue" | "slate"
 // ---------------------------------------------------------------------------
 // Webhook events (from docs/INTEGRATIONS.md §3)
 // ---------------------------------------------------------------------------
-export const EVENT_META: Record<WebhookEvent, { description: string; sentTo: string; audience: Audience }> = {
-  "order.created": { description: "A new order was placed.", sentTo: "supplier + buyer company", audience: "both" },
-  "order.status_changed": { description: "Order moved to CONFIRMED, IN_TRANSIT or DELIVERED (carries previousStatus, note, trackingNumber).", sentTo: "supplier + buyer company", audience: "both" },
-  "order.paid": { description: "Payment captured for an order.", sentTo: "supplier + buyer company", audience: "both" },
-  "order.cancelled": { description: "Order cancelled (reserved stock released).", sentTo: "supplier + buyer company", audience: "both" },
-  "payment.refunded": { description: "A refund was issued ({ amount, reason, method }).", sentTo: "supplier + buyer company", audience: "both" },
-  "invoice.issued": { description: "ZATCA e-invoice issued for an order.", sentTo: "supplier + buyer company", audience: "both" },
-  "rfq.created": { description: "A buyer published an RFQ in your city or for materials you list.", sentTo: "suppliers in the delivery city / listing the materials", audience: "supplier" },
-  "bid.received": { description: "A supplier bid on one of your RFQs.", sentTo: "buyer company", audience: "buyer" },
-  "bid.accepted": { description: "Your bid was accepted and an order was created.", sentTo: "winning supplier", audience: "supplier" },
-  "stock.low": { description: "Listings fell to or below the low-stock threshold.", sentTo: "supplier", audience: "supplier" },
-  "return.requested": { description: "A buyer requested a return (RMA) on an order.", sentTo: "supplier", audience: "supplier" },
-  ping: { description: "Test event sent from the dashboard (\"Send test\").", sentTo: "the endpoint under test", audience: "both" },
+export const EVENT_META: Record<WebhookEvent, { descriptionKey: TranslationKey; sentToKey: TranslationKey; audience: Audience }> = {
+  "order.created": { descriptionKey: "integrations.evOrderCreated", sentToKey: "integrations.stSupplierBuyer", audience: "both" },
+  "order.status_changed": { descriptionKey: "integrations.evOrderStatusChanged", sentToKey: "integrations.stSupplierBuyer", audience: "both" },
+  "order.paid": { descriptionKey: "integrations.evOrderPaid", sentToKey: "integrations.stSupplierBuyer", audience: "both" },
+  "order.cancelled": { descriptionKey: "integrations.evOrderCancelled", sentToKey: "integrations.stSupplierBuyer", audience: "both" },
+  "payment.refunded": { descriptionKey: "integrations.evPaymentRefunded", sentToKey: "integrations.stSupplierBuyer", audience: "both" },
+  "invoice.issued": { descriptionKey: "integrations.evInvoiceIssued", sentToKey: "integrations.stSupplierBuyer", audience: "both" },
+  "rfq.created": { descriptionKey: "integrations.evRfqCreated", sentToKey: "integrations.stSuppliersInCity", audience: "supplier" },
+  "bid.received": { descriptionKey: "integrations.evBidReceived", sentToKey: "integrations.stBuyerCompany", audience: "buyer" },
+  "bid.accepted": { descriptionKey: "integrations.evBidAccepted", sentToKey: "integrations.stWinningSupplier", audience: "supplier" },
+  "stock.low": { descriptionKey: "integrations.evStockLow", sentToKey: "integrations.stSupplier", audience: "supplier" },
+  "return.requested": { descriptionKey: "integrations.evReturnRequested", sentToKey: "integrations.stSupplier", audience: "supplier" },
+  ping: { descriptionKey: "integrations.evPing", sentToKey: "integrations.stEndpointUnderTest", audience: "both" },
 };
 
 export const DEFAULT_EVENTS: Record<Perspective, WebhookEvent[]> = {
@@ -112,9 +122,12 @@ export function useCopy(timeout = 1800): [string | null, (text: string, key?: st
   return [copied, copy];
 }
 
-export function CopyButton({ text, label = "Copy", copiedLabel = "Copied", size = "sm", variant = "outline", className }: { text: string; label?: string; copiedLabel?: string; size?: "sm" | "xs"; variant?: "outline" | "dark"; className?: string }) {
+export function CopyButton({ text, label, copiedLabel, size = "sm", variant = "outline", className }: { text: string; label?: string; copiedLabel?: string; size?: "sm" | "xs"; variant?: "outline" | "dark"; className?: string }) {
+  const { t } = useI18n();
   const [copied, copy] = useCopy();
   const done = copied === text;
+  const idleLabel = label ?? t("integrations.copy");
+  const doneLabel = copiedLabel ?? t("integrations.copied");
   return (
     <button
       type="button"
@@ -135,7 +148,7 @@ export function CopyButton({ text, label = "Copy", copiedLabel = "Copied", size 
           <path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z" />
         )}
       </svg>
-      {done ? copiedLabel : label}
+      {done ? doneLabel : idleLabel}
     </button>
   );
 }
@@ -205,18 +218,22 @@ export function Tabs<K extends string>({ tabs, value, onChange, size = "md", cla
 // ---------------------------------------------------------------------------
 // Delivery status
 // ---------------------------------------------------------------------------
+const DELIVERY_STATUS_KEY: Record<string, TranslationKey> = { PENDING: "integrations.dsPending", SUCCESS: "integrations.dsSuccess", FAILED: "integrations.dsFailed" };
+
 export function DeliveryStatusBadge({ status }: { status: WebhookDeliveryStatus | string }) {
+  const { t } = useI18n();
   const tone = status === "SUCCESS" ? "green" : status === "FAILED" ? "red" : "amber";
-  return <Badge tone={tone}>{status}</Badge>;
+  return <Badge tone={tone}>{DELIVERY_STATUS_KEY[status] ? t(DELIVERY_STATUS_KEY[status]) : status}</Badge>;
 }
 
 export function ScopeChips({ scopes, max = 4 }: { scopes: ApiScope[]; max?: number }) {
+  const { t } = useI18n();
   const shown = scopes.slice(0, max);
   const rest = scopes.length - shown.length;
   return (
     <span className="flex flex-wrap gap-1">
       {shown.map((s) => (
-        <Badge key={s} tone={scopeTone(s)} title={SCOPE_META[s]?.description}>
+        <Badge key={s} tone={scopeTone(s)} title={SCOPE_META[s] ? t(SCOPE_META[s].descriptionKey) : undefined}>
           <span dir="ltr" className="font-mono">{s}</span>
         </Badge>
       ))}
@@ -226,13 +243,14 @@ export function ScopeChips({ scopes, max = 4 }: { scopes: ApiScope[]; max?: numb
 }
 
 export function EventChips({ events, max = 3 }: { events: Array<WebhookEvent | "*">; max?: number }) {
-  if (events.includes("*")) return <Badge tone="purple">All events (*)</Badge>;
+  const { t } = useI18n();
+  if (events.includes("*")) return <Badge tone="purple">{t("integrations.allEvents")} (*)</Badge>;
   const shown = events.slice(0, max);
   const rest = events.length - shown.length;
   return (
     <span className="flex flex-wrap gap-1">
       {shown.map((e) => (
-        <Badge key={e} tone="blue" title={e !== "*" ? EVENT_META[e]?.description : undefined}>
+        <Badge key={e} tone="blue" title={e !== "*" && EVENT_META[e] ? t(EVENT_META[e].descriptionKey) : undefined}>
           <span dir="ltr" className="font-mono">{e}</span>
         </Badge>
       ))}

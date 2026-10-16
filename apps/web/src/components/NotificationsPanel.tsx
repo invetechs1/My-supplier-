@@ -5,7 +5,7 @@ import { useState } from "react";
 import type { Notification } from "@mysupplier/shared";
 import { api, errorMessage } from "@/lib/api";
 import { useAsync, useFlash } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { cn, formatDateTime } from "@/lib/format";
 import { Alert, Button, Card, EmptyState, FlashMessage, LoadingBlock, PageHeader } from "./ui";
 
@@ -16,6 +16,14 @@ const typeTone: Record<string, string> = {
   BID_REJECTED: "bg-red-100 text-red-700",
   ORDER_UPDATE: "bg-violet-100 text-violet-700",
   SYSTEM: "bg-slate-100 text-slate-700",
+};
+const typeLabelKey: Record<string, TranslationKey> = {
+  NEW_RFQ: "notifications.typeNewRfq",
+  NEW_BID: "notifications.typeNewBid",
+  BID_ACCEPTED: "notifications.typeBidAccepted",
+  BID_REJECTED: "notifications.typeBidRejected",
+  ORDER_UPDATE: "notifications.typeOrderUpdate",
+  SYSTEM: "notifications.typeSystem",
 };
 
 export function NotificationsPanel() {
@@ -40,7 +48,7 @@ export function NotificationsPanel() {
     try {
       await api.markAllRead();
       state.setData((prev) => (prev ? { ...prev, unread: 0, items: prev.items.map((x) => ({ ...x, read: true })) } : prev));
-      setFlash({ kind: "success", message: "All notifications marked as read." });
+      setFlash({ kind: "success", message: t("notifications.allRead") });
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
     } finally {
@@ -52,15 +60,15 @@ export function NotificationsPanel() {
     <div>
       <PageHeader
         title={t("dash.notifications")}
-        subtitle={state.data ? `${state.data.unread} unread` : undefined}
+        subtitle={state.data ? `${state.data.unread} ${t("notifications.unread")}` : undefined}
         action={
           <>
             <label className="flex items-center gap-2 text-sm text-slate-600">
               <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-brand-600" />
-              Unread only
+              {t("notifications.unreadOnly")}
             </label>
             <Button variant="outline" size="sm" onClick={markAll} loading={busy} disabled={!state.data || state.data.unread === 0}>
-              Mark all read
+              {t("notifications.markAllRead")}
             </Button>
           </>
         }
@@ -71,7 +79,7 @@ export function NotificationsPanel() {
       ) : state.error ? (
         <Alert onRetry={state.reload}>{state.error}</Alert>
       ) : (state.data?.items.length ?? 0) === 0 ? (
-        <Card><EmptyState title="You're all caught up" description="New RFQs, bids and order updates will appear here." /></Card>
+        <Card><EmptyState title={t("notifications.caughtUp")} description={t("notifications.caughtUpDesc")} /></Card>
       ) : (
         <Card>
           <ul className="divide-y divide-slate-100">
@@ -82,7 +90,7 @@ export function NotificationsPanel() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className={cn("text-sm", n.read ? "font-medium text-slate-700" : "font-semibold text-slate-900")}>{n.title}</p>
-                      <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase", typeTone[n.type] ?? typeTone.SYSTEM)}>{n.type.replace(/_/g, " ")}</span>
+                      <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase", typeTone[n.type] ?? typeTone.SYSTEM)}>{typeLabelKey[n.type] ? t(typeLabelKey[n.type]) : n.type.replace(/_/g, " ")}</span>
                     </div>
                     <p className="mt-0.5 text-sm text-slate-600">{n.body}</p>
                     <p className="mt-1 text-xs text-slate-400">{formatDateTime(n.createdAt, lang)}</p>

@@ -6,20 +6,21 @@ import type { ReturnItem, ReturnRequest, ReturnStatus } from "@mysupplier/shared
 import { errorMessage } from "@/lib/api";
 import { RETURN_TRANSITIONS, supplierCommerceApi, type ReturnActionPayload, type ReturnActionStatus } from "@/lib/api/supplierCommerce";
 import { useAsync, useFlash } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { cn, formatDateTime, formatNumber, formatSar, timeAgo } from "@/lib/format";
 import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, FlashMessage, Input, LoadingBlock, PageHeader, Pagination, Select, StatTile, StatusBadge, Table, Textarea, type Column } from "@/components/ui";
 
 type Tone = "green" | "amber" | "red" | "blue" | "slate" | "purple";
 
-export const RETURN_STATUS_LABEL: Record<ReturnStatus, string> = {
-  REQUESTED: "Requested",
-  APPROVED: "Approved",
-  RECEIVED: "Received",
-  REFUNDED: "Refunded",
-  REJECTED: "Rejected",
-  CANCELLED: "Cancelled",
+export const RETURN_STATUS_LABEL_KEY: Record<ReturnStatus, TranslationKey> = {
+  REQUESTED: "returns.stRequested",
+  APPROVED: "returns.stApproved",
+  RECEIVED: "returns.stReceived",
+  REFUNDED: "returns.stRefunded",
+  REJECTED: "returns.stRejected",
+  CANCELLED: "returns.stCancelled",
 };
+const PAYMENT_METHOD_KEY: Record<string, TranslationKey> = { COD: "checkout.cod", BANK_TRANSFER: "checkout.bank", CARD: "checkout.card", CREDIT: "checkout.credit" };
 const RETURN_STATUS_TONE: Record<ReturnStatus, Tone> = {
   REQUESTED: "amber",
   APPROVED: "blue",
@@ -28,25 +29,34 @@ const RETURN_STATUS_TONE: Record<ReturnStatus, Tone> = {
   REJECTED: "red",
   CANCELLED: "slate",
 };
-const REASON_LABEL: Record<string, string> = {
-  DAMAGED: "Damaged in transit",
-  DEFECTIVE: "Defective",
-  WRONG_ITEM: "Wrong item delivered",
-  NOT_AS_DESCRIBED: "Not as described",
-  EXCESS: "Excess quantity",
-  OTHER: "Other",
+const REASON_LABEL_KEY: Record<string, TranslationKey> = {
+  DAMAGED: "returns.rsDamaged",
+  DEFECTIVE: "returns.rsDefective",
+  WRONG_ITEM: "returns.rsWrongItem",
+  NOT_AS_DESCRIBED: "returns.rsNotAsDescribed",
+  EXCESS: "returns.rsExcess",
+  OTHER: "returns.rsOther",
 };
-const ACTION_META: Record<ReturnActionStatus, { label: string; variant: "primary" | "danger" | "accent" | "secondary"; confirm?: string; success: string }> = {
-  APPROVED: { label: "Approve return", variant: "primary", success: "Return approved. The buyer has been asked to hand over the goods." },
-  REJECTED: { label: "Reject", variant: "danger", confirm: "Reject this return request? The buyer will be notified.", success: "Return rejected." },
-  RECEIVED: { label: "Mark received", variant: "primary", success: "Goods marked as received and restocked. The refund amount has been computed." },
-  REFUNDED: { label: "Mark refunded", variant: "accent", confirm: "Record the refund to the buyer? This cannot be undone.", success: "Refund recorded and the buyer notified." },
+const TILE_SUB_KEY: Record<ReturnStatus, TranslationKey> = {
+  REQUESTED: "returns.awaitingDecision",
+  APPROVED: "returns.goodsOnWay",
+  RECEIVED: "returns.refundToRecord",
+  REFUNDED: "returns.closed",
+  REJECTED: "returns.closed",
+  CANCELLED: "returns.closed",
+};
+const ACTION_META: Record<ReturnActionStatus, { labelKey: TranslationKey; variant: "primary" | "danger" | "accent" | "secondary"; confirmKey?: TranslationKey; successKey: TranslationKey }> = {
+  APPROVED: { labelKey: "returns.approve", variant: "primary", successKey: "returns.approveSuccess" },
+  REJECTED: { labelKey: "returns.reject", variant: "danger", confirmKey: "returns.rejectConfirm", successKey: "returns.rejectSuccess" },
+  RECEIVED: { labelKey: "returns.markReceived", variant: "primary", successKey: "returns.receivedSuccess" },
+  REFUNDED: { labelKey: "returns.markRefunded", variant: "accent", confirmKey: "returns.refundConfirm", successKey: "returns.refundSuccess" },
 };
 const TILE_STATUSES: ReturnStatus[] = ["REQUESTED", "APPROVED", "RECEIVED", "REFUNDED"];
-const STATUS_OPTIONS = (Object.keys(RETURN_STATUS_LABEL) as ReturnStatus[]).map((s) => ({ value: s, label: RETURN_STATUS_LABEL[s] }));
+const STATUS_VALUES = Object.keys(RETURN_STATUS_LABEL_KEY) as ReturnStatus[];
 
 export function ReturnStatusBadge({ status }: { status: ReturnStatus }) {
-  return <Badge tone={RETURN_STATUS_TONE[status] ?? "slate"}>{RETURN_STATUS_LABEL[status] ?? status}</Badge>;
+  const { t } = useI18n();
+  return <Badge tone={RETURN_STATUS_TONE[status] ?? "slate"}>{RETURN_STATUS_LABEL_KEY[status] ? t(RETURN_STATUS_LABEL_KEY[status]) : status}</Badge>;
 }
 
 const itemsTotal = (items: ReturnItem[]) => items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
@@ -58,6 +68,9 @@ const itemsTotal = (items: ReturnItem[]) => items.reduce((s, i) => s + i.quantit
 export function ReturnsWorkspace({ mode, initialId }: { mode: "supplier" | "admin"; initialId?: string | null }) {
   const { t, lang } = useI18n();
   const isAdmin = mode === "admin";
+  const statusLabel = (s: ReturnStatus) => t(RETURN_STATUS_LABEL_KEY[s]);
+  const reasonLabel = (reason: string) => (REASON_LABEL_KEY[reason] ? t(REASON_LABEL_KEY[reason]) : reason);
+  const statusOptions = STATUS_VALUES.map((s) => ({ value: s, label: statusLabel(s) }));
   const [status, setStatus] = useState<ReturnStatus | "">("");
   const [page, setPage] = useState(1);
   const [flash, setFlash] = useFlash(6000);
@@ -100,19 +113,19 @@ export function ReturnsWorkspace({ mode, initialId }: { mode: "supplier" | "admi
   const act = async (next: ReturnActionStatus) => {
     if (!ret) return;
     const meta = ACTION_META[next];
-    if (meta.confirm && !window.confirm(meta.confirm)) return;
+    if (meta.confirmKey && !window.confirm(t(meta.confirmKey))) return;
     const body: ReturnActionPayload = { status: next };
     if (resolution.trim()) body.resolution = resolution.trim();
     if (next === "RECEIVED" || next === "REFUNDED") {
       if (refund.trim() !== "") {
         const n = Number(refund);
         if (!Number.isFinite(n) || n < 0) {
-          setFlash({ kind: "error", message: "Enter a valid refund amount." });
+          setFlash({ kind: "error", message: t("returns.errRefundAmount") });
           return;
         }
         const cap = ret.refundAmount ?? ret.estimatedRefund;
         if (cap !== null && cap !== undefined && n > cap + 0.01) {
-          setFlash({ kind: "error", message: `Refund cannot exceed ${formatSar(cap, lang)}.` });
+          setFlash({ kind: "error", message: `${t("returns.refundCannotExceed")} ${formatSar(cap, lang)}.` });
           return;
         }
         body.refundAmount = n;
@@ -124,7 +137,7 @@ export function ReturnsWorkspace({ mode, initialId }: { mode: "supplier" | "admi
       detail.setData((prev) => (prev ? { ...prev, ...updated, estimatedRefund: prev.estimatedRefund } : updated));
       list.setData((prev) => (prev ? { ...prev, data: prev.data.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)) } : prev));
       setStatsTick((n) => n + 1);
-      setFlash({ kind: "success", message: meta.success });
+      setFlash({ kind: "success", message: t(meta.successKey) });
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
     } finally {
@@ -137,18 +150,18 @@ export function ReturnsWorkspace({ mode, initialId }: { mode: "supplier" | "admi
   const needsRefundInput = transitions.includes("RECEIVED") || transitions.includes("REFUNDED");
 
   const itemColumns: Column<ReturnItem>[] = [
-    { key: "name", header: "Item", render: (i) => <span className="font-medium text-slate-900">{i.name}</span> },
-    { key: "qty", header: "Qty", align: "end", render: (i) => <span className="tabular-nums">{formatNumber(i.quantity, lang)} {i.unit}</span> },
-    { key: "unit", header: "Unit price", align: "end", render: (i) => <span className="tabular-nums">{formatSar(i.unitPrice, lang)}</span> },
-    { key: "total", header: "Line total", align: "end", render: (i) => <span className="font-semibold tabular-nums">{formatSar(i.quantity * i.unitPrice, lang)}</span> },
+    { key: "name", header: t("orders.item"), render: (i) => <span className="font-medium text-slate-900">{i.name}</span> },
+    { key: "qty", header: t("orders.qty"), align: "end", render: (i) => <span className="tabular-nums">{formatNumber(i.quantity, lang)} {i.unit}</span> },
+    { key: "unit", header: t("product.unitPrice"), align: "end", render: (i) => <span className="tabular-nums">{formatSar(i.unitPrice, lang)}</span> },
+    { key: "total", header: t("product.lineTotal"), align: "end", render: (i) => <span className="font-semibold tabular-nums">{formatSar(i.quantity * i.unitPrice, lang)}</span> },
   ];
 
   const tile = (s: ReturnStatus) => {
     const selected = status === s;
     const value = stats.data ? formatNumber(stats.data[s], lang) : "…";
     return (
-      <button key={s} type="button" onClick={() => pickStatus(selected ? "" : s)} aria-pressed={selected} className={cn("rounded-xl text-start transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2", selected ? "ring-2 ring-brand-600 ring-offset-2" : "hover:-translate-y-0.5")} title={`Show ${RETURN_STATUS_LABEL[s].toLowerCase()} returns`}>
-        <StatTile label={RETURN_STATUS_LABEL[s]} value={value} tone={s === "REQUESTED" && (stats.data?.REQUESTED ?? 0) > 0 ? "amber" : "default"} sub={s === "REQUESTED" ? "Awaiting your decision" : s === "APPROVED" ? "Goods on the way back" : s === "RECEIVED" ? "Refund to be recorded" : "Closed"} className="h-full" />
+      <button key={s} type="button" onClick={() => pickStatus(selected ? "" : s)} aria-pressed={selected} className={cn("rounded-xl text-start transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2", selected ? "ring-2 ring-brand-600 ring-offset-2" : "hover:-translate-y-0.5")} title={`${t("returns.showReturns")}: ${statusLabel(s)}`}>
+        <StatTile label={statusLabel(s)} value={value} tone={s === "REQUESTED" && (stats.data?.REQUESTED ?? 0) > 0 ? "amber" : "default"} sub={t(TILE_SUB_KEY[s])} className="h-full" />
       </button>
     );
   };
@@ -157,21 +170,21 @@ export function ReturnsWorkspace({ mode, initialId }: { mode: "supplier" | "admi
     <div>
       <PageHeader
         title={t(isAdmin ? "admin.returns" : "sup.returns")}
-        subtitle={isAdmin ? "Every return request across suppliers. Approve, reject, confirm receipt and record refunds on a supplier's behalf." : "Return requests from your buyers. Approve or reject a request, confirm when the goods arrive, then record the refund."}
-        action={<Select name="status" aria-label={t("common.status")} value={status} onChange={(e) => pickStatus(e.target.value as ReturnStatus | "")} placeholder="All statuses" options={STATUS_OPTIONS} />}
+        subtitle={isAdmin ? t("returns.adminSubtitle") : t("returns.supplierSubtitle")}
+        action={<Select name="status" aria-label={t("common.status")} value={status} onChange={(e) => pickStatus(e.target.value as ReturnStatus | "")} placeholder={t("orders.allStatuses")} options={statusOptions} />}
       />
       <FlashMessage flash={flash} className="mb-4" />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">{TILE_STATUSES.map(tile)}</div>
 
       {list.loading && !list.data ? <LoadingBlock /> : list.error ? <Alert onRetry={list.reload}>{list.error}</Alert> : rows.length === 0 && !initialId ? (
         <Card>
-          <EmptyState title="No returns" description={status ? `No ${RETURN_STATUS_LABEL[status].toLowerCase()} returns.` : isAdmin ? "Return requests raised by buyers will appear here." : "When a buyer asks to return goods from one of your orders, the request appears here."} action={status ? <Button variant="outline" onClick={() => pickStatus("")}>Show all</Button> : undefined} />
+          <EmptyState title={t("returns.none")} description={status ? `${t("returns.noneWithStatus")}: ${statusLabel(status)}.` : isAdmin ? t("returns.adminEmptyDesc") : t("returns.supplierEmptyDesc")} action={status ? <Button variant="outline" onClick={() => pickStatus("")}>{t("returns.showAll")}</Button> : undefined} />
         </Card>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(280px,360px)_1fr] lg:items-start">
           <Card className="overflow-hidden">
             {rows.length === 0 ? (
-              <EmptyState title="No returns on this page" />
+              <EmptyState title={t("returns.noneOnPage")} />
             ) : (
               <ul className={cn("divide-y divide-slate-100", list.loading && "opacity-60")} aria-busy={list.loading}>
                 {rows.map((r: ReturnRequest) => {
@@ -185,11 +198,11 @@ export function ReturnsWorkspace({ mode, initialId }: { mode: "supplier" | "admi
                           <span className="shrink-0 text-xs text-slate-500" title={formatDateTime(r.createdAt, lang)}>{timeAgo(r.createdAt)}</span>
                         </div>
                         <p className="mt-0.5 truncate text-sm text-slate-700">
-                          {r.buyer?.name ?? "Buyer"}
+                          {r.buyer?.name ?? t("reviews.buyer")}
                           {isAdmin && r.company?.name ? <span className="text-slate-500"> · {r.company.name}</span> : null}
                         </p>
                         <p className="truncate text-xs text-slate-500">
-                          {r.items.length} {r.items.length === 1 ? "item" : "items"} · {REASON_LABEL[r.reason] ?? r.reason}
+                          {r.items.length} {r.items.length === 1 ? t("cart.itemOne") : t("cart.itemMany")} · {reasonLabel(r.reason)}
                           {r.order ? <span dir="ltr"> · {r.order.reference}</span> : null}
                         </p>
                         <div className="mt-1.5 flex items-center justify-between gap-2">
@@ -206,7 +219,7 @@ export function ReturnsWorkspace({ mode, initialId }: { mode: "supplier" | "admi
           </Card>
 
           {!selectedId ? (
-            <Card><EmptyState title="Select a return" description="Pick a request from the list to see its details." /></Card>
+            <Card><EmptyState title={t("returns.selectReturn")} description={t("returns.selectReturnDesc")} /></Card>
           ) : detail.loading && !ret ? (
             <Card><LoadingBlock /></Card>
           ) : detail.error ? (
@@ -215,13 +228,13 @@ export function ReturnsWorkspace({ mode, initialId }: { mode: "supplier" | "admi
             <Card>
               <CardHeader
                 title={<span className="font-mono" dir="ltr">{ret.reference}</span>}
-                subtitle={<>Requested {formatDateTime(ret.createdAt, lang)}{ret.updatedAt !== ret.createdAt ? ` · Updated ${formatDateTime(ret.updatedAt, lang)}` : ""}</>}
+                subtitle={<>{t("returns.requestedAt")} {formatDateTime(ret.createdAt, lang)}{ret.updatedAt !== ret.createdAt ? ` · ${t("orders.updated")} ${formatDateTime(ret.updatedAt, lang)}` : ""}</>}
                 action={<ReturnStatusBadge status={ret.status} />}
               />
               <CardBody className="space-y-5">
                 <dl className="grid gap-3 rounded-xl bg-slate-50 px-4 py-3 text-sm sm:grid-cols-2">
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-slate-500">Buyer</dt>
+                    <dt className="text-xs uppercase tracking-wide text-slate-500">{t("reviews.buyer")}</dt>
                     <dd className="mt-0.5 font-medium text-slate-900">
                       {ret.buyer?.name ?? "—"}
                       {ret.buyer?.email && <p className="text-xs font-normal text-slate-500" dir="ltr"><a href={`mailto:${ret.buyer.email}`} className="hover:underline">{ret.buyer.email}</a></p>}
@@ -229,38 +242,38 @@ export function ReturnsWorkspace({ mode, initialId }: { mode: "supplier" | "admi
                   </div>
                   {isAdmin && (
                     <div>
-                      <dt className="text-xs uppercase tracking-wide text-slate-500">Supplier</dt>
+                      <dt className="text-xs uppercase tracking-wide text-slate-500">{t("product.supplier")}</dt>
                       <dd className="mt-0.5 font-medium text-slate-900">{ret.company ? <Link href={`/admin/companies/${ret.company.id}`} className="text-brand-700 hover:underline">{ret.company.name}</Link> : "—"}</dd>
                     </div>
                   )}
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-slate-500">Order</dt>
+                    <dt className="text-xs uppercase tracking-wide text-slate-500">{t("returns.order")}</dt>
                     <dd className="mt-0.5 flex flex-wrap items-center gap-2">
                       <Link href={orderHref(ret.orderId)} className="font-mono text-sm font-medium text-brand-700 hover:underline" dir="ltr">{ret.order?.reference ?? ret.orderId}</Link>
                       {ret.order && <StatusBadge status={ret.order.paymentStatus} />}
-                      {ret.order && <span className="text-xs text-slate-500">total {formatSar(ret.order.total, lang)}{ret.order.paymentMethod ? ` · ${ret.order.paymentMethod.replace(/_/g, " ")}` : ""}</span>}
+                      {ret.order && <span className="text-xs text-slate-500">{t("returns.totalLower")} {formatSar(ret.order.total, lang)}{ret.order.paymentMethod ? ` · ${PAYMENT_METHOD_KEY[ret.order.paymentMethod] ? t(PAYMENT_METHOD_KEY[ret.order.paymentMethod]) : ret.order.paymentMethod.replace(/_/g, " ")}` : ""}</span>}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-slate-500">Reason</dt>
-                    <dd className="mt-0.5 font-medium text-slate-900">{REASON_LABEL[ret.reason] ?? ret.reason}</dd>
+                    <dt className="text-xs uppercase tracking-wide text-slate-500">{t("returns.reason")}</dt>
+                    <dd className="mt-0.5 font-medium text-slate-900">{reasonLabel(ret.reason)}</dd>
                   </div>
                 </dl>
 
                 {ret.details && (
                   <div>
-                    <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Buyer&apos;s notes</h4>
+                    <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("returns.buyerNotes")}</h4>
                     <p className="whitespace-pre-wrap rounded-xl border border-slate-200 px-4 py-3 text-sm leading-relaxed text-slate-800">{ret.details}</p>
                   </div>
                 )}
                 {ret.images.length > 0 && (
                   <div>
-                    <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Photos</h4>
+                    <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("returns.photos")}</h4>
                     <div className="flex flex-wrap gap-2">
                       {ret.images.map((src, i) => (
                         <a key={`${src}-${i}`} href={src} target="_blank" rel="noreferrer" className="block h-20 w-20 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={src} alt={`Return photo ${i + 1}`} className="h-full w-full object-cover" loading="lazy" />
+                          <img src={src} alt={`${t("returns.photo")} ${i + 1}`} className="h-full w-full object-cover" loading="lazy" />
                         </a>
                       ))}
                     </div>
@@ -268,49 +281,49 @@ export function ReturnsWorkspace({ mode, initialId }: { mode: "supplier" | "admi
                 )}
 
                 <div>
-                  <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Items</h4>
+                  <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("orders.items")}</h4>
                   <div className="overflow-hidden rounded-xl border border-slate-200">
-                    <Table columns={itemColumns} rows={ret.items} rowKey={(i) => i.orderItemId} dense empty={<EmptyState title="No items" />} />
+                    <Table columns={itemColumns} rows={ret.items} rowKey={(i) => i.orderItemId} dense empty={<EmptyState title={t("returns.noItems")} />} />
                   </div>
                 </div>
 
                 <dl className="grid gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm sm:grid-cols-3">
                   <div>
-                    <dt className="text-xs text-slate-500">Goods value</dt>
+                    <dt className="text-xs text-slate-500">{t("returns.goodsValue")}</dt>
                     <dd className="font-semibold tabular-nums text-slate-900">{formatSar(itemsTotal(ret.items), lang)}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-slate-500">Estimated refund</dt>
-                    <dd className="font-semibold tabular-nums text-slate-900" title="Unit price × quantity, minus any pro-rata coupon discount, plus VAT">{ret.estimatedRefund === null || ret.estimatedRefund === undefined ? "—" : formatSar(ret.estimatedRefund, lang)}</dd>
+                    <dt className="text-xs text-slate-500">{t("returns.estimatedRefund")}</dt>
+                    <dd className="font-semibold tabular-nums text-slate-900" title={t("returns.estimatedRefundHint")}>{ret.estimatedRefund === null || ret.estimatedRefund === undefined ? "—" : formatSar(ret.estimatedRefund, lang)}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-slate-500">{ret.status === "REFUNDED" ? "Refunded" : "Refund set"}</dt>
+                    <dt className="text-xs text-slate-500">{ret.status === "REFUNDED" ? t("checkout.refunded") : t("returns.refundSet")}</dt>
                     <dd className={cn("font-semibold tabular-nums", ret.status === "REFUNDED" ? "text-emerald-700" : "text-slate-900")}>{ret.refundAmount === null || ret.refundAmount === undefined ? "—" : formatSar(ret.refundAmount, lang)}</dd>
                   </div>
                 </dl>
 
                 {transitions.length > 0 ? (
                   <div className="space-y-3 border-t border-slate-100 pt-4">
-                    <Textarea label="Resolution note" name="resolution" rows={3} value={resolution} onChange={(e) => setResolution(e.target.value)} placeholder={ret.status === "REQUESTED" ? "e.g. Approved – courier will collect on Sunday. / Rejected – outside the 14-day window." : "Optional note shown to the buyer with this update."} hint="Sent to the buyer with the status update and kept on the return." />
+                    <Textarea label={t("returns.resolutionNote")} name="resolution" rows={3} value={resolution} onChange={(e) => setResolution(e.target.value)} placeholder={ret.status === "REQUESTED" ? t("returns.resolutionPlaceholderRequested") : t("returns.resolutionPlaceholderOther")} hint={t("returns.resolutionHint")} />
                     {needsRefundInput && (
-                      <Input label="Refund amount (SAR)" name="refundAmount" type="number" min={0} step="0.01" dir="ltr" value={refund} onChange={(e) => setRefund(e.target.value)} hint={`Prefilled with the ${ret.refundAmount !== null && ret.refundAmount !== undefined ? "amount set at receipt" : "estimated refund"}; you may lower it (partial refund) but not raise it.`} className="max-w-xs" />
+                      <Input label={t("returns.refundAmountSar")} name="refundAmount" type="number" min={0} step="0.01" dir="ltr" value={refund} onChange={(e) => setRefund(e.target.value)} hint={`${t("returns.prefilledWith")} ${ret.refundAmount !== null && ret.refundAmount !== undefined ? t("returns.amountAtReceipt") : t("returns.estimatedRefundLower")}${t("returns.semicolon")} ${t("returns.mayLower")}`} className="max-w-xs" />
                     )}
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       {transitions.map((next) => (
-                        <Button key={next} variant={ACTION_META[next].variant} onClick={() => act(next)} loading={acting === next} disabled={acting !== null && acting !== next}>{ACTION_META[next].label}</Button>
+                        <Button key={next} variant={ACTION_META[next].variant} onClick={() => act(next)} loading={acting === next} disabled={acting !== null && acting !== next}>{t(ACTION_META[next].labelKey)}</Button>
                       ))}
                     </div>
                   </div>
                 ) : (
                   <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                    <p>This return is <span className="font-medium text-slate-900">{RETURN_STATUS_LABEL[ret.status].toLowerCase()}</span>; no further action is possible.</p>
-                    {ret.resolution && <p className="mt-1 whitespace-pre-wrap text-slate-700"><span className="text-xs uppercase tracking-wide text-slate-500">Resolution:</span> {ret.resolution}</p>}
+                    <p>{t("returns.thisReturnIs")} <span className="font-medium text-slate-900">{statusLabel(ret.status).toLowerCase()}</span>{t("returns.noFurtherAction")}</p>
+                    {ret.resolution && <p className="mt-1 whitespace-pre-wrap text-slate-700"><span className="text-xs uppercase tracking-wide text-slate-500">{t("returns.resolution")}</span> {ret.resolution}</p>}
                   </div>
                 )}
               </CardBody>
             </Card>
           ) : (
-            <Card><EmptyState title="Return not found" description="It may belong to another company or have been removed." /></Card>
+            <Card><EmptyState title={t("returns.notFound")} description={t("returns.notFoundDesc")} /></Card>
           )}
         </div>
       )}

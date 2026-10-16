@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { API_SCOPES, WEBHOOK_EVENTS } from "@mysupplier/shared";
 import { INTEGRATION_API_URL } from "@/lib/api/integrations";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { Badge, Card, CardBody, CardHeader } from "@/components/ui";
 import { CodeBlock, EVENT_META, INTEGRATIONS_GUIDE_URL, Mono, OPENAPI_RAW_URL, OPENAPI_URL, SCOPE_META, Tabs, relevantTo, scopeTone, type Perspective } from "./shared";
 
@@ -11,19 +12,19 @@ type Language = "curl" | "node" | "python";
 
 interface Sample {
   id: string;
-  title: string;
+  titleKey: TranslationKey;
   method: Method;
   path: string;
   query?: Record<string, string>;
   body?: unknown;
   scope: string;
-  note: string;
+  noteKey: TranslationKey;
 }
 
 const SUPPLIER_SAMPLES: Sample[] = [
   {
     id: "prices",
-    title: "Push prices",
+    titleKey: "integrations.smPrices",
     method: "PUT",
     path: "/prices",
     scope: "prices:write",
@@ -32,50 +33,50 @@ const SUPPLIER_SAMPLES: Sample[] = [
       { sku: "RB-12-G60", city: "Riyadh", price: 2650, minQty: 1, leadTimeDays: 2, validUntil: "2026-12-31" },
       { sku: "RB-12-G60", city: "Dammam", price: 2590, salePrice: 2550 },
     ] },
-    note: "One row = one SKU in one delivery city, SAR excluding VAT. Upsert on (sku, city); up to 1000 rows per call; each row gets its own created / updated / error result and the batch is never rolled back.",
+    noteKey: "integrations.smPricesNote",
   },
   {
     id: "stock",
-    title: "Push stock",
+    titleKey: "integrations.smStock",
     method: "PUT",
     path: "/stock",
     scope: "stock:write",
     body: { rows: [{ sku: "CEM-OPC-50", city: "Riyadh", stock: 11500 }, { listingId: "lst_2", stock: 0 }] },
-    note: "Absolute on-hand quantities (recorded as ADJUST movements). Cheaper than a full price push, so run it more often. Listings at or below your low-stock threshold fire stock.low.",
+    noteKey: "integrations.smStockNote",
   },
   {
     id: "orders",
-    title: "Pull orders since…",
+    titleKey: "integrations.smOrders",
     method: "GET",
     path: "/orders",
     query: { since: "2026-09-25T09:12:44.000Z", pageSize: "100" },
     scope: "orders:read",
-    note: "Sorted by updatedAt ascending and filtered on updatedAt, so one loop catches new orders and status / payment changes. Keep the last serverTime (from /ping) as the watermark and de-duplicate on reference.",
+    noteKey: "integrations.smOrdersNote",
   },
   {
     id: "status",
-    title: "Push order status",
+    titleKey: "integrations.smStatus",
     method: "PATCH",
     path: "/orders/ORD-2026-000123/status",
     scope: "orders:write",
     body: { status: "SHIPPED", trackingNumber: "SMSA123456789", carrierName: "SMSA", note: "2 pallets" },
-    note: "Transitions: PENDING → CONFIRMED | CANCELLED, CONFIRMED → IN_TRANSIT | CANCELLED, IN_TRANSIT → DELIVERED. Aliases PROCESSING = CONFIRMED, SHIPPED = IN_TRANSIT. Re-sending the current status returns changed: false.",
+    noteKey: "integrations.smStatusNote",
   },
 ];
 
 const BUYER_SAMPLES: Sample[] = [
   {
     id: "catalog-prices",
-    title: "Best offers per SKU",
+    titleKey: "integrations.smCatalogPrices",
     method: "GET",
     path: "/catalog/prices",
     query: { sku: "RB-12-G60,CEM-OPC-50", city: "Riyadh" },
     scope: "catalog:read",
-    note: "Cheapest active offers per SKU (max 50 SKUs per call, limit up to 20 offers each). Use it to price purchase requisitions before raising an RFQ or an order.",
+    noteKey: "integrations.smCatalogPricesNote",
   },
   {
     id: "rfq",
-    title: "Create an RFQ",
+    titleKey: "integrations.smRfq",
     method: "POST",
     path: "/rfqs",
     scope: "rfqs:write",
@@ -87,25 +88,25 @@ const BUYER_SAMPLES: Sample[] = [
       closesAt: "2026-10-05T12:00:00Z",
       items: [{ sku: "RB-12-G60", quantity: 40 }, { description: "Binding wire 1.2mm", unit: "kg", quantity: 500 }],
     },
-    note: "Items may reference a catalogue sku (description and unit are then optional) or be free text. Bids arrive as bid.received webhooks or by polling GET /rfqs/:id. Awarding is done in the dashboard.",
+    noteKey: "integrations.smRfqNote",
   },
   {
     id: "purchases",
-    title: "Pull purchases since…",
+    titleKey: "integrations.smPurchases",
     method: "GET",
     path: "/purchases",
     query: { since: "2026-09-25T09:12:44.000Z", pageSize: "100" },
     scope: "orders:read",
-    note: "Orders placed by your company's users, in the ERP shape (supplier company with VAT / CR numbers, items with sku, totals, shipments, e-invoice ids). Same since / paging pattern as the supplier order pull.",
+    noteKey: "integrations.smPurchasesNote",
   },
   {
     id: "invoices",
-    title: "Pull invoices",
+    titleKey: "integrations.smInvoices",
     method: "GET",
     path: "/invoices",
     query: { side: "purchases", since: "2026-09-01T00:00:00.000Z", includeXml: "true" },
     scope: "invoices:read",
-    note: "ZATCA e-invoice records (invoiceNumber, uuid, hash chain, status) with the order totals. includeXml=true embeds the UBL 2.1 XML for archiving or AP automation / 3-way matching.",
+    noteKey: "integrations.smInvoicesNote",
   },
 ];
 
@@ -255,6 +256,7 @@ const BUYER_MAPPING: MappingRow[] = [
 
 // ---------------------------------------------------------------------------
 export function DeveloperGuideTab({ perspective }: { perspective: Perspective }) {
+  const { t } = useI18n();
   const samples = perspective === "supplier" ? SUPPLIER_SAMPLES : BUYER_SAMPLES;
   const [sampleId, setSampleId] = useState(samples[0].id);
   const [language, setLanguage] = useState<Language>("curl");
@@ -263,81 +265,81 @@ export function DeveloperGuideTab({ perspective }: { perspective: Perspective })
   const code = useMemo(() => (language === "curl" ? toCurl(sample) : language === "node" ? toNode(sample) : toPython(sample)), [sample, language]);
   const mapping = perspective === "supplier" ? SUPPLIER_MAPPING : BUYER_MAPPING;
 
-  const steps = perspective === "supplier"
+  const steps: Array<{ titleKey: TranslationKey; textKey: TranslationKey }> = perspective === "supplier"
     ? [
-        { title: "Create an API key", text: "In the API keys tab, with prices:write, stock:write, orders:read and orders:write. Store it in your ERP's credential vault." },
-        { title: "Ping", text: "Call GET /ping with X-API-Key. It returns your company, the key's scopes and serverTime – the safest watermark for incremental pulls." },
-        { title: "Map SKUs", text: "Pull GET /catalog/materials and keep a cross-reference between your item codes and our SKUs (customer material info record)." },
-        { title: "Push prices and stock", text: "Schedule PUT /prices every 15–60 minutes (or on change) and PUT /stock more often. Log per-row errors in the ERP." },
-        { title: "Pull orders and push status", text: "Poll GET /orders?since=<watermark> or subscribe to order.created webhooks; create the sales order, then PATCH the status as it ships." },
+        { titleKey: "integrations.stepCreateKey", textKey: "integrations.stepCreateKeySupplier" },
+        { titleKey: "integrations.stepPing", textKey: "integrations.stepPingSupplier" },
+        { titleKey: "integrations.stepMapSkus", textKey: "integrations.stepMapSkusText" },
+        { titleKey: "integrations.stepPushPrices", textKey: "integrations.stepPushPricesText" },
+        { titleKey: "integrations.stepPullOrders", textKey: "integrations.stepPullOrdersText" },
       ]
     : [
-        { title: "Create an API key", text: "In the API keys tab, with catalog:read, orders:read, invoices:read, rfqs:read and rfqs:write. Store it in your procurement system's credential vault." },
-        { title: "Ping", text: "Call GET /ping with X-API-Key. It returns your company, the key's scopes and serverTime – keep it as the watermark for incremental pulls." },
-        { title: "Price requisitions", text: "GET /catalog/prices?sku=…&city=… returns the cheapest active offers per SKU for purchase requisitions." },
-        { title: "Raise RFQs", text: "POST /rfqs from a purchase requisition; bids arrive as bid.received webhooks. Award in the dashboard – the resulting order shows up in /purchases." },
-        { title: "Pull purchases and invoices", text: "Poll GET /purchases?since=… and GET /invoices?side=purchases for ZATCA e-invoices (UBL XML optional) to drive 3-way matching." },
+        { titleKey: "integrations.stepCreateKey", textKey: "integrations.stepCreateKeyBuyer" },
+        { titleKey: "integrations.stepPing", textKey: "integrations.stepPingBuyer" },
+        { titleKey: "integrations.stepPriceReqs", textKey: "integrations.stepPriceReqsText" },
+        { titleKey: "integrations.stepRaiseRfqs", textKey: "integrations.stepRaiseRfqsText" },
+        { titleKey: "integrations.stepPullPurchases", textKey: "integrations.stepPullPurchasesText" },
       ];
 
   return (
     <div className="space-y-6">
       {/* Quick start */}
       <Card>
-        <CardHeader title="Quick start" subtitle={`Connect ${perspective === "supplier" ? "your ERP as a supplier" : "your procurement system as a buyer"} in five steps.`} />
+        <CardHeader title={t("integrations.quickStart")} subtitle={perspective === "supplier" ? t("integrations.quickStartSupplier") : t("integrations.quickStartBuyer")} />
         <CardBody>
           <ol className="grid gap-3 md:grid-cols-5">
             {steps.map((s, i) => (
-              <li key={s.title} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <li key={s.textKey} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <span className="mb-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white">{i + 1}</span>
-                <p className="text-sm font-semibold text-slate-900">{s.title}</p>
-                <p className="mt-0.5 text-xs text-slate-600">{s.text}</p>
+                <p className="text-sm font-semibold text-slate-900">{t(s.titleKey)}</p>
+                <p className="mt-0.5 text-xs text-slate-600">{t(s.textKey)}</p>
               </li>
             ))}
           </ol>
           <div className="mt-4 flex flex-wrap gap-2 text-xs">
-            <a href={OPENAPI_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50">OpenAPI 3.0 spec (docs/openapi.yaml)</a>
-            <a href={OPENAPI_RAW_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50">Raw YAML for Postman / SAP CPI / Logic Apps</a>
-            <a href={INTEGRATIONS_GUIDE_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50">Full integration guide (docs/INTEGRATIONS.md)</a>
+            <a href={OPENAPI_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50">{t("integrations.openApiSpec")}</a>
+            <a href={OPENAPI_RAW_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50">{t("integrations.rawYaml")}</a>
+            <a href={INTEGRATIONS_GUIDE_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50">{t("integrations.fullGuide")}</a>
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            Limits: 600 requests / minute per key, 1000 rows per bulk call, JSON bodies up to 2 MB. Errors are <Mono>{'{ "error", "details" }'}</Mono>: 401 key problem, 403 missing scope or wrong company type, 400 validation, 404 not yours, 429 rate limited.
+            {t("integrations.limits1")} <Mono>{'{ "error", "details" }'}</Mono>{t("integrations.limits2")}
           </p>
         </CardBody>
       </Card>
 
       {/* Code samples */}
       <Card>
-        <CardHeader title="Code samples" subtitle="The four calls most ERPs need first. Replace $MYSUPPLIER_API_KEY with a key from the API keys tab." />
+        <CardHeader title={t("integrations.codeSamples")} subtitle={t("integrations.codeSamplesSub")} />
         <CardBody className="space-y-3">
-          <Tabs tabs={samples.map((s) => ({ key: s.id, label: <><span className="font-mono text-[11px] text-slate-400">{s.method}</span> {s.title}</> }))} value={sample.id} onChange={setSampleId} />
+          <Tabs tabs={samples.map((s) => ({ key: s.id, label: <><span className="font-mono text-[11px] text-slate-400">{s.method}</span> {t(s.titleKey)}</> }))} value={sample.id} onChange={setSampleId} />
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone="slate"><span dir="ltr" className="font-mono">{sample.method} {sample.path}</span></Badge>
-            <Badge tone={scopeTone(sample.scope as (typeof API_SCOPES)[number])} title="Required scope"><span dir="ltr" className="font-mono">{sample.scope}</span></Badge>
+            <Badge tone={scopeTone(sample.scope as (typeof API_SCOPES)[number])} title={t("integrations.requiredScope")}><span dir="ltr" className="font-mono">{sample.scope}</span></Badge>
             <Tabs tabs={LANGUAGES.map((l) => ({ key: l.key, label: l.label }))} value={language} onChange={setLanguage} size="sm" className="ms-auto" />
           </div>
           <CodeBlock title={LANGUAGES.find((l) => l.key === language)?.title} code={code} />
-          <p className="text-xs text-slate-600">{sample.note}</p>
+          <p className="text-xs text-slate-600">{t(sample.noteKey)}</p>
         </CardBody>
       </Card>
 
       {/* Webhook verification */}
       <Card>
-        <CardHeader title="Verify webhook signatures" subtitle="Every delivery is signed: X-MySupplier-Signature = sha256=HMAC-SHA256(secret, timestamp + '.' + rawBody). Verify against the raw body bytes, reject stale timestamps, de-duplicate on the delivery id and answer 2xx within 10 seconds." action={<Tabs tabs={[{ key: "node", label: "Node.js (Express)" }, { key: "python", label: "Python (Flask)" }]} value={verifyLang} onChange={setVerifyLang} size="sm" />} />
+        <CardHeader title={t("integrations.verifySignatures")} subtitle={t("integrations.verifySignaturesSub")} action={<Tabs tabs={[{ key: "node", label: "Node.js (Express)" }, { key: "python", label: "Python (Flask)" }]} value={verifyLang} onChange={setVerifyLang} size="sm" />} />
         <CardBody className="space-y-3">
           <CodeBlock title={verifyLang === "node" ? "javascript" : "python"} code={verifyLang === "node" ? NODE_VERIFY : PYTHON_VERIFY} />
           <details className="rounded-xl border border-slate-200">
-            <summary className="cursor-pointer px-4 py-2 text-sm font-medium text-slate-700">Events reference</summary>
+            <summary className="cursor-pointer px-4 py-2 text-sm font-medium text-slate-700">{t("integrations.eventsReference")}</summary>
             <div className="overflow-x-auto border-t border-slate-100">
               <table className="min-w-full text-xs">
                 <thead className="bg-slate-50 text-start text-slate-500">
-                  <tr><th className="px-4 py-2 text-start font-semibold">Event</th><th className="px-4 py-2 text-start font-semibold">When</th><th className="px-4 py-2 text-start font-semibold">Sent to</th></tr>
+                  <tr><th className="px-4 py-2 text-start font-semibold">{t("integrations.event")}</th><th className="px-4 py-2 text-start font-semibold">{t("integrations.when")}</th><th className="px-4 py-2 text-start font-semibold">{t("integrations.sentTo")}</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {WEBHOOK_EVENTS.map((ev) => (
                     <tr key={ev} className={relevantTo(EVENT_META[ev].audience, perspective) ? "" : "text-slate-400"}>
                       <td className="px-4 py-1.5"><span dir="ltr" className="font-mono text-slate-800">{ev}</span></td>
-                      <td className="px-4 py-1.5 text-slate-600">{EVENT_META[ev].description}</td>
-                      <td className="px-4 py-1.5 text-slate-500">{EVENT_META[ev].sentTo}</td>
+                      <td className="px-4 py-1.5 text-slate-600">{t(EVENT_META[ev].descriptionKey)}</td>
+                      <td className="px-4 py-1.5 text-slate-500">{t(EVENT_META[ev].sentToKey)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -345,17 +347,17 @@ export function DeveloperGuideTab({ perspective }: { perspective: Perspective })
             </div>
           </details>
           <details className="rounded-xl border border-slate-200">
-            <summary className="cursor-pointer px-4 py-2 text-sm font-medium text-slate-700">Scopes reference</summary>
+            <summary className="cursor-pointer px-4 py-2 text-sm font-medium text-slate-700">{t("integrations.scopesReference")}</summary>
             <div className="overflow-x-auto border-t border-slate-100">
               <table className="min-w-full text-xs">
                 <thead className="bg-slate-50 text-slate-500">
-                  <tr><th className="px-4 py-2 text-start font-semibold">Scope</th><th className="px-4 py-2 text-start font-semibold">Allows</th></tr>
+                  <tr><th className="px-4 py-2 text-start font-semibold">{t("integrations.scope")}</th><th className="px-4 py-2 text-start font-semibold">{t("integrations.allows")}</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {API_SCOPES.map((s) => (
                     <tr key={s} className={relevantTo(SCOPE_META[s].audience, perspective) ? "" : "text-slate-400"}>
                       <td className="px-4 py-1.5"><span dir="ltr" className="font-mono text-slate-800">{s}</span></td>
-                      <td className="px-4 py-1.5 text-slate-600">{SCOPE_META[s].description}</td>
+                      <td className="px-4 py-1.5 text-slate-600">{t(SCOPE_META[s].descriptionKey)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -367,7 +369,7 @@ export function DeveloperGuideTab({ perspective }: { perspective: Perspective })
 
       {/* Field mapping */}
       <Card>
-        <CardHeader title="Field mapping summary" subtitle={perspective === "supplier" ? "Where the price / stock rows and the pulled sales orders live in common ERPs. The full tables (incl. Zoho) are in INTEGRATIONS.md §4." : "Where pulled purchases, invoices and RFQs land in common ERPs. The full tables (incl. Zoho) are in INTEGRATIONS.md §4."} />
+        <CardHeader title={t("integrations.fieldMapping")} subtitle={perspective === "supplier" ? t("integrations.fieldMappingSupplier") : t("integrations.fieldMappingBuyer")} />
         <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
             <thead className="bg-slate-50 text-slate-500">
@@ -393,7 +395,7 @@ export function DeveloperGuideTab({ perspective }: { perspective: Perspective })
           </table>
         </div>
         <CardBody className="border-t border-slate-100 text-xs text-slate-500">
-          Money is SAR with 2 decimals and prices exclude VAT (15 % is added at checkout); <Mono>vat</Mono> and <Mono>total</Mono> on orders are authoritative for invoicing. Timestamps are UTC ISO-8601 – convert to Asia/Riyadh in the ERP presentation layer.
+          {t("integrations.moneyNote1")} <Mono>vat</Mono> {t("integrations.and")} <Mono>total</Mono> {t("integrations.moneyNote2")}
         </CardBody>
       </Card>
     </div>

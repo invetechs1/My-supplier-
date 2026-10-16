@@ -64,14 +64,14 @@ export default function SupplierRfqDetailPage() {
     const next: Record<string, string> = {};
     items.forEach((it) => {
       const price = Number(lines[it.id]?.unitPrice);
-      if (!lines[it.id]?.unitPrice || Number.isNaN(price) || price <= 0) next[`price-${it.id}`] = "Enter a unit price";
+      if (!lines[it.id]?.unitPrice || Number.isNaN(price) || price <= 0) next[`price-${it.id}`] = t("sup.marketplace.errUnitPrice");
       const lead = Number(lines[it.id]?.leadTimeDays);
-      if (Number.isNaN(lead) || lead < 0) next[`lead-${it.id}`] = "Invalid";
+      if (Number.isNaN(lead) || lead < 0) next[`lead-${it.id}`] = t("sup.marketplace.errInvalid");
     });
     const dd = Number(deliveryDays);
-    if (Number.isNaN(dd) || dd <= 0) next.deliveryDays = "Enter delivery days.";
-    if (!validUntil) next.validUntil = "Set a validity date.";
-    else if (new Date(validUntil).getTime() <= Date.now()) next.validUntil = "Must be in the future.";
+    if (Number.isNaN(dd) || dd <= 0) next.deliveryDays = t("sup.marketplace.errDeliveryDays");
+    if (!validUntil) next.validUntil = t("sup.marketplace.errValidity");
+    else if (new Date(validUntil).getTime() <= Date.now()) next.validUntil = t("sup.marketplace.errFuture");
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -94,7 +94,7 @@ export default function SupplierRfqDetailPage() {
     setSubmitting(true);
     try {
       await api.submitBid(rfq.id, payload);
-      setFlash({ kind: "success", message: myBid ? "Bid updated." : "Bid submitted. The buyer has been notified." });
+      setFlash({ kind: "success", message: myBid ? t("sup.marketplace.bidUpdated") : t("sup.marketplace.bidSubmitted") });
       state.reload();
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
@@ -104,11 +104,11 @@ export default function SupplierRfqDetailPage() {
   };
 
   const withdraw = async () => {
-    if (!myBid || !window.confirm("Withdraw your bid?")) return;
+    if (!myBid || !window.confirm(t("sup.marketplace.confirmWithdraw"))) return;
     setWithdrawing(true);
     try {
       await api.withdrawBid(myBid.id);
-      setFlash({ kind: "success", message: "Bid withdrawn." });
+      setFlash({ kind: "success", message: t("sup.bids.withdrawn") });
       state.reload();
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
@@ -118,46 +118,46 @@ export default function SupplierRfqDetailPage() {
   };
 
   if (state.loading) return <LoadingBlock />;
-  if (state.error || !rfq) return <Alert onRetry={state.reload}>{state.error ?? "RFQ not found"}</Alert>;
+  if (state.error || !rfq) return <Alert onRetry={state.reload}>{state.error ?? t("sup.marketplace.notFound")}</Alert>;
 
   const closed = rfq.status !== "OPEN" || new Date(rfq.closesAt).getTime() < Date.now();
   const canBid = !closed && (!myBid || myBid.status === "SUBMITTED" || myBid.status === "WITHDRAWN");
 
   return (
     <div>
-      <nav className="mb-4 text-sm text-slate-500" aria-label="Breadcrumb">
+      <nav className="mb-4 text-sm text-slate-500" aria-label={t("common.breadcrumb")}>
         <Link href="/supplier/marketplace" className="hover:text-brand-700">{t("sup.marketplace")}</Link>
         <span className="mx-2">/</span>
         <span className="text-slate-700">{rfq.reference}</span>
       </nav>
       <PageHeader
         title={rfq.title}
-        subtitle={<>{rfq.reference} · {rfq.buyer?.company?.name ?? rfq.buyer?.name ?? "Buyer"} · closes {formatDateTime(rfq.closesAt, lang)}</>}
+        subtitle={<>{rfq.reference} · {rfq.buyer?.company?.name ?? rfq.buyer?.name ?? t("reviews.buyer")} · {t("sup.marketplace.closesLower")} {formatDateTime(rfq.closesAt, lang)}</>}
         action={
           <>
             <StatusBadge status={rfq.status} />
-            {myBid && <span className="text-sm text-slate-500">Your bid: <StatusBadge status={myBid.status} /></span>}
+            {myBid && <span className="text-sm text-slate-500">{t("sup.marketplace.yourBid")} <StatusBadge status={myBid.status} /></span>}
           </>
         }
       />
       <FlashMessage flash={flash} className="mb-4" />
-      {closed && <Alert kind="warning" className="mb-4">This RFQ is no longer accepting bids.</Alert>}
+      {closed && <Alert kind="warning" className="mb-4">{t("sup.marketplace.closedNotice")}</Alert>}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <form onSubmit={submit} noValidate>
             <Card>
-              <CardHeader title="Items & your pricing" subtitle="Enter your unit price per line. Totals update automatically." />
+              <CardHeader title={t("sup.marketplace.itemsPricing")} subtitle={t("sup.marketplace.itemsPricingSub")} />
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <tr>
-                      <th className="px-4 py-3 text-start">Item</th>
-                      <th className="px-4 py-3 text-end">Qty</th>
-                      <th className="px-4 py-3 text-end">Market avg</th>
-                      <th className="w-36 px-4 py-3 text-start">Unit price (SAR)</th>
-                      <th className="w-24 px-4 py-3 text-start">Lead (d)</th>
-                      <th className="px-4 py-3 text-end">Line total</th>
+                      <th className="px-4 py-3 text-start">{t("orders.item")}</th>
+                      <th className="px-4 py-3 text-end">{t("orders.qty")}</th>
+                      <th className="px-4 py-3 text-end">{t("sup.marketplace.marketAvg")}</th>
+                      <th className="w-36 px-4 py-3 text-start">{t("sup.marketplace.unitPriceSar")}</th>
+                      <th className="w-24 px-4 py-3 text-start">{t("sup.marketplace.leadDays")}</th>
+                      <th className="px-4 py-3 text-end">{t("product.lineTotal")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -174,7 +174,7 @@ export default function SupplierRfqDetailPage() {
                               type="text"
                               value={l.notes}
                               onChange={(e) => setLine(it.id, { notes: e.target.value })}
-                              placeholder="Line note (brand, spec…)"
+                              placeholder={t("sup.marketplace.lineNotePlaceholder")}
                               disabled={!canBid}
                               className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-xs focus:border-brand-600 focus:outline-none disabled:bg-slate-50"
                             />
@@ -194,27 +194,27 @@ export default function SupplierRfqDetailPage() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-slate-200 bg-slate-50">
-                      <td colSpan={5} className="px-4 py-3 text-end text-sm font-semibold text-slate-700">Bid total</td>
+                      <td colSpan={5} className="px-4 py-3 text-end text-sm font-semibold text-slate-700">{t("sup.marketplace.bidTotal")}</td>
                       <td className="px-4 py-3 text-end text-lg font-bold tabular-nums text-brand-700">{formatSar(total, lang)}</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
               <CardBody className="grid gap-4 border-t border-slate-100 sm:grid-cols-2">
-                <Input label="Delivery within (days)" name="deliveryDays" type="number" min={1} value={deliveryDays} onChange={(e) => setDeliveryDays(e.target.value)} error={errors.deliveryDays} disabled={!canBid} required dir="ltr" />
-                <Input label="Bid valid until" name="validUntil" type="datetime-local" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} error={errors.validUntil} disabled={!canBid} required />
-                <Textarea label="Notes to buyer" name="notes" className="sm:col-span-2" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Payment terms, delivery conditions, certifications…" disabled={!canBid} />
+                <Input label={t("sup.marketplace.deliveryWithin")} name="deliveryDays" type="number" min={1} value={deliveryDays} onChange={(e) => setDeliveryDays(e.target.value)} error={errors.deliveryDays} disabled={!canBid} required dir="ltr" />
+                <Input label={t("sup.marketplace.validUntil")} name="validUntil" type="datetime-local" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} error={errors.validUntil} disabled={!canBid} required />
+                <Textarea label={t("sup.marketplace.notesToBuyer")} name="notes" className="sm:col-span-2" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("sup.marketplace.notesPlaceholder")} disabled={!canBid} />
               </CardBody>
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-4">
                 <p className={cn("text-xs", myBid ? "text-slate-500" : "text-slate-400")}>
-                  {myBid ? `Last submitted ${formatDateTime(myBid.createdAt, lang)}` : "One bid per company; re-submitting updates your bid."}
+                  {myBid ? `${t("sup.marketplace.lastSubmitted")} ${formatDateTime(myBid.createdAt, lang)}` : t("sup.marketplace.oneBidNote")}
                 </p>
                 <div className="flex gap-2">
                   {myBid && myBid.status === "SUBMITTED" && (
-                    <Button type="button" variant="outline" onClick={withdraw} loading={withdrawing}>Withdraw bid</Button>
+                    <Button type="button" variant="outline" onClick={withdraw} loading={withdrawing}>{t("sup.marketplace.withdrawBid")}</Button>
                   )}
                   <Button type="submit" loading={submitting} disabled={!canBid} size="lg">
-                    {myBid && myBid.status !== "WITHDRAWN" ? "Update bid" : "Submit bid"}
+                    {myBid && myBid.status !== "WITHDRAWN" ? t("sup.marketplace.updateBid") : t("sup.marketplace.submitBid")}
                   </Button>
                 </div>
               </div>
@@ -224,21 +224,21 @@ export default function SupplierRfqDetailPage() {
 
         <div className="space-y-6">
           <Card>
-            <CardHeader title="Delivery" />
+            <CardHeader title={t("order.delivery")} />
             <dl className="space-y-3 px-5 py-4 text-sm">
-              <div><dt className="text-slate-500">City</dt><dd className="font-medium text-slate-900">{rfq.deliveryCity}</dd></div>
-              <div><dt className="text-slate-500">Address</dt><dd className="font-medium text-slate-900">{rfq.deliveryAddress || "—"}</dd></div>
-              <div><dt className="text-slate-500">Requested date</dt><dd className="font-medium text-slate-900">{rfq.deliveryDate ? formatDateTime(rfq.deliveryDate, lang) : "—"}</dd></div>
-              <div><dt className="text-slate-500">Competing bids</dt><dd className="font-medium text-slate-900">{rfq.bidCount ?? 0}{rfq.lowestBid ? ` · lowest ${formatSar(rfq.lowestBid, lang)}` : ""}</dd></div>
+              <div><dt className="text-slate-500">{t("common.city")}</dt><dd className="font-medium text-slate-900">{rfq.deliveryCity}</dd></div>
+              <div><dt className="text-slate-500">{t("orders.address")}</dt><dd className="font-medium text-slate-900">{rfq.deliveryAddress || "—"}</dd></div>
+              <div><dt className="text-slate-500">{t("orders.requestedDate")}</dt><dd className="font-medium text-slate-900">{rfq.deliveryDate ? formatDateTime(rfq.deliveryDate, lang) : "—"}</dd></div>
+              <div><dt className="text-slate-500">{t("sup.marketplace.competingBids")}</dt><dd className="font-medium text-slate-900">{rfq.bidCount ?? 0}{rfq.lowestBid ? ` · ${t("sup.marketplace.lowest")} ${formatSar(rfq.lowestBid, lang)}` : ""}</dd></div>
             </dl>
           </Card>
           {rfq.notes && (
             <Card>
-              <CardHeader title="Buyer notes" />
+              <CardHeader title={t("sup.marketplace.buyerNotes")} />
               <CardBody><p className="whitespace-pre-wrap text-sm text-slate-700">{rfq.notes}</p></CardBody>
             </Card>
           )}
-          <Button variant="ghost" className="w-full" onClick={() => router.push("/supplier/marketplace")}>← Back to marketplace</Button>
+          <Button variant="ghost" className="w-full" onClick={() => router.push("/supplier/marketplace")}>{t("sup.marketplace.backToMarketplace")}</Button>
         </div>
       </div>
     </div>

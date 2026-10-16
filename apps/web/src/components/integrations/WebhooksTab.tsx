@@ -6,7 +6,7 @@ import { WEBHOOK_EVENTS } from "@mysupplier/shared";
 import { errorMessage } from "@/lib/api";
 import { integrationsApi, type WebhookDeliveryResult, type WebhookEndpointCreated, type WebhookEndpointWithStats } from "@/lib/api/integrations";
 import { useAsync, useFlash } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { formatDate, formatDateTime, timeAgo } from "@/lib/format";
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, FlashMessage, Input, LoadingBlock, Modal, Pagination, Select, Table, Textarea, Toggle, type Column } from "@/components/ui";
 import { CodeBlock, CopyButton, DEFAULT_EVENTS, DeliveryStatusBadge, EVENT_META, EventChips, Mono, relevantTo, type Perspective } from "./shared";
@@ -21,16 +21,19 @@ interface EndpointForm {
 
 const PAGE_SIZE = 20;
 
-function describeResult(result: WebhookDeliveryResult, kind: "test" | "retry"): { kind: "success" | "error"; message: string } {
+type Translate = (key: TranslationKey) => string;
+
+function describeResult(result: WebhookDeliveryResult, kind: "test" | "retry", t: Translate): { kind: "success" | "error"; message: string } {
   const code = result.delivery.responseCode;
-  const http = code ? ` (HTTP ${code})` : " (no response)";
-  if (result.ok) return { kind: "success", message: `${kind === "test" ? "Test ping" : "Delivery"} delivered${http}.` };
-  const tail = result.outcome === "retried" ? "A retry is scheduled – see the deliveries log." : "Marked as FAILED – see the deliveries log for the response.";
-  return { kind: "error", message: `${kind === "test" ? "Test ping" : "Delivery"} not accepted${http}. ${tail}` };
+  const http = code ? ` (HTTP ${code})` : ` (${t("integrations.noResponse")})`;
+  const subject = kind === "test" ? t("integrations.testPing") : t("integrations.delivery");
+  if (result.ok) return { kind: "success", message: `${subject} ${t("integrations.delivered")}${http}.` };
+  const tail = result.outcome === "retried" ? t("integrations.retryScheduled") : t("integrations.markedFailed");
+  return { kind: "error", message: `${subject} ${t("integrations.notAccepted")}${http}. ${tail}` };
 }
 
 export function WebhooksTab({ perspective }: { perspective: Perspective }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const state = useAsync(() => integrationsApi.webhooks(), []);
   const [flash, setFlash] = useFlash(8000);
 
@@ -69,17 +72,17 @@ export function WebhooksTab({ perspective }: { perspective: Perspective }) {
   const save = async () => {
     const next: Record<string, string> = {};
     const url = form.url.trim();
-    if (!url) next.url = "Enter the endpoint URL.";
+    if (!url) next.url = t("integrations.errUrl");
     else {
       try {
         const parsed = new URL(url);
-        if (parsed.protocol !== "https:") next.url = "Webhook URLs must use https://.";
+        if (parsed.protocol !== "https:") next.url = t("integrations.errHttps");
       } catch {
-        next.url = "Enter a valid absolute URL (https://…).";
+        next.url = t("integrations.errUrlInvalid");
       }
     }
-    if (form.events.length === 0) next.events = "Select at least one event (or All events).";
-    if (form.description.length > 200) next.description = "Keep the description under 200 characters.";
+    if (form.events.length === 0) next.events = t("integrations.errEvents");
+    if (form.description.length > 200) next.description = t("integrations.errDescLong");
     setErrors(next);
     if (Object.keys(next).length) return;
 
@@ -90,7 +93,7 @@ export function WebhooksTab({ perspective }: { perspective: Perspective }) {
       if (modal.editing) {
         const updated = await integrationsApi.updateWebhook(modal.editing.id, { url, events, description });
         state.setData((prev) => (prev ? prev.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)) : prev));
-        setFlash({ kind: "success", message: "Endpoint updated." });
+        setFlash({ kind: "success", message: t("integrations.endpointUpdated") });
         closeModal();
       } else {
         const result = await integrationsApi.createWebhook({ url, events, description });
@@ -111,7 +114,7 @@ export function WebhooksTab({ perspective }: { perspective: Perspective }) {
     try {
       const updated = await integrationsApi.updateWebhook(e.id, { active });
       state.setData((prev) => (prev ? prev.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)) : prev));
-      setFlash({ kind: "success", message: `Endpoint ${active ? "activated" : "paused"}. ${active ? "" : "Events are skipped (not queued) while paused."}`.trim() });
+      setFlash({ kind: "success", message: active ? t("integrations.endpointActivated") : t("integrations.endpointPaused") });
     } catch (err) {
       state.setData((prev) => (prev ? prev.map((x) => (x.id === e.id ? { ...x, active: !active } : x)) : prev));
       setFlash({ kind: "error", message: errorMessage(err) });
@@ -124,7 +127,7 @@ export function WebhooksTab({ perspective }: { perspective: Perspective }) {
     setBusy(e.id);
     try {
       const result = await integrationsApi.testWebhook(e.id);
-      setFlash(describeResult(result, "test"));
+      setFlash(describeResult(result, "test", t));
       const key = result.delivery.status;
       state.setData((prev) => (prev ? prev.map((x) => (x.id === e.id ? { ...x, deliveries: { PENDING: 0, SUCCESS: 0, FAILED: 0, ...(x.deliveries ?? {}), [key]: (x.deliveries?.[key] ?? 0) + 1 } } : x)) : prev));
     } catch (err) {
@@ -140,7 +143,7 @@ export function WebhooksTab({ perspective }: { perspective: Perspective }) {
     try {
       await integrationsApi.deleteWebhook(deleteTarget.id);
       state.setData((prev) => (prev ? prev.filter((x) => x.id !== deleteTarget.id) : prev));
-      setFlash({ kind: "success", message: "Endpoint deleted." });
+      setFlash({ kind: "success", message: t("integrations.endpointDeleted") });
       setDeleteTarget(null);
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
@@ -150,37 +153,37 @@ export function WebhooksTab({ perspective }: { perspective: Perspective }) {
   };
 
   const columns: Column<WebhookEndpointWithStats>[] = [
-    { key: "url", header: "Endpoint", render: (e) => (
+    { key: "url", header: t("integrations.endpoint"), render: (e) => (
       <div className="min-w-[220px] max-w-[360px]">
         <p dir="ltr" className="truncate font-mono text-xs text-slate-900 text-start" title={e.url}>{e.url}</p>
         {e.description && <p className="truncate text-xs text-slate-500" title={e.description}>{e.description}</p>}
       </div>
     ) },
-    { key: "events", header: "Events", render: (e) => <EventChips events={e.events} /> },
-    { key: "deliveries", header: "Deliveries", render: (e) => {
+    { key: "events", header: t("integrations.events"), render: (e) => <EventChips events={e.events} /> },
+    { key: "deliveries", header: t("integrations.deliveries"), render: (e) => {
       const d = e.deliveries ?? { PENDING: 0, SUCCESS: 0, FAILED: 0 };
       return (
-        <button type="button" onClick={() => setDrawer(e)} className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs tabular-nums hover:underline" title="Open the delivery log">
-          <span className="text-emerald-700">{d.SUCCESS} ok</span>
+        <button type="button" onClick={() => setDrawer(e)} className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs tabular-nums hover:underline" title={t("integrations.openLog")}>
+          <span className="text-emerald-700">{d.SUCCESS} {t("integrations.ok")}</span>
           <span className="text-slate-300">·</span>
-          <span className={d.FAILED > 0 ? "font-semibold text-red-600" : "text-slate-500"}>{d.FAILED} failed</span>
-          {d.PENDING > 0 && <><span className="text-slate-300">·</span><span className="text-amber-700">{d.PENDING} pending</span></>}
+          <span className={d.FAILED > 0 ? "font-semibold text-red-600" : "text-slate-500"}>{d.FAILED} {t("integrations.failedLower")}</span>
+          {d.PENDING > 0 && <><span className="text-slate-300">·</span><span className="text-amber-700">{d.PENDING} {t("integrations.pendingLower")}</span></>}
         </button>
       );
     } },
-    { key: "active", header: "Active", render: (e) => (
+    { key: "active", header: t("integrations.active"), render: (e) => (
       <span className="inline-flex items-center gap-2">
-        <Toggle checked={e.active} onChange={(v) => toggleActive(e, v)} disabled={busy === e.id} label={`Endpoint ${e.url} active`} />
-        <span className={`text-xs ${e.active ? "text-emerald-700" : "text-slate-500"}`}>{e.active ? "Active" : "Paused"}</span>
+        <Toggle checked={e.active} onChange={(v) => toggleActive(e, v)} disabled={busy === e.id} label={`${t("integrations.endpointActive")}: ${e.url}`} />
+        <span className={`text-xs ${e.active ? "text-emerald-700" : "text-slate-500"}`}>{e.active ? t("integrations.active") : t("integrations.paused")}</span>
       </span>
     ) },
-    { key: "created", header: "Created", render: (e) => <span className="whitespace-nowrap text-slate-500" title={formatDateTime(e.createdAt, lang)}>{formatDate(e.createdAt, lang)}</span> },
+    { key: "created", header: t("orders.created"), render: (e) => <span className="whitespace-nowrap text-slate-500" title={formatDateTime(e.createdAt, lang)}>{formatDate(e.createdAt, lang)}</span> },
     { key: "actions", header: "", align: "end", render: (e) => (
       <div className="flex flex-wrap justify-end gap-1.5">
-        <Button size="sm" variant="outline" onClick={() => sendTest(e)} loading={busy === e.id}>Send test</Button>
-        <Button size="sm" variant="ghost" onClick={() => setDrawer(e)}>Deliveries</Button>
-        <Button size="sm" variant="ghost" onClick={() => openEdit(e)}>Edit</Button>
-        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setDeleteTarget(e)}>Delete</Button>
+        <Button size="sm" variant="outline" onClick={() => sendTest(e)} loading={busy === e.id}>{t("integrations.sendTest")}</Button>
+        <Button size="sm" variant="ghost" onClick={() => setDrawer(e)}>{t("integrations.deliveries")}</Button>
+        <Button size="sm" variant="ghost" onClick={() => openEdit(e)}>{t("common.edit")}</Button>
+        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setDeleteTarget(e)}>{t("common.delete")}</Button>
       </div>
     ) },
   ];
@@ -190,16 +193,16 @@ export function WebhooksTab({ perspective }: { perspective: Perspective }) {
       <FlashMessage flash={flash} />
       <Card>
         <CardHeader
-          title="Webhook endpoints"
-          subtitle="We POST a signed JSON envelope to your ERP within seconds of each event. Reply 2xx within 10 s; failures retry after 1 min, 5 min, 30 min, 2 h and 12 h. Up to 10 endpoints per company."
-          action={<Button variant="accent" onClick={openCreate}>+ Add endpoint</Button>}
+          title={t("integrations.webhookEndpoints")}
+          subtitle={t("integrations.webhooksSubtitle")}
+          action={<Button variant="accent" onClick={openCreate}>{t("integrations.addEndpointPlus")}</Button>}
         />
         {state.loading ? <LoadingBlock /> : state.error ? <div className="p-5"><Alert onRetry={state.reload}>{state.error}</Alert></div> : (
           <Table
             columns={columns}
             rows={rows}
             rowKey={(e) => e.id}
-            empty={<EmptyState title="No webhook endpoints" description={perspective === "supplier" ? "Get new orders and payment events pushed straight into your ERP instead of polling." : "Get order status, invoices and supplier bids pushed to your procurement system."} action={<Button onClick={openCreate}>Add your first endpoint</Button>} />}
+            empty={<EmptyState title={t("integrations.noEndpoints")} description={perspective === "supplier" ? t("integrations.noEndpointsSupplier") : t("integrations.noEndpointsBuyer")} action={<Button onClick={openCreate}>{t("integrations.addFirstEndpoint")}</Button>} />}
           />
         )}
       </Card>
@@ -208,19 +211,19 @@ export function WebhooksTab({ perspective }: { perspective: Perspective }) {
       <Modal
         open={modal.open}
         wide
-        title={modal.editing ? "Edit endpoint" : "Add webhook endpoint"}
+        title={modal.editing ? t("integrations.editEndpoint") : t("integrations.addWebhookEndpoint")}
         onClose={closeModal}
-        footer={<><Button variant="outline" onClick={closeModal}>Cancel</Button><Button onClick={save} loading={saving}>{modal.editing ? "Save changes" : "Add endpoint"}</Button></>}
+        footer={<><Button variant="outline" onClick={closeModal}>{t("common.cancel")}</Button><Button onClick={save} loading={saving}>{modal.editing ? t("reviews.saveChanges") : t("integrations.addEndpoint")}</Button></>}
       >
         <div className="space-y-5">
           {errors.form && <Alert>{errors.form}</Alert>}
-          <Input label="Endpoint URL" name="webhookUrl" type="url" dir="ltr" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} error={errors.url} required placeholder="https://erp.example.com/hooks/mysupplier" hint="Must be a public https:// URL. Private / internal addresses are rejected." className="font-mono" />
+          <Input label={t("integrations.endpointUrl")} name="webhookUrl" type="url" dir="ltr" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} error={errors.url} required placeholder="https://erp.example.com/hooks/mysupplier" hint={t("integrations.endpointUrlHint")} className="font-mono" />
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-medium text-slate-700">Events <span className="text-red-500">*</span></p>
+              <p className="text-sm font-medium text-slate-700">{t("integrations.events")} <span className="text-red-500">*</span></p>
               <label className="flex items-center gap-2 text-xs text-slate-600">
                 <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600" checked={allEvents} onChange={(e) => toggleAll(e.target.checked)} />
-                All events (<span dir="ltr" className="font-mono">*</span>), including future ones
+                {t("integrations.allEvents")} (<span dir="ltr" className="font-mono">*</span>){t("integrations.includingFuture")}
               </label>
             </div>
             {errors.events && <Alert className="mb-2">{errors.events}</Alert>}
@@ -234,39 +237,39 @@ export function WebhooksTab({ perspective }: { perspective: Perspective }) {
                     <span className="min-w-0">
                       <span className="flex flex-wrap items-center gap-1.5">
                         <span dir="ltr" className="font-mono text-xs font-semibold text-slate-800">{ev}</span>
-                        {!relevant && <Badge tone="slate">{meta.audience === "supplier" ? "supplier only" : "buyer only"}</Badge>}
+                        {!relevant && <Badge tone="slate">{meta.audience === "supplier" ? t("integrations.supplierOnly") : t("integrations.buyerOnly")}</Badge>}
                       </span>
-                      <span className="block text-xs text-slate-500">{meta.description}</span>
+                      <span className="block text-xs text-slate-500">{t(meta.descriptionKey)}</span>
                     </span>
                   </label>
                 );
               })}
             </div>
           </div>
-          <Textarea label="Description (optional)" name="webhookDescription" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} error={errors.description} placeholder="e.g. SAP PI inbound – production" maxLength={200} />
-          {!modal.editing && <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">The signing secret is shown <strong>once</strong> after the endpoint is created. Use it to verify <Mono>X-MySupplier-Signature</Mono> on every delivery.</p>}
+          <Textarea label={t("integrations.descriptionOptional")} name="webhookDescription" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} error={errors.description} placeholder={t("integrations.descriptionPlaceholder")} maxLength={200} />
+          {!modal.editing && <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{t("integrations.secretShownOnce1")} <strong>{t("integrations.once")}</strong> {t("integrations.secretShownOnce2")} <Mono>X-MySupplier-Signature</Mono> {t("integrations.onEveryDelivery")}</p>}
         </div>
       </Modal>
 
       {/* ---------------------------------------------------------------- one-time secret */}
-      <Modal open={!!created} wide title="Endpoint created" onClose={() => setCreated(null)} footer={<Button onClick={() => setCreated(null)}>I have stored the secret</Button>}>
+      <Modal open={!!created} wide title={t("integrations.endpointCreated")} onClose={() => setCreated(null)} footer={<Button onClick={() => setCreated(null)}>{t("integrations.storedSecret")}</Button>}>
         {created && (
           <div className="space-y-4">
             <Alert kind="warning">
-              <p className="font-semibold">Copy this signing secret now – it will not be shown again.</p>
-              <p className="mt-1">{created.warning ?? "Use it to verify X-MySupplier-Signature. If you lose it, delete the endpoint and add it again."}</p>
+              <p className="font-semibold">{t("integrations.copySecretNow")}</p>
+              <p className="mt-1">{created.warning ?? t("integrations.secretLoseNote")}</p>
             </Alert>
             <div>
               <p dir="ltr" className="mb-1 truncate font-mono text-xs text-slate-600 text-start">{created.endpoint.url}</p>
               <div dir="ltr" className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
                 <code className="min-w-0 flex-1 select-all break-all font-mono text-sm text-emerald-900">{created.secret}</code>
-                <CopyButton text={created.secret} label="Copy secret" />
+                <CopyButton text={created.secret} label={t("integrations.copySecret")} />
               </div>
             </div>
             <div className="text-xs text-slate-600">
-              <p className="mb-1 font-medium text-slate-700">Every delivery carries</p>
+              <p className="mb-1 font-medium text-slate-700">{t("integrations.everyDeliveryCarries")}</p>
               <CodeBlock title="headers" compact code={`X-MySupplier-Event: order.created\nX-MySupplier-Delivery: dlv_01HZX…          # unique per delivery – de-duplicate on it\nX-MySupplier-Timestamp: 1790326500          # unix seconds\nX-MySupplier-Signature: sha256=3f1a…        # HMAC-SHA256(secret, timestamp + "." + rawBody)`} />
-              <p className="mt-2">Verification samples for Node and Python are in the <strong>Developer guide</strong> tab. Use <strong>Send test</strong> to receive a signed <Mono>ping</Mono> right away.</p>
+              <p className="mt-2">{t("integrations.verifySamples1")} <strong>{t("integrations.devGuide")}</strong>{t("integrations.verifySamples2")} <strong>{t("integrations.sendTest")}</strong> {t("integrations.verifySamples3")} <Mono>ping</Mono> {t("integrations.verifySamples4")}</p>
             </div>
           </div>
         )}
@@ -275,19 +278,19 @@ export function WebhooksTab({ perspective }: { perspective: Perspective }) {
       {/* ---------------------------------------------------------------- delete */}
       <Modal
         open={!!deleteTarget}
-        title="Delete endpoint"
+        title={t("integrations.deleteEndpoint")}
         onClose={() => setDeleteTarget(null)}
-        footer={<><Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button variant="danger" onClick={remove} loading={deleting}>Delete</Button></>}
+        footer={<><Button variant="outline" onClick={() => setDeleteTarget(null)}>{t("common.cancel")}</Button><Button variant="danger" onClick={remove} loading={deleting}>{t("common.delete")}</Button></>}
       >
         {deleteTarget && (
           <div className="space-y-3 text-sm text-slate-600">
-            <p>Delete <span dir="ltr" className="font-mono text-xs text-slate-900">{deleteTarget.url}</span>?</p>
-            <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">The delivery log for this endpoint is removed as well. To stop events temporarily, pause the endpoint instead.</p>
+            <p>{t("common.delete")} <span dir="ltr" className="font-mono text-xs text-slate-900">{deleteTarget.url}</span>{t("integrations.qm")}</p>
+            <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">{t("integrations.deleteWarning")}</p>
           </div>
         )}
       </Modal>
 
-      {drawer && <DeliveriesDrawer endpoint={drawer} onClose={() => setDrawer(null)} onResult={(r) => setFlash(describeResult(r, "retry"))} />}
+      {drawer && <DeliveriesDrawer endpoint={drawer} onClose={() => setDrawer(null)} onResult={(r) => setFlash(describeResult(r, "retry", t))} />}
     </div>
   );
 }
@@ -296,7 +299,7 @@ export function WebhooksTab({ perspective }: { perspective: Perspective }) {
 // Deliveries drawer
 // ---------------------------------------------------------------------------
 function DeliveriesDrawer({ endpoint, onClose, onResult }: { endpoint: WebhookEndpointWithStats; onClose: () => void; onResult: (r: WebhookDeliveryResult) => void }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const [status, setStatus] = useState<WebhookDeliveryStatus | "">("");
   const [event, setEvent] = useState("");
   const [page, setPage] = useState(1);
@@ -331,28 +334,28 @@ function DeliveriesDrawer({ endpoint, onClose, onResult }: { endpoint: WebhookEn
   const eventOptions = WEBHOOK_EVENTS.map((e) => ({ value: e, label: e }));
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/50" onClick={onClose} role="dialog" aria-modal="true" aria-label="Webhook deliveries">
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/50" onClick={onClose} role="dialog" aria-modal="true" aria-label={t("integrations.webhookDeliveries")}>
       <div className="flex h-full w-full max-w-2xl flex-col bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-slate-900">Deliveries</h3>
+            <h3 className="text-base font-semibold text-slate-900">{t("integrations.deliveries")}</h3>
             <p dir="ltr" className="truncate font-mono text-xs text-slate-500 text-start" title={endpoint.url}>{endpoint.url}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-slate-500 hover:bg-slate-100">
+          <button type="button" onClick={onClose} aria-label={t("integrations.close")} className="rounded-lg p-1 text-slate-500 hover:bg-slate-100">
             <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5" aria-hidden>
               <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
             </svg>
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-5 py-3">
-          <Select name="deliveryStatus" value={status} onChange={(e) => { setStatus(e.target.value as WebhookDeliveryStatus | ""); setPage(1); }} placeholder="All statuses" options={[{ value: "PENDING", label: "Pending" }, { value: "SUCCESS", label: "Success" }, { value: "FAILED", label: "Failed" }]} className="w-40" aria-label="Filter by status" />
-          <Select name="deliveryEvent" value={event} onChange={(e) => { setEvent(e.target.value); setPage(1); }} placeholder="All events" options={eventOptions} className="w-52" aria-label="Filter by event" />
-          <Button size="sm" variant="ghost" onClick={state.reload} className="ms-auto">Refresh</Button>
+          <Select name="deliveryStatus" value={status} onChange={(e) => { setStatus(e.target.value as WebhookDeliveryStatus | ""); setPage(1); }} placeholder={t("orders.allStatuses")} options={[{ value: "PENDING", label: t("integrations.dsPending") }, { value: "SUCCESS", label: t("integrations.dsSuccess") }, { value: "FAILED", label: t("integrations.dsFailed") }]} className="w-40" aria-label={t("integrations.filterByStatus")} />
+          <Select name="deliveryEvent" value={event} onChange={(e) => { setEvent(e.target.value); setPage(1); }} placeholder={t("integrations.allEvents")} options={eventOptions} className="w-52" aria-label={t("integrations.filterByEvent")} />
+          <Button size="sm" variant="ghost" onClick={state.reload} className="ms-auto">{t("common.refresh")}</Button>
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {error && <Alert className="mb-3">{error}</Alert>}
           {state.loading ? <LoadingBlock /> : state.error ? <Alert onRetry={state.reload}>{state.error}</Alert> : deliveries.length === 0 ? (
-            <EmptyState title="No deliveries yet" description="Deliveries appear here as events fire. Use “Send test” to trigger a signed ping." />
+            <EmptyState title={t("integrations.noDeliveries")} description={t("integrations.noDeliveriesDesc")} />
           ) : (
             <ul className="space-y-3">
               {deliveries.map((d) => {
@@ -362,17 +365,17 @@ function DeliveriesDrawer({ endpoint, onClose, onResult }: { endpoint: WebhookEn
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5">
                       <span dir="ltr" className="font-mono text-xs font-semibold text-slate-800">{d.event}</span>
                       <DeliveryStatusBadge status={d.status} />
-                      <span className="text-xs text-slate-500 tabular-nums">{d.attempts} attempt{d.attempts === 1 ? "" : "s"}</span>
+                      <span className="text-xs text-slate-500 tabular-nums">{d.attempts} {d.attempts === 1 ? t("integrations.attemptOne") : t("integrations.attemptMany")}</span>
                       <span className="text-xs text-slate-500 tabular-nums">HTTP {d.responseCode ?? "—"}</span>
                       <span className="ms-auto flex items-center gap-1.5">
-                        <Button size="sm" variant="ghost" onClick={() => setExpanded(open ? null : d.id)} aria-expanded={open}>{open ? "Hide" : "Details"}</Button>
-                        <Button size="sm" variant="outline" onClick={() => retry(d)} loading={retrying === d.id}>{d.status === "SUCCESS" ? "Resend" : "Retry"}</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setExpanded(open ? null : d.id)} aria-expanded={open}>{open ? t("integrations.hide") : t("integrations.details")}</Button>
+                        <Button size="sm" variant="outline" onClick={() => retry(d)} loading={retrying === d.id}>{d.status === "SUCCESS" ? t("integrations.resend") : t("common.retry")}</Button>
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-0.5 border-t border-slate-100 px-3 py-1.5 text-[11px] text-slate-500">
-                      <span title={formatDateTime(d.createdAt, lang)}>Created {timeAgo(d.createdAt)}</span>
-                      <span>Delivered {d.deliveredAt ? formatDateTime(d.deliveredAt, lang) : "—"}</span>
-                      {d.nextAttemptAt && d.status === "PENDING" && <span>Next attempt {formatDateTime(d.nextAttemptAt, lang)}</span>}
+                      <span title={formatDateTime(d.createdAt, lang)}>{t("orders.created")} {timeAgo(d.createdAt)}</span>
+                      <span>{t("integrations.deliveredAt")} {d.deliveredAt ? formatDateTime(d.deliveredAt, lang) : "—"}</span>
+                      {d.nextAttemptAt && d.status === "PENDING" && <span>{t("integrations.nextAttempt")} {formatDateTime(d.nextAttemptAt, lang)}</span>}
                       <span dir="ltr" className="font-mono">{d.id}</span>
                     </div>
                     {open && (
