@@ -3,6 +3,7 @@
 import React, { useId, useState } from "react";
 import type { SeriesPoint } from "@mysupplier/shared";
 import { cn, formatDate } from "@/lib/format";
+import { useI18n } from "@/lib/i18n";
 
 const BRAND = "#0B6E4F";
 const ACCENT = "#F2A900";
@@ -37,7 +38,7 @@ export function LineChart({
   height = 200,
   format = (v) => String(v),
   color = BRAND,
-  label = "Chart",
+  label,
 }: {
   points: SeriesPoint[];
   lang: "en" | "ar";
@@ -48,7 +49,8 @@ export function LineChart({
 }) {
   const gradientId = useId();
   const [hover, setHover] = useState<number | null>(null);
-  if (!points || points.length < 2) return <p className="py-8 text-center text-sm text-slate-500">Not enough data yet.</p>;
+  const { t } = useI18n();
+  if (!points || points.length < 2) return <p className="py-8 text-center text-sm text-slate-500">{t("sup.dash.notEnoughData")}</p>;
   const width = 480;
   const padX = 8;
   const padY = 14;
@@ -64,13 +66,13 @@ export function LineChart({
     <div>
       <div className="mb-2 flex items-baseline justify-between text-sm">
         <span className="font-semibold tabular-nums text-slate-900">{format(values[active])}</span>
-        <span className="text-slate-500">{formatDate(points[active].date, lang)}{hover === null ? ` · total ${format(total)}` : ""}</span>
+        <span className="text-slate-500">{formatDate(points[active].date, lang)}{hover === null ? ` · ${t("common.total")} ${format(total)}` : ""}</span>
       </div>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="h-auto w-full touch-none"
         role="img"
-        aria-label={label}
+        aria-label={label ?? t("sup.dash.chart")}
         onMouseLeave={() => setHover(null)}
         onMouseMove={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
@@ -108,7 +110,7 @@ export function BarChart({
   height = 200,
   format = (v) => String(v),
   color = BRAND,
-  label = "Bar chart",
+  label,
 }: {
   points: SeriesPoint[];
   lang: "en" | "ar";
@@ -118,7 +120,8 @@ export function BarChart({
   label?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
-  if (!points || points.length === 0) return <p className="py-8 text-center text-sm text-slate-500">Not enough data yet.</p>;
+  const { t } = useI18n();
+  if (!points || points.length === 0) return <p className="py-8 text-center text-sm text-slate-500">{t("sup.dash.notEnoughData")}</p>;
   const width = 480;
   const padX = 8;
   const padY = 14;
@@ -134,9 +137,9 @@ export function BarChart({
     <div>
       <div className="mb-2 flex items-baseline justify-between text-sm">
         <span className="font-semibold tabular-nums text-slate-900">{format(values[active])}</span>
-        <span className="text-slate-500">{formatDate(points[active].date, lang)}{hover === null ? ` · total ${format(total)}` : ""}</span>
+        <span className="text-slate-500">{formatDate(points[active].date, lang)}{hover === null ? ` · ${t("common.total")} ${format(total)}` : ""}</span>
       </div>
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label={label} onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label={label ?? t("sup.dash.barChart")} onMouseLeave={() => setHover(null)}>
         {[0.25, 0.5, 0.75].map((f) => (
           <line key={f} x1={padX} x2={width - padX} y1={padY + f * (height - padY * 2)} y2={padY + f * (height - padY * 2)} stroke="#e2e8f0" strokeDasharray="3 3" />
         ))}
@@ -162,8 +165,9 @@ export function BarChart({
 
 /** Horizontal bars for a categorical breakdown (e.g. orders by status). */
 export function HorizontalBars({ rows, format = (v) => String(v) }: { rows: Array<{ label: string; value: number; color?: string }>; format?: (v: number) => string }) {
+  const { t } = useI18n();
   const max = Math.max(1, ...rows.map((r) => r.value));
-  if (rows.length === 0) return <p className="text-sm text-slate-500">No data yet.</p>;
+  if (rows.length === 0) return <p className="text-sm text-slate-500">{t("sup.dash.noData")}</p>;
   return (
     <ul className="space-y-3">
       {rows.map((r) => (

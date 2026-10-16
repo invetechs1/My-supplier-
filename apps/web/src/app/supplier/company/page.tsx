@@ -67,6 +67,7 @@ function slugify(input: string): string {
 const numOrNull = (v: string): number | null => (v.trim() === "" ? null : Number(v));
 
 function LogoUploader({ company, canEdit, onUploaded, onError }: { company: CompanyProfile; canEdit: boolean; onUploaded: (c: CompanyProfile) => void; onError: (m: string) => void }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -79,11 +80,11 @@ function LogoUploader({ company, canEdit, onUploaded, onError }: { company: Comp
   const pick = async (f: File | null | undefined) => {
     if (!f) return;
     if (!/^image\/(png|jpe?g|webp)$/i.test(f.type)) {
-      onError("Logo must be a PNG, JPG or WEBP image.");
+      onError(t("sup.company.logoType"));
       return;
     }
     if (f.size > 2 * 1024 * 1024) {
-      onError("Logo must be 2 MB or smaller.");
+      onError(t("sup.company.logoSize"));
       return;
     }
     setPreview(URL.createObjectURL(f));
@@ -92,7 +93,7 @@ function LogoUploader({ company, canEdit, onUploaded, onError }: { company: Comp
       const updated = await api.uploadCompanyLogo(f);
       onUploaded(updated);
     } catch (err) {
-      onError(errorMessage(err, "Could not upload the logo."));
+      onError(errorMessage(err, t("sup.company.logoUploadFailed")));
       setPreview(null);
     } finally {
       setBusy(false);
@@ -105,18 +106,18 @@ function LogoUploader({ company, canEdit, onUploaded, onError }: { company: Comp
       <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
         {current ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={current} alt={`${company.name} logo`} className="h-full w-full object-contain" />
+          <img src={current} alt={`${company.name} – ${t("sup.company.logo")}`} className="h-full w-full object-contain" />
         ) : (
           <span className="text-2xl font-semibold text-slate-400">{company.name.slice(0, 2).toUpperCase()}</span>
         )}
       </div>
       <div className="space-y-2">
-        <p className="text-sm text-slate-600">Square PNG, JPG or WEBP up to 2 MB. Shown on your storefront, in the shop and on invoices.</p>
+        <p className="text-sm text-slate-600">{t("sup.company.logoHint")}</p>
         {canEdit && (
           <>
             <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(e) => void pick(e.target.files?.[0])} />
             <Button size="sm" variant="outline" onClick={() => inputRef.current?.click()} loading={busy}>
-              {company.logoUrl ? "Replace logo" : "Upload logo"}
+              {company.logoUrl ? t("sup.company.replaceLogo") : t("sup.company.uploadLogo")}
             </Button>
           </>
         )}
@@ -145,7 +146,7 @@ function CompanyPageInner() {
   const siteOrigin = typeof window !== "undefined" ? window.location.origin : "";
 
   if (state.loading || !form) return <LoadingBlock />;
-  if (state.error || !state.data) return <Alert onRetry={state.reload}>{state.error ?? "Could not load your company profile"}</Alert>;
+  if (state.error || !state.data) return <Alert onRetry={state.reload}>{state.error ?? t("sup.company.loadError")}</Alert>;
   const c = state.data;
   const publicHref = `/suppliers/${c.slug || c.id}`;
 
@@ -154,15 +155,15 @@ function CompanyPageInner() {
 
   const validate = (): boolean => {
     const next: Record<string, string> = {};
-    if (form.name.trim().length < 2) next.name = "Company name is required.";
-    if (form.slug && !/^[a-z0-9؀-ۿ]+(?:-[a-z0-9؀-ۿ]+)*$/.test(form.slug)) next.slug = "Use lowercase letters, numbers and hyphens only.";
-    if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) next.email = "Enter a valid email.";
-    if (form.website && !/^https?:\/\//i.test(form.website)) next.website = "Start with http:// or https://";
+    if (form.name.trim().length < 2) next.name = t("sup.company.errName");
+    if (form.slug && !/^[a-z0-9؀-ۿ]+(?:-[a-z0-9؀-ۿ]+)*$/.test(form.slug)) next.slug = t("sup.company.errSlug");
+    if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) next.email = t("sup.company.errEmail");
+    if (form.website && !/^https?:\/\//i.test(form.website)) next.website = t("sup.company.errWebsite");
     for (const key of ["minOrderValue", "deliveryFee", "deliveryDays", "lowStockThreshold"] as const) {
       const v = form[key];
-      if (v.trim() !== "" && (Number.isNaN(Number(v)) || Number(v) < 0)) next[key] = "Must be a positive number.";
+      if (v.trim() !== "" && (Number.isNaN(Number(v)) || Number(v) < 0)) next[key] = t("sup.company.errNumber");
     }
-    if (form.iban && !/^SA\d{22}$/i.test(form.iban.replace(/\s+/g, ""))) next.iban = "Saudi IBANs are 'SA' followed by 22 digits.";
+    if (form.iban && !/^SA\d{22}$/i.test(form.iban.replace(/\s+/g, ""))) next.iban = t("sup.company.errIban");
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -194,7 +195,7 @@ function CompanyPageInner() {
       const updated = await api.updateSupplierCompany(body);
       state.setData(updated);
       setForm(toForm(updated));
-      setFlash({ kind: "success", message: "Company profile saved." });
+      setFlash({ kind: "success", message: t("sup.company.saved") });
       void refresh();
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
@@ -211,15 +212,15 @@ function CompanyPageInner() {
         title={t("sup.company")}
         subtitle={
           <span className="inline-flex flex-wrap items-center gap-2">
-            What buyers see on your public storefront.
+            {t("sup.company.subtitle")}
             <VerificationBadge status={c.verificationStatus} />
-            {!canEdit && <Badge tone="slate">Read-only for your role</Badge>}
+            {!canEdit && <Badge tone="slate">{t("sup.company.readOnly")}</Badge>}
           </span>
         }
         action={
           <>
             <Link href={publicHref} target="_blank" className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              View public page ↗
+              {t("sup.company.viewPublicPage")}
             </Link>
             {canEdit && <Button type="submit" loading={saving} disabled={!dirty}>{t("common.save")}</Button>}
           </>
@@ -227,25 +228,25 @@ function CompanyPageInner() {
       />
       <FlashMessage flash={flash} className="mb-4" />
       {c.verificationStatus === "REJECTED" && c.verificationNotes && (
-        <Alert kind="error" className="mb-4"><span className="font-semibold">Verification rejected:</span> {c.verificationNotes} <Link href="/supplier/documents" className="font-semibold underline">Upload new documents</Link></Alert>
+        <Alert kind="error" className="mb-4"><span className="font-semibold">{t("sup.company.verificationRejected")}</span> {c.verificationNotes} <Link href="/supplier/documents" className="font-semibold underline">{t("sup.company.uploadNewDocs")}</Link></Alert>
       )}
 
       <fieldset disabled={!canEdit} className="space-y-6">
         <Card>
-          <CardHeader title="Logo" />
+          <CardHeader title={t("sup.company.logo")} />
           <CardBody>
-            <LogoUploader company={c} canEdit={canEdit} onUploaded={(updated) => { state.setData(updated); setFlash({ kind: "success", message: "Logo updated." }); void refresh(); }} onError={(m) => setFlash({ kind: "error", message: m })} />
+            <LogoUploader company={c} canEdit={canEdit} onUploaded={(updated) => { state.setData(updated); setFlash({ kind: "success", message: t("sup.company.logoUpdated") }); void refresh(); }} onError={(m) => setFlash({ kind: "error", message: m })} />
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader title="Identity" subtitle="Name, public URL and description in English and Arabic." />
+          <CardHeader title={t("sup.company.identity")} subtitle={t("sup.company.identitySubtitle")} />
           <CardBody className="grid gap-4 sm:grid-cols-2">
-            <Input label="Company name" name="name" value={form.name} onChange={(e) => set("name", e.target.value)} error={errors.name} required />
-            <Input label="Company name (Arabic)" name="nameAr" dir="rtl" value={form.nameAr} onChange={(e) => set("nameAr", e.target.value)} />
+            <Input label={t("sup.company.name")} name="name" value={form.name} onChange={(e) => set("name", e.target.value)} error={errors.name} required />
+            <Input label={t("sup.company.nameAr")} name="nameAr" dir="rtl" value={form.nameAr} onChange={(e) => set("nameAr", e.target.value)} />
             <div className="sm:col-span-2">
               <Input
-                label="Storefront URL slug"
+                label={t("sup.company.slug")}
                 name="slug"
                 dir="ltr"
                 value={form.slug}
@@ -253,26 +254,26 @@ function CompanyPageInner() {
                 onBlur={() => !form.slug && set("slug", slugify(form.name))}
                 placeholder={slugify(form.name) || "your-company"}
                 error={errors.slug}
-                hint={`Public page: ${siteOrigin}/suppliers/${form.slug || slugify(form.name) || "<slug>"}`}
+                hint={`${t("sup.company.publicPage")} ${siteOrigin}/suppliers/${form.slug || slugify(form.name) || "<slug>"}`}
               />
             </div>
-            <Textarea label="Description (English)" name="description" rows={5} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="What you supply, which projects you have served, certifications, delivery capacity…" />
-            <Textarea label="Description (Arabic)" name="descriptionAr" dir="rtl" rows={5} value={form.descriptionAr} onChange={(e) => set("descriptionAr", e.target.value)} />
+            <Textarea label={t("sup.company.descEn")} name="description" rows={5} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder={t("sup.company.descPlaceholder")} />
+            <Textarea label={t("sup.company.descAr")} name="descriptionAr" dir="rtl" rows={5} value={form.descriptionAr} onChange={(e) => set("descriptionAr", e.target.value)} />
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader title="Delivery & service area" subtitle="Buyers only see your offers and RFQs in the cities you serve." />
+          <CardHeader title={t("sup.company.delivery")} subtitle={t("sup.company.deliverySubtitle")} />
           <CardBody className="space-y-4">
             <div>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <Label>Cities served</Label>
+                <Label>{t("sup.company.citiesServed")}</Label>
                 <div className="flex items-center gap-2">
-                  <input value={cityQuery} onChange={(e) => setCityQuery(e.target.value)} placeholder="Filter cities…" className="h-8 w-40 rounded-lg border border-slate-300 px-2 text-xs" aria-label="Filter cities" />
+                  <input value={cityQuery} onChange={(e) => setCityQuery(e.target.value)} placeholder={`${t("sup.company.filterCities")}…`} className="h-8 w-40 rounded-lg border border-slate-300 px-2 text-xs" aria-label={t("sup.company.filterCities")} />
                   {canEdit && (
                     <>
-                      <button type="button" className="text-xs font-semibold text-brand-700 hover:underline" onClick={() => set("citiesServed", [...SAUDI_CITIES])}>All</button>
-                      <button type="button" className="text-xs font-semibold text-slate-500 hover:underline" onClick={() => set("citiesServed", [])}>None</button>
+                      <button type="button" className="text-xs font-semibold text-brand-700 hover:underline" onClick={() => set("citiesServed", [...SAUDI_CITIES])}>{t("sup.company.all")}</button>
+                      <button type="button" className="text-xs font-semibold text-slate-500 hover:underline" onClick={() => set("citiesServed", [])}>{t("sup.company.none")}</button>
                     </>
                   )}
                 </div>
@@ -297,39 +298,39 @@ function CompanyPageInner() {
                   );
                 })}
               </div>
-              <p className="mt-2 text-xs text-slate-500">{form.citiesServed.length} of {SAUDI_CITIES.length} cities selected{form.citiesServed.length === 0 ? ` – defaults to ${c.city}` : ""}.</p>
+              <p className="mt-2 text-xs text-slate-500">{form.citiesServed.length} {t("sup.company.of")} {SAUDI_CITIES.length} {t("sup.company.citiesSelected")}{form.citiesServed.length === 0 ? ` – ${t("sup.company.defaultsTo")} ${c.city}` : ""}.</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Input label="Minimum order value (SAR)" name="minOrderValue" type="number" min={0} step="0.01" dir="ltr" value={form.minOrderValue} onChange={(e) => set("minOrderValue", e.target.value)} error={errors.minOrderValue} />
-              <Input label="Delivery fee (SAR)" name="deliveryFee" type="number" min={0} step="0.01" dir="ltr" value={form.deliveryFee} onChange={(e) => set("deliveryFee", e.target.value)} error={errors.deliveryFee} hint="Per order, charged at checkout" />
-              <Input label="Delivery time (days)" name="deliveryDays" type="number" min={0} dir="ltr" value={form.deliveryDays} onChange={(e) => set("deliveryDays", e.target.value)} error={errors.deliveryDays} />
-              <Input label="Working hours" name="workingHours" value={form.workingHours} onChange={(e) => set("workingHours", e.target.value)} placeholder="Sat–Thu 8:00–18:00" />
+              <Input label={t("sup.company.minOrder")} name="minOrderValue" type="number" min={0} step="0.01" dir="ltr" value={form.minOrderValue} onChange={(e) => set("minOrderValue", e.target.value)} error={errors.minOrderValue} />
+              <Input label={t("sup.company.deliveryFee")} name="deliveryFee" type="number" min={0} step="0.01" dir="ltr" value={form.deliveryFee} onChange={(e) => set("deliveryFee", e.target.value)} error={errors.deliveryFee} hint={t("sup.company.deliveryFeeHint")} />
+              <Input label={t("sup.company.deliveryDays")} name="deliveryDays" type="number" min={0} dir="ltr" value={form.deliveryDays} onChange={(e) => set("deliveryDays", e.target.value)} error={errors.deliveryDays} />
+              <Input label={t("sup.company.workingHours")} name="workingHours" value={form.workingHours} onChange={(e) => set("workingHours", e.target.value)} placeholder={t("sup.company.workingHoursPlaceholder")} />
             </div>
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader title="Contact" />
+          <CardHeader title={t("sup.company.contact")} />
           <CardBody className="grid gap-4 sm:grid-cols-3">
-            <Input label="Phone" name="phone" type="tel" dir="ltr" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+9665XXXXXXXX" />
-            <Input label="Email" name="email" type="email" dir="ltr" value={form.email} onChange={(e) => set("email", e.target.value)} error={errors.email} />
-            <Input label="Website" name="website" type="url" dir="ltr" value={form.website} onChange={(e) => set("website", e.target.value)} error={errors.website} placeholder="https://" />
+            <Input label={t("sup.company.phone")} name="phone" type="tel" dir="ltr" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+9665XXXXXXXX" />
+            <Input label={t("auth.email")} name="email" type="email" dir="ltr" value={form.email} onChange={(e) => set("email", e.target.value)} error={errors.email} />
+            <Input label={t("sup.company.website")} name="website" type="url" dir="ltr" value={form.website} onChange={(e) => set("website", e.target.value)} error={errors.website} placeholder="https://" />
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader title="Inventory" />
+          <CardHeader title={t("sup.inventory")} />
           <CardBody className="grid gap-4 sm:grid-cols-3">
-            <Input label="Low-stock threshold" name="lowStockThreshold" type="number" min={0} dir="ltr" value={form.lowStockThreshold} onChange={(e) => set("lowStockThreshold", e.target.value)} error={errors.lowStockThreshold} hint="Items at or below this quantity are flagged and trigger a daily alert." />
+            <Input label={t("sup.company.lowStock")} name="lowStockThreshold" type="number" min={0} dir="ltr" value={form.lowStockThreshold} onChange={(e) => set("lowStockThreshold", e.target.value)} error={errors.lowStockThreshold} hint={t("sup.company.lowStockHint")} />
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader title="Bank details for payouts" subtitle="Used by MySupplier to pay out card orders. Never shown publicly." />
+          <CardHeader title={t("sup.company.bank")} subtitle={t("sup.company.bankSubtitle")} />
           <CardBody className="grid gap-4 sm:grid-cols-3">
-            <Input label="Bank name" name="bankName" value={form.bankName} onChange={(e) => set("bankName", e.target.value)} placeholder="Al Rajhi Bank" />
-            <Input label="IBAN" name="iban" dir="ltr" value={form.iban} onChange={(e) => set("iban", e.target.value)} error={errors.iban} placeholder="SA00 0000 0000 0000 0000 0000" className="font-mono" />
-            <Input label="Beneficiary name" name="beneficiary" value={form.beneficiary} onChange={(e) => set("beneficiary", e.target.value)} hint="Exactly as on the bank account" />
+            <Input label={t("sup.company.bankName")} name="bankName" value={form.bankName} onChange={(e) => set("bankName", e.target.value)} placeholder={t("sup.company.bankPlaceholder")} />
+            <Input label={t("sup.company.iban")} name="iban" dir="ltr" value={form.iban} onChange={(e) => set("iban", e.target.value)} error={errors.iban} placeholder="SA00 0000 0000 0000 0000 0000" className="font-mono" />
+            <Input label={t("sup.company.beneficiary")} name="beneficiary" value={form.beneficiary} onChange={(e) => set("beneficiary", e.target.value)} hint={t("sup.company.beneficiaryHint")} />
           </CardBody>
         </Card>
       </fieldset>
@@ -337,7 +338,7 @@ function CompanyPageInner() {
       {canEdit && (
         <div className="sticky bottom-4 mt-6 flex justify-end">
           <div className={cn("flex items-center gap-3 rounded-xl border bg-white px-4 py-3 shadow-card-hover transition", dirty ? "border-amber-300" : "border-slate-200")}>
-            <span className="text-sm text-slate-600">{dirty ? "You have unsaved changes." : "All changes saved."}</span>
+            <span className="text-sm text-slate-600">{dirty ? t("sup.company.unsaved") : t("sup.company.allSaved")}</span>
             <Button type="submit" loading={saving} disabled={!dirty}>{t("common.save")}</Button>
           </div>
         </div>

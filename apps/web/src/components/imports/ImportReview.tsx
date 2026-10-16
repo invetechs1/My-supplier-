@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { SAUDI_CITIES, UNITS, type ImportKind, type Material, type PriceImport, type PriceImportRow, type PublishImportResult } from "@mysupplier/shared";
 import { api, errorMessage, type ImportRowPatch } from "@/lib/api";
 import { useAsync, useFlash } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { cn, formatDateTime, formatSar } from "@/lib/format";
 import { Alert, Badge, Button, Card, CardBody, FlashMessage, LinkButton, LoadingBlock, Modal, StatusBadge } from "@/components/ui";
 import { MaterialAutocomplete } from "@/components/MaterialAutocomplete";
@@ -18,6 +18,12 @@ export const KIND_LABEL: Record<ImportKind, string> = {
   WEB_PAGE: "Web page",
   TEXT: "Pasted text",
 };
+export const KIND_LABEL_KEY: Record<ImportKind, TranslationKey> = {
+  SUPPLIER_PRICE_LIST: "sup.imports.kindSupplierPriceList",
+  BUYER_QUOTATION: "sup.imports.kindQuotation",
+  WEB_PAGE: "sup.imports.kindWebPage",
+  TEXT: "sup.imports.kindText",
+};
 export const KIND_TONE: Record<ImportKind, "green" | "purple" | "blue" | "slate"> = {
   SUPPLIER_PRICE_LIST: "green",
   BUYER_QUOTATION: "purple",
@@ -27,33 +33,34 @@ export const KIND_TONE: Record<ImportKind, "green" | "purple" | "blue" | "slate"
 
 const CONFIDENCE_OPTIONS = [60, 70, 80, 90];
 
-const AREA_LINKS: Record<ImportArea, { href: string; label: string }> = {
-  supplier: { href: "/supplier/prices", label: "View my price list" },
-  buyer: { href: "/materials", label: "Browse market prices" },
-  admin: { href: "/admin/materials", label: "Open materials admin" },
+const AREA_LINKS: Record<ImportArea, { href: string; labelKey: TranslationKey }> = {
+  supplier: { href: "/supplier/prices", labelKey: "sup.imports.viewMyPriceList" },
+  buyer: { href: "/materials", labelKey: "sup.imports.browseMarket" },
+  admin: { href: "/admin/materials", labelKey: "sup.imports.openMaterialsAdmin" },
 };
 
 export function ConfidenceBadge({ row }: { row: Pick<PriceImportRow, "materialId" | "confidence"> }) {
-  if (!row.materialId) return <Badge tone="slate">No match</Badge>;
+  const { t } = useI18n();
+  if (!row.materialId) return <Badge tone="slate">{t("sup.imports.noMatch")}</Badge>;
   const pct = Math.round((row.confidence ?? 0) * 100);
   const tone = row.confidence >= 0.8 ? "green" : row.confidence >= 0.5 ? "amber" : "red";
   return (
-    <Badge tone={tone} className="tabular-nums" title="Match confidence">
+    <Badge tone={tone} className="tabular-nums" title={t("sup.imports.matchConfidence")}>
       {pct}%
     </Badge>
   );
 }
 
-function publishExplanation(kind: ImportKind): string {
+function publishExplanationKey(kind: ImportKind): TranslationKey {
   switch (kind) {
     case "SUPPLIER_PRICE_LIST":
-      return "Approved rows become your company's live SUPPLIER listings (one per material and city). Existing listings for the same material and city are updated. They appear immediately in the shop, on material pages and in the market index.";
+      return "sup.imports.publishExplainSupplier";
     case "BUYER_QUOTATION":
-      return "Approved rows are added to the market data as QUOTATION listings attributed to the quoting supplier, labelled “Quoted” so every contractor can see a price a buyer actually received. Your identity is not shown.";
+      return "sup.imports.publishExplainQuotation";
     case "WEB_PAGE":
-      return "Approved rows become MARKET reference listings attributed to the source web page.";
+      return "sup.imports.publishExplainWeb";
     default:
-      return "Approved rows become MARKET reference listings attributed to the source name.";
+      return "sup.imports.publishExplainDefault";
   }
 }
 
@@ -66,7 +73,7 @@ interface RowProps {
 }
 
 function ReviewRow({ row, readOnly, error, saving, onPatch }: RowProps) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const [changing, setChanging] = useState(false);
   const [priceDraft, setPriceDraft] = useState<string>(row.price === null || row.price === undefined ? "" : String(row.price));
 
@@ -107,9 +114,9 @@ function ReviewRow({ row, readOnly, error, saving, onPatch }: RowProps) {
         <td className="min-w-[240px] px-4 py-3">
           {changing ? (
             <div className="space-y-1">
-              <MaterialAutocomplete value={null} onChange={(m) => m && pinMaterial(m)} placeholder="Search catalogue…" />
+              <MaterialAutocomplete value={null} onChange={(m) => m && pinMaterial(m)} placeholder={t("sup.imports.searchCatalogue")} />
               <button type="button" className="text-xs text-slate-500 hover:underline" onClick={() => setChanging(false)}>
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           ) : (
@@ -125,24 +132,24 @@ function ReviewRow({ row, readOnly, error, saving, onPatch }: RowProps) {
                     </p>
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500">No catalogue match</p>
+                  <p className="text-sm text-slate-500">{t("sup.imports.noCatalogueMatch")}</p>
                 )}
                 <ConfidenceBadge row={row} />
                 {!disabled && (
                   <button type="button" onClick={() => setChanging(true)} className="text-xs font-semibold text-brand-700 hover:underline">
-                    Change
+                    {t("common.change")}
                   </button>
                 )}
               </div>
               {!disabled && row.alternatives && row.alternatives.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                  <span className="text-[11px] uppercase tracking-wide text-slate-400">Alternatives</span>
+                  <span className="text-[11px] uppercase tracking-wide text-slate-400">{t("sup.imports.alternatives")}</span>
                   {row.alternatives.slice(0, 3).map((alt) => (
                     <button
                       key={alt.material.id}
                       type="button"
                       onClick={() => pinMaterial(alt.material)}
-                      title={`${alt.material.sku} · ${Math.round(alt.confidence * 100)}% — click to pin`}
+                      title={`${alt.material.sku} · ${Math.round(alt.confidence * 100)}% — ${t("sup.imports.clickToPin")}`}
                       className="max-w-[180px] truncate rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-700 hover:border-brand-400 hover:text-brand-700"
                     >
                       {alt.material.name} <span className="text-slate-400">{Math.round(alt.confidence * 100)}%</span>
@@ -158,10 +165,10 @@ function ReviewRow({ row, readOnly, error, saving, onPatch }: RowProps) {
                     onChange={(e) => onPatch(row, { createMaterial: e.target.checked }, { createMaterial: e.target.checked })}
                     className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-600"
                   />
-                  Create as new catalogue item
+                  {t("sup.imports.createNewItem")}
                 </label>
               )}
-              {!row.materialId && row.createMaterial && disabled && <Badge tone="blue" className="mt-1">New item</Badge>}
+              {!row.materialId && row.createMaterial && disabled && <Badge tone="blue" className="mt-1">{t("sup.imports.newItem")}</Badge>}
             </div>
           )}
         </td>
@@ -179,7 +186,7 @@ function ReviewRow({ row, readOnly, error, saving, onPatch }: RowProps) {
               }}
               disabled={disabled}
               dir="ltr"
-              aria-label="Price (SAR)"
+              aria-label={`${t("product.price")} (SAR)`}
               className={cn(controlClass, "w-28 text-end tabular-nums")}
             />
             <span className="text-xs text-slate-500">SAR</span>
@@ -187,7 +194,7 @@ function ReviewRow({ row, readOnly, error, saving, onPatch }: RowProps) {
           {row.price !== null && row.price !== undefined && <p className="mt-1 text-[11px] text-slate-400">{formatSar(row.price, lang)}</p>}
         </td>
         <td className="px-4 py-3">
-          <select value={row.unit ?? ""} onChange={(e) => onPatch(row, { unit: e.target.value }, { unit: e.target.value })} disabled={disabled} aria-label="Unit" className={cn(controlClass, "w-28 pe-7")}>
+          <select value={row.unit ?? ""} onChange={(e) => onPatch(row, { unit: e.target.value }, { unit: e.target.value })} disabled={disabled} aria-label={t("product.unit")} className={cn(controlClass, "w-28 pe-7")}>
             {!row.unit && <option value="">—</option>}
             {units.map((u) => (
               <option key={u} value={u}>
@@ -201,7 +208,7 @@ function ReviewRow({ row, readOnly, error, saving, onPatch }: RowProps) {
             value={row.city ?? ""}
             onChange={(e) => onPatch(row, { city: e.target.value || null }, { city: e.target.value || null })}
             disabled={disabled}
-            aria-label="City"
+            aria-label={t("common.city")}
             className={cn(controlClass, "w-36 pe-7")}
           >
             <option value="">—</option>
@@ -220,8 +227,8 @@ function ReviewRow({ row, readOnly, error, saving, onPatch }: RowProps) {
             <div className="flex items-center justify-end gap-1">
               <button
                 type="button"
-                title="Approve"
-                aria-label="Approve row"
+                title={t("sup.imports.approve")}
+                aria-label={t("sup.imports.approveRow")}
                 disabled={row.status === "APPROVED"}
                 onClick={() => onPatch(row, { status: "APPROVED" }, { status: "APPROVED" })}
                 className={cn("rounded-lg p-1.5 transition", row.status === "APPROVED" ? "bg-emerald-100 text-emerald-700" : "text-slate-500 hover:bg-emerald-50 hover:text-emerald-700")}
@@ -232,8 +239,8 @@ function ReviewRow({ row, readOnly, error, saving, onPatch }: RowProps) {
               </button>
               <button
                 type="button"
-                title="Reject"
-                aria-label="Reject row"
+                title={t("sup.imports.reject")}
+                aria-label={t("sup.imports.rejectRow")}
                 disabled={row.status === "REJECTED"}
                 onClick={() => onPatch(row, { status: "REJECTED" }, { status: "REJECTED" })}
                 className={cn("rounded-lg p-1.5 transition", row.status === "REJECTED" ? "bg-red-100 text-red-700" : "text-slate-500 hover:bg-red-50 hover:text-red-700")}
@@ -243,8 +250,8 @@ function ReviewRow({ row, readOnly, error, saving, onPatch }: RowProps) {
                 </svg>
               </button>
               {row.status === "REJECTED" || row.status === "APPROVED" ? (
-                <button type="button" title="Back to suggested" className="rounded-lg px-1.5 py-1 text-[11px] text-slate-500 hover:bg-slate-100" onClick={() => onPatch(row, { status: "SUGGESTED" }, { status: "SUGGESTED" })}>
-                  Undo
+                <button type="button" title={t("sup.imports.backToSuggested")} className="rounded-lg px-1.5 py-1 text-[11px] text-slate-500 hover:bg-slate-100" onClick={() => onPatch(row, { status: "SUGGESTED" }, { status: "SUGGESTED" })}>
+                  {t("common.undo")}
                 </button>
               ) : null}
             </div>
@@ -263,7 +270,7 @@ function ReviewRow({ row, readOnly, error, saving, onPatch }: RowProps) {
 }
 
 export function ImportReview({ importId, area }: { importId: string; area: ImportArea }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const state = useAsync(() => api.importDetail(importId), [importId]);
   const imp = state.data;
   const [flash, setFlash] = useFlash(6000);
@@ -298,12 +305,12 @@ export function ImportReview({ importId, area }: { importId: string; area: Impor
         applyRow(row.id, { ...updated, material: updated.material ?? optimistic.material ?? snapshot.material, alternatives: updated.alternatives ?? snapshot.alternatives });
       } catch (err) {
         applyRow(row.id, snapshot);
-        setRowErrors((e) => ({ ...e, [row.id]: errorMessage(err, "Could not save this row.") }));
+        setRowErrors((e) => ({ ...e, [row.id]: errorMessage(err, t("sup.imports.errSaveRow")) }));
       } finally {
         setSavingRows((s) => ({ ...s, [row.id]: false }));
       }
     },
-    [applyRow, importId],
+    [applyRow, importId, t],
   );
 
   const rows = useMemo(() => imp?.rows ?? [], [imp]);
@@ -347,7 +354,7 @@ export function ImportReview({ importId, area }: { importId: string; area: Impor
       const res = await api.approveAllRows(imp.id, minConf / 100);
       if (res.rows) setImport(res);
       else state.reload();
-      setFlash({ kind: "success", message: `Approved every suggested row matched at ${minConf}% or better.` });
+      setFlash({ kind: "success", message: `${t("sup.imports.approvedAllPre")} ${minConf}% ${t("sup.imports.approvedAllPost")}` });
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
     } finally {
@@ -365,7 +372,7 @@ export function ImportReview({ importId, area }: { importId: string; area: Impor
       else if (res.import) setImport((prev) => (prev ? { ...prev, ...res.import, rows: prev.rows } : res.import));
       else state.reload();
       setPublishOpen(false);
-      setFlash({ kind: "success", message: `${res.published} price${res.published === 1 ? "" : "s"} published.` });
+      setFlash({ kind: "success", message: `${res.published} ${res.published === 1 ? t("sup.imports.priceOne") : t("sup.imports.priceMany")} ${t("sup.imports.publishedWord")}.` });
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
     } finally {
@@ -375,12 +382,12 @@ export function ImportReview({ importId, area }: { importId: string; area: Impor
 
   const reject = async () => {
     if (!imp) return;
-    if (!window.confirm("Reject this whole import? Nothing will be published and the rows are kept for reference.")) return;
+    if (!window.confirm(t("sup.imports.confirmReject"))) return;
     setRejecting(true);
     try {
       const res = await api.rejectImport(imp.id);
       setImport((prev) => (prev ? { ...prev, ...res, rows: res.rows ?? prev.rows } : res));
-      setFlash({ kind: "success", message: "Import rejected." });
+      setFlash({ kind: "success", message: t("sup.imports.importRejected") });
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
     } finally {
@@ -388,8 +395,8 @@ export function ImportReview({ importId, area }: { importId: string; area: Impor
     }
   };
 
-  if (state.loading && !imp) return <LoadingBlock label="Loading import…" />;
-  if (state.error || !imp) return <Alert onRetry={state.reload}>{state.error ?? "Import not found"}</Alert>;
+  if (state.loading && !imp) return <LoadingBlock label={t("sup.imports.loading")} />;
+  if (state.error || !imp) return <Alert onRetry={state.reload}>{state.error ?? t("sup.imports.notFound")}</Alert>;
 
   const publishable = counts.approved + (includeSuggested ? counts.suggestedAbove : 0);
   const link = AREA_LINKS[area];
@@ -412,8 +419,8 @@ export function ImportReview({ importId, area }: { importId: string; area: Impor
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="truncate text-lg font-semibold text-slate-900">{imp.sourceName || imp.fileName || "Import"}</h2>
-                <Badge tone={KIND_TONE[imp.kind] ?? "slate"}>{KIND_LABEL[imp.kind] ?? imp.kind}</Badge>
+                <h2 className="truncate text-lg font-semibold text-slate-900">{imp.sourceName || imp.fileName || t("sup.imports.import")}</h2>
+                <Badge tone={KIND_TONE[imp.kind] ?? "slate"}>{KIND_LABEL_KEY[imp.kind] ? t(KIND_LABEL_KEY[imp.kind]) : imp.kind}</Badge>
                 <StatusBadge status={imp.status} />
                 {imp.aiUsed && (
                   <Badge tone="purple" title={imp.model ?? undefined}>
@@ -423,25 +430,25 @@ export function ImportReview({ importId, area }: { importId: string; area: Impor
               </div>
               <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-slate-500">
                 {imp.fileName && <span dir="ltr">{imp.fileName}</span>}
-                {imp.supplierName && <span>Supplier: {imp.supplierName}</span>}
-                {imp.company?.name && !imp.supplierName && <span>Company: {imp.company.name}</span>}
+                {imp.supplierName && <span>{t("product.supplier")}: {imp.supplierName}</span>}
+                {imp.company?.name && !imp.supplierName && <span>{t("sup.group.company")}: {imp.company.name}</span>}
                 {imp.city && <span>{imp.city}</span>}
-                {imp.quotationDate && <span>Quoted {formatDateTime(imp.quotationDate, lang)}</span>}
+                {imp.quotationDate && <span>{t("sup.imports.quoted")} {formatDateTime(imp.quotationDate, lang)}</span>}
                 <span>
-                  {imp.extractedCount} row{imp.extractedCount === 1 ? "" : "s"} extracted
+                  {imp.extractedCount} {imp.extractedCount === 1 ? t("common.rowOne") : t("common.rows")} {t("sup.imports.extracted")}
                 </span>
-                {imp.publishedCount > 0 && <span>{imp.publishedCount} published</span>}
-                {imp.uploadedBy && area === "admin" && <span>by {imp.uploadedBy.name}</span>}
+                {imp.publishedCount > 0 && <span>{imp.publishedCount} {t("sup.imports.publishedWord")}</span>}
+                {imp.uploadedBy && area === "admin" && <span>{t("sup.imports.by")} {imp.uploadedBy.name}</span>}
                 <span>{formatDateTime(imp.createdAt, lang)}</span>
               </p>
               {imp.error && <Alert kind="error" className="mt-2">{imp.error}</Alert>}
             </div>
             <div className="flex flex-wrap gap-2">
-              {chip("matched", "Matched ≥80%", counts.matched, "bg-emerald-50 text-emerald-700")}
-              {chip("review", "Needs review", counts.review, "bg-amber-50 text-amber-800")}
-              {chip("unmatched", "Unmatched", counts.unmatched, "bg-slate-100 text-slate-700")}
-              {chip("approved", "Approved", counts.approved + counts.published, "bg-sky-50 text-sky-700")}
-              {chip("rejected", "Rejected", counts.rejected, "bg-red-50 text-red-700")}
+              {chip("matched", t("sup.imports.matched80"), counts.matched, "bg-emerald-50 text-emerald-700")}
+              {chip("review", t("sup.imports.needsReview"), counts.review, "bg-amber-50 text-amber-800")}
+              {chip("unmatched", t("sup.imports.unmatched"), counts.unmatched, "bg-slate-100 text-slate-700")}
+              {chip("approved", t("sup.imports.approved"), counts.approved + counts.published, "bg-sky-50 text-sky-700")}
+              {chip("rejected", t("sup.imports.rejected"), counts.rejected, "bg-red-50 text-red-700")}
             </div>
           </div>
         </CardBody>
@@ -452,14 +459,14 @@ export function ImportReview({ importId, area }: { importId: string; area: Impor
       {published && (
         <Alert kind={published.published > 0 ? "success" : "warning"}>
           <p className="font-semibold">
-            Published {published.published} price{published.published === 1 ? "" : "s"}
-            {published.skipped ? ` · ${published.skipped} skipped` : ""}
-            {published.createdMaterials ? ` · ${published.createdMaterials} new catalogue item${published.createdMaterials === 1 ? "" : "s"}` : ""}
+            {t("sup.imports.publishedCap")} {published.published} {published.published === 1 ? t("sup.imports.priceOne") : t("sup.imports.priceMany")}
+            {published.skipped ? ` · ${published.skipped} ${t("common.skipped")}` : ""}
+            {published.createdMaterials ? ` · ${published.createdMaterials} ${published.createdMaterials === 1 ? t("sup.imports.newItemOne") : t("sup.imports.newItemMany")}` : ""}
           </p>
           <p className="mt-1 text-xs">
-            {imp.kind === "BUYER_QUOTATION" ? "Thanks — these quoted prices now help every contractor benchmark this supplier." : "Prices are live and included in the market index."}{" "}
+            {imp.kind === "BUYER_QUOTATION" ? t("sup.imports.thanksQuoted") : t("sup.imports.pricesLive")}{" "}
             <Link href={link.href} className="font-semibold underline underline-offset-2">
-              {link.label} →
+              {t(link.labelKey)} {t("common.forwardArrow")}
             </Link>
           </p>
         </Alert>
@@ -469,7 +476,7 @@ export function ImportReview({ importId, area }: { importId: string; area: Impor
         <Card>
           <CardBody className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-slate-700">
-              <span>Min confidence</span>
+              <span>{t("sup.imports.minConfidence")}</span>
               <select value={minConf} onChange={(e) => setMinConf(Number(e.target.value))} className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20">
                 {CONFIDENCE_OPTIONS.map((c) => (
                   <option key={c} value={c}>
@@ -479,14 +486,14 @@ export function ImportReview({ importId, area }: { importId: string; area: Impor
               </select>
             </label>
             <Button variant="secondary" size="sm" onClick={approveAll} loading={approvingAll} disabled={counts.suggestedAbove === 0}>
-              Approve all ≥ {minConf}% ({counts.suggestedAbove})
+              {t("sup.imports.approveAll")} ≥ {minConf}% ({counts.suggestedAbove})
             </Button>
             <Button size="sm" onClick={() => setPublishOpen(true)} disabled={counts.approved === 0 && counts.suggestedAbove === 0}>
-              Publish approved ({counts.approved})
+              {t("sup.imports.publishApproved")} ({counts.approved})
             </Button>
             <span className="flex-1" />
             <Button size="sm" variant="ghost" className="text-red-600" onClick={reject} loading={rejecting}>
-              Reject import
+              {t("sup.imports.rejectImport")}
             </Button>
           </CardBody>
         </Card>
@@ -497,20 +504,20 @@ export function ImportReview({ importId, area }: { importId: string; area: Impor
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50">
               <tr className="text-start text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="px-4 py-3 text-start">Extracted text</th>
-                <th className="px-4 py-3 text-start">Catalogue match</th>
-                <th className="px-4 py-3 text-start">Price</th>
-                <th className="px-4 py-3 text-start">Unit</th>
-                <th className="px-4 py-3 text-start">City</th>
-                <th className="px-4 py-3 text-start">Status</th>
-                <th className="px-4 py-3 text-end">{readOnly ? "" : "Approve / Reject"}</th>
+                <th className="px-4 py-3 text-start">{t("sup.imports.extractedText")}</th>
+                <th className="px-4 py-3 text-start">{t("sup.imports.catalogueMatch")}</th>
+                <th className="px-4 py-3 text-start">{t("product.price")}</th>
+                <th className="px-4 py-3 text-start">{t("product.unit")}</th>
+                <th className="px-4 py-3 text-start">{t("common.city")}</th>
+                <th className="px-4 py-3 text-start">{t("common.status")}</th>
+                <th className="px-4 py-3 text-end">{readOnly ? "" : t("sup.imports.approveReject")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {visible.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
-                    {rows.length === 0 ? "No rows were extracted from this document." : "No rows match this filter."}
+                    {rows.length === 0 ? t("sup.imports.noRowsExtracted") : t("sup.imports.noRowsFilter")}
                   </td>
                 </tr>
               ) : (
@@ -521,7 +528,7 @@ export function ImportReview({ importId, area }: { importId: string; area: Impor
         </div>
         {rows.length > 0 && (
           <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">
-            Showing {visible.length} of {rows.length} rows · edits save automatically
+            {t("sup.imports.showing")} {visible.length} {t("cart.of")} {rows.length} {t("common.rows")} · {t("sup.imports.autosave")}
           </div>
         )}
       </Card>
@@ -529,39 +536,39 @@ export function ImportReview({ importId, area }: { importId: string; area: Impor
       {readOnly && !published && (
         <div className="flex justify-end">
           <LinkButton href={link.href} variant="outline">
-            {link.label}
+            {t(link.labelKey)}
           </LinkButton>
         </div>
       )}
 
       <Modal
         open={publishOpen}
-        title="Publish approved prices"
+        title={t("sup.imports.publishModalTitle")}
         onClose={() => setPublishOpen(false)}
         footer={
           <>
             <Button variant="outline" onClick={() => setPublishOpen(false)} disabled={publishing}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button onClick={publish} loading={publishing} disabled={publishable === 0}>
-              Publish {publishable} row{publishable === 1 ? "" : "s"}
+              {t("sup.imports.publish")} {publishable} {publishable === 1 ? t("common.rowOne") : t("common.rows")}
             </Button>
           </>
         }
       >
         <div className="space-y-4 text-sm text-slate-700">
-          <p>{publishExplanation(imp.kind)}</p>
+          <p>{t(publishExplanationKey(imp.kind))}</p>
           <p>
-            Rows with no catalogue match are skipped unless <em>Create as new item</em> is ticked, in which case a new catalogue item is created from the extracted text.
+            {t("sup.imports.skipNoteBefore")} <em>{t("sup.imports.createAsNewItem")}</em> {t("sup.imports.skipNoteAfter")}
           </p>
           <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
             <input type="checkbox" checked={includeSuggested} onChange={(e) => setIncludeSuggested(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600" />
             <span>
-              Also include suggested rows matched at ≥ {minConf}% <span className="text-slate-500">({counts.suggestedAbove} row{counts.suggestedAbove === 1 ? "" : "s"})</span>
+              {t("sup.imports.alsoInclude")} ≥ {minConf}% <span className="text-slate-500">({counts.suggestedAbove} {counts.suggestedAbove === 1 ? t("common.rowOne") : t("common.rows")})</span>
             </span>
           </label>
           <p className="text-xs text-slate-500">
-            {counts.approved} approved{includeSuggested ? ` + ${counts.suggestedAbove} suggested` : ""} → {publishable} to publish.
+            {counts.approved} {t("sup.imports.approvedLower")}{includeSuggested ? ` + ${counts.suggestedAbove} ${t("sup.imports.suggestedLower")}` : ""} {t("common.forwardArrow")} {publishable} {t("sup.imports.toPublish")}.
           </p>
         </div>
       </Modal>

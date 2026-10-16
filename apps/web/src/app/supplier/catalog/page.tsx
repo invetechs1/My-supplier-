@@ -6,11 +6,13 @@ import { SAUDI_CITIES, UNITS, type SupplierCatalogItem } from "@mysupplier/share
 import { api, errorMessage, importErrorText, type CatalogImportResult } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useAsync, useFlash } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { Alert, Button, Card, CardBody, CardHeader, FlashMessage, Input, LinkButton, PageHeader, Select, Textarea } from "@/components/ui";
 
 const CSV_HEADER = ["sku", "name", "nameAr", "categorySlug", "unit", "brand", "price", "city", "stock", "minQty", "leadTimeDays"] as const;
 type CsvColumn = (typeof CSV_HEADER)[number];
+
+type Translate = (key: TranslationKey) => string;
 
 interface ParsedCsv {
   rows: SupplierCatalogItem[];
@@ -37,7 +39,7 @@ function splitCsvLine(line: string): string[] {
   return out.map((s) => s.trim());
 }
 
-function parseCsv(text: string, defaultCity: string): ParsedCsv {
+function parseCsv(text: string, defaultCity: string, t: Translate): ParsedCsv {
   const rows: SupplierCatalogItem[] = [];
   const errors: string[] = [];
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -63,7 +65,7 @@ function parseCsv(text: string, defaultCity: string): ParsedCsv {
     const price = Number(get("price"));
     const city = get("city") || defaultCity;
     if (!name || !categorySlug || !unit || !Number.isFinite(price) || price <= 0) {
-      errors.push(`Line ${i + 1}: needs name, categorySlug, unit and a positive price.`);
+      errors.push(`${t("common.line")} ${i + 1}: ${t("sup.catalog.csvLineNeeds")}`);
       continue;
     }
     const num = (v: string) => (v === "" ? undefined : Number.isFinite(Number(v)) ? Number(v) : undefined);
@@ -85,31 +87,32 @@ function parseCsv(text: string, defaultCity: string): ParsedCsv {
 }
 
 function ImportResultView({ result }: { result: CatalogImportResult }) {
+  const { t } = useI18n();
   const errs = result.errors ?? [];
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-3 gap-3 text-center">
         <div className="rounded-xl bg-emerald-50 p-3">
           <p className="text-2xl font-semibold tabular-nums text-emerald-700">{result.created ?? 0}</p>
-          <p className="text-xs text-emerald-800">products created</p>
+          <p className="text-xs text-emerald-800">{t("sup.catalog.productsCreated")}</p>
         </div>
         <div className="rounded-xl bg-sky-50 p-3">
           <p className="text-2xl font-semibold tabular-nums text-sky-700">{result.updated ?? 0}</p>
-          <p className="text-xs text-sky-800">products updated</p>
+          <p className="text-xs text-sky-800">{t("sup.catalog.productsUpdated")}</p>
         </div>
         <div className="rounded-xl bg-brand-50 p-3">
           <p className="text-2xl font-semibold tabular-nums text-brand-700">{result.listings ?? 0}</p>
-          <p className="text-xs text-brand-800">offers upserted</p>
+          <p className="text-xs text-brand-800">{t("sup.catalog.offersUpserted")}</p>
         </div>
       </div>
       {errs.length > 0 && (
         <Alert kind="warning">
-          <p className="font-semibold">{errs.length} row{errs.length === 1 ? "" : "s"} rejected</p>
+          <p className="font-semibold">{errs.length} {errs.length === 1 ? t("common.rowOne") : t("common.rows")} {t("sup.catalog.rejected")}</p>
           <ul className="mt-1 list-disc ps-4">
             {errs.slice(0, 10).map((e, i) => (
               <li key={i}>{importErrorText(e)}</li>
             ))}
-            {errs.length > 10 && <li>…and {errs.length - 10} more</li>}
+            {errs.length > 10 && <li>{t("common.andPrefix")} {errs.length - 10} {t("common.moreSuffix")}</li>}
           </ul>
         </Alert>
       )}
@@ -175,12 +178,12 @@ export default function SupplierCatalogPage() {
   const submitForm = async (e: React.FormEvent) => {
     e.preventDefault();
     const next: Record<string, string> = {};
-    if (!form.name.trim()) next.name = "Product name is required.";
-    if (!form.categorySlug) next.categorySlug = "Choose a category.";
-    if (!form.unit) next.unit = "Choose a unit.";
+    if (!form.name.trim()) next.name = t("sup.catalog.errName");
+    if (!form.categorySlug) next.categorySlug = t("sup.catalog.errCategory");
+    if (!form.unit) next.unit = t("sup.catalog.errUnit");
     const price = Number(form.price);
-    if (!form.price || !Number.isFinite(price) || price <= 0) next.price = "Enter a valid price.";
-    if (!form.city) next.city = "Choose a city.";
+    if (!form.price || !Number.isFinite(price) || price <= 0) next.price = t("common.enterValidPrice");
+    if (!form.city) next.city = t("sup.catalog.errCity");
     setErrors(next);
     if (Object.keys(next).length > 0) return;
     const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
@@ -204,10 +207,10 @@ export default function SupplierCatalogPage() {
       const res = await api.supplierCatalogImport([item]);
       setFormResult(res);
       if ((res.errors ?? []).length === 0) {
-        setFlash({ kind: "success", message: `"${item.name}" is now listed in the shop.` });
+        setFlash({ kind: "success", message: `"${item.name}" ${t("sup.catalog.nowListed")}` });
         setForm(emptyForm(defaultCity));
       } else {
-        setFlash({ kind: "error", message: "The product was not accepted. See details below." });
+        setFlash({ kind: "error", message: t("sup.catalog.notAccepted") });
       }
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
@@ -217,17 +220,17 @@ export default function SupplierCatalogPage() {
   };
 
   const submitCsv = async () => {
-    const p = parsed ?? parseCsv(csv, defaultCity);
+    const p = parsed ?? parseCsv(csv, defaultCity, t);
     setParsed(p);
     if (p.rows.length === 0) {
-      setFlash({ kind: "error", message: "No valid rows to import." });
+      setFlash({ kind: "error", message: t("sup.catalog.noValidRows") });
       return;
     }
     setCsvBusy(true);
     try {
       const res = await api.supplierCatalogImport(p.rows);
       setCsvResult(res);
-      setFlash({ kind: "success", message: `Import finished: ${res.created ?? 0} created, ${res.updated ?? 0} updated, ${res.listings ?? 0} offers.` });
+      setFlash({ kind: "success", message: `${t("sup.catalog.importFinished")}: ${res.created ?? 0} ${t("sup.catalog.created")}, ${res.updated ?? 0} ${t("sup.catalog.updated")}, ${res.listings ?? 0} ${t("sup.catalog.offers")}.` });
       if ((res.errors ?? []).length === 0) {
         setCsv("");
         setParsed(null);
@@ -243,46 +246,46 @@ export default function SupplierCatalogPage() {
     <div>
       <PageHeader
         title={t("sup.catalog")}
-        subtitle="List your products with live price and stock. They appear instantly in the shop, where buyers can add them to their cart."
-        action={<LinkButton href="/supplier/prices" variant="outline">Manage price list</LinkButton>}
+        subtitle={t("sup.catalog.subtitle")}
+        action={<LinkButton href="/supplier/prices" variant="outline">{t("sup.catalog.managePrices")}</LinkButton>}
       />
       <FlashMessage flash={flash} className="mb-4" />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
-          <CardHeader title="Add a product" subtitle="Creates the product if the SKU or name is new and publishes your offer." />
+          <CardHeader title={t("sup.catalog.addProduct")} subtitle={t("sup.catalog.addProductSub")} />
           <CardBody>
             <form onSubmit={submitForm} noValidate className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <Input label="Product name" name="name" value={form.name} onChange={(e) => set({ name: e.target.value })} error={errors.name} placeholder="Portland cement OPC 50kg" required />
-                <Input label="Arabic name" name="nameAr" value={form.nameAr} onChange={(e) => set({ nameAr: e.target.value })} placeholder="إسمنت بورتلاندي 50 كجم" dir="rtl" />
+                <Input label={t("sup.catalog.productName")} name="name" value={form.name} onChange={(e) => set({ name: e.target.value })} error={errors.name} placeholder="Portland cement OPC 50kg" required />
+                <Input label={t("sup.catalog.arabicName")} name="nameAr" value={form.nameAr} onChange={(e) => set({ nameAr: e.target.value })} placeholder="إسمنت بورتلاندي 50 كجم" dir="rtl" />
                 <Select
-                  label="Category"
+                  label={t("materials.category")}
                   name="categorySlug"
                   value={form.categorySlug}
                   onChange={(e) => set({ categorySlug: e.target.value })}
-                  placeholder={categories.loading ? "Loading…" : "Select category"}
+                  placeholder={categories.loading ? t("common.loading") : t("sup.catalog.selectCategory")}
                   options={categoryOptions}
-                  error={errors.categorySlug ?? (categories.error ? `Categories unavailable: ${categories.error}` : null)}
+                  error={errors.categorySlug ?? (categories.error ? `${t("sup.catalog.categoriesUnavailable")}: ${categories.error}` : null)}
                   required
                 />
-                <Select label="Unit" name="unit" value={form.unit} onChange={(e) => set({ unit: e.target.value })} options={UNITS.map((u) => ({ value: u, label: u }))} error={errors.unit} required />
-                <Input label="Brand" name="brand" value={form.brand} onChange={(e) => set({ brand: e.target.value })} placeholder="e.g. Yamama, SABIC" />
-                <Input label="SKU (optional)" name="sku" value={form.sku} onChange={(e) => set({ sku: e.target.value })} placeholder="Leave blank to auto-generate" dir="ltr" />
-                <Textarea label="Description" name="description" value={form.description} onChange={(e) => set({ description: e.target.value })} className="sm:col-span-2" rows={3} />
-                <Input label="Image URL" name="imageUrl" type="url" value={form.imageUrl} onChange={(e) => set({ imageUrl: e.target.value })} placeholder="https://…" className="sm:col-span-2" dir="ltr" hint="Optional. A product image is generated when left empty." />
+                <Select label={t("product.unit")} name="unit" value={form.unit} onChange={(e) => set({ unit: e.target.value })} options={UNITS.map((u) => ({ value: u, label: u }))} error={errors.unit} required />
+                <Input label={t("product.brand")} name="brand" value={form.brand} onChange={(e) => set({ brand: e.target.value })} placeholder={t("sup.catalog.brandPlaceholder")} />
+                <Input label={t("sup.catalog.skuOptional")} name="sku" value={form.sku} onChange={(e) => set({ sku: e.target.value })} placeholder={t("sup.catalog.skuPlaceholder")} dir="ltr" />
+                <Textarea label={t("sup.catalog.description")} name="description" value={form.description} onChange={(e) => set({ description: e.target.value })} className="sm:col-span-2" rows={3} />
+                <Input label={t("sup.catalog.imageUrl")} name="imageUrl" type="url" value={form.imageUrl} onChange={(e) => set({ imageUrl: e.target.value })} placeholder="https://…" className="sm:col-span-2" dir="ltr" hint={t("sup.catalog.imageHint")} />
               </div>
-              <h3 className="border-t border-slate-100 pt-4 text-sm font-semibold text-slate-900">Your offer</h3>
+              <h3 className="border-t border-slate-100 pt-4 text-sm font-semibold text-slate-900">{t("sup.catalog.yourOffer")}</h3>
               <div className="grid gap-4 sm:grid-cols-3">
-                <Input label={`Price (SAR / ${form.unit})`} name="price" type="number" min={0} step="0.01" value={form.price} onChange={(e) => set({ price: e.target.value })} error={errors.price} required dir="ltr" />
-                <Select label="City" name="city" value={form.city} onChange={(e) => set({ city: e.target.value })} options={SAUDI_CITIES.map((c) => ({ value: c, label: c }))} error={errors.city} required />
-                <Input label="Stock" name="stock" type="number" min={0} value={form.stock} onChange={(e) => set({ stock: e.target.value })} placeholder="Blank = on request" dir="ltr" />
-                <Input label="Minimum quantity" name="minQty" type="number" min={1} value={form.minQty} onChange={(e) => set({ minQty: e.target.value })} dir="ltr" />
-                <Input label="Lead time (days)" name="leadTimeDays" type="number" min={0} value={form.leadTimeDays} onChange={(e) => set({ leadTimeDays: e.target.value })} dir="ltr" />
+                <Input label={`${t("product.price")} (SAR / ${form.unit})`} name="price" type="number" min={0} step="0.01" value={form.price} onChange={(e) => set({ price: e.target.value })} error={errors.price} required dir="ltr" />
+                <Select label={t("common.city")} name="city" value={form.city} onChange={(e) => set({ city: e.target.value })} options={SAUDI_CITIES.map((c) => ({ value: c, label: c }))} error={errors.city} required />
+                <Input label={t("product.stock")} name="stock" type="number" min={0} value={form.stock} onChange={(e) => set({ stock: e.target.value })} placeholder={t("sup.catalog.stockPlaceholder")} dir="ltr" />
+                <Input label={t("common.minimumQuantity")} name="minQty" type="number" min={1} value={form.minQty} onChange={(e) => set({ minQty: e.target.value })} dir="ltr" />
+                <Input label={t("common.leadTimeDays")} name="leadTimeDays" type="number" min={0} value={form.leadTimeDays} onChange={(e) => set({ leadTimeDays: e.target.value })} dir="ltr" />
               </div>
               <div className="flex justify-end">
                 <Button type="submit" loading={saving} variant="accent">
-                  Publish product
+                  {t("sup.catalog.publishProduct")}
                 </Button>
               </div>
             </form>
@@ -295,7 +298,7 @@ export default function SupplierCatalogPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Bulk upload (CSV)" subtitle="One product per line. Header row is recognised; columns may be in any order when a header is present." />
+          <CardHeader title={t("sup.catalog.bulkTitle")} subtitle={t("sup.catalog.bulkSubtitle")} />
           <CardBody className="space-y-3">
             <Textarea
               name="csv"
@@ -308,18 +311,18 @@ export default function SupplierCatalogPage() {
               rows={12}
               className="font-mono text-xs"
               placeholder={`${CSV_HEADER.join(",")}\nCEM-OPC-50,Portland cement OPC 50kg,إسمنت بورتلاندي,cement,bag,Yamama,18.5,Riyadh,5000,50,2\n,Rebar 16mm B500B,حديد تسليح 16 مم,steel,ton,Hadeed,2650,Jeddah,,5,7`}
-              hint={`Required: name, categorySlug, unit, price. City defaults to ${defaultCity}.`}
+              hint={`${t("sup.catalog.csvRequired")} ${t("sup.catalog.cityDefaults")} ${defaultCity}.`}
             />
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" onClick={() => setParsed(parseCsv(csv, defaultCity))} disabled={!csv.trim()}>
-                Validate
+              <Button variant="outline" onClick={() => setParsed(parseCsv(csv, defaultCity, t))} disabled={!csv.trim()}>
+                {t("sup.catalog.validate")}
               </Button>
               <Button onClick={submitCsv} loading={csvBusy} disabled={!csv.trim()}>
-                Import{parsed ? ` ${parsed.rows.length} rows` : ""}
+                {t("sup.catalog.import")}{parsed ? ` ${parsed.rows.length} ${t("common.rows")}` : ""}
               </Button>
               {parsed && (
                 <span className="text-sm text-slate-600">
-                  {parsed.rows.length} valid · {parsed.errors.length} invalid
+                  {parsed.rows.length} {t("sup.catalog.valid")} · {parsed.errors.length} {t("sup.catalog.invalid")}
                 </span>
               )}
             </div>
@@ -329,7 +332,7 @@ export default function SupplierCatalogPage() {
                   {parsed.errors.slice(0, 8).map((e) => (
                     <li key={e}>{e}</li>
                   ))}
-                  {parsed.errors.length > 8 && <li>…and {parsed.errors.length - 8} more</li>}
+                  {parsed.errors.length > 8 && <li>{t("common.andPrefix")} {parsed.errors.length - 8} {t("common.moreSuffix")}</li>}
                 </ul>
               </Alert>
             )}
@@ -338,12 +341,12 @@ export default function SupplierCatalogPage() {
                 <table className="min-w-full text-xs">
                   <thead className="sticky top-0 bg-slate-50 text-slate-500">
                     <tr>
-                      <th className="px-3 py-2 text-start">Name</th>
-                      <th className="px-3 py-2 text-start">Category</th>
-                      <th className="px-3 py-2 text-start">Unit</th>
-                      <th className="px-3 py-2 text-end">Price</th>
-                      <th className="px-3 py-2 text-start">City</th>
-                      <th className="px-3 py-2 text-end">Stock</th>
+                      <th className="px-3 py-2 text-start">{t("common.name")}</th>
+                      <th className="px-3 py-2 text-start">{t("materials.category")}</th>
+                      <th className="px-3 py-2 text-start">{t("product.unit")}</th>
+                      <th className="px-3 py-2 text-end">{t("product.price")}</th>
+                      <th className="px-3 py-2 text-start">{t("common.city")}</th>
+                      <th className="px-3 py-2 text-end">{t("product.stock")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -367,16 +370,16 @@ export default function SupplierCatalogPage() {
       </div>
 
       <Card className="mt-6">
-        <CardHeader title="Category slugs" subtitle="Use these in the categorySlug column." />
+        <CardHeader title={t("sup.catalog.slugsTitle")} subtitle={t("sup.catalog.slugsSubtitle")} />
         <CardBody>
           {categories.loading ? (
-            <p className="text-sm text-slate-500">Loading…</p>
+            <p className="text-sm text-slate-500">{t("common.loading")}</p>
           ) : categories.error ? (
             <Alert onRetry={categories.reload}>{categories.error}</Alert>
           ) : (
             <div className="flex flex-wrap gap-2">
               {(categories.data ?? []).map((c) => (
-                <button key={c.id} type="button" onClick={() => set({ categorySlug: c.slug })} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 hover:border-brand-300 hover:bg-brand-50" title="Use in the form">
+                <button key={c.id} type="button" onClick={() => set({ categorySlug: c.slug })} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 hover:border-brand-300 hover:bg-brand-50" title={t("sup.catalog.useInForm")}>
                   <span className="font-mono text-brand-700">{c.slug}</span> · {lang === "ar" ? c.nameAr : c.name}
                 </button>
               ))}

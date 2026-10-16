@@ -14,9 +14,9 @@ export default function SupplierImportReviewPage() {
   return (
     <div>
       <PageHeader
-        title="Review extracted prices"
-        subtitle="Check the catalogue match, price, unit and city for each row, approve what is right and publish."
-        action={<Link href="/supplier/imports" className="text-sm font-semibold text-brand-700 hover:underline">← {t("sup.imports")}</Link>}
+        title={t("sup.imports.reviewTitle")}
+        subtitle={t("sup.imports.reviewSubtitle")}
+        action={<Link href="/supplier/imports" className="text-sm font-semibold text-brand-700 hover:underline">{t("common.backArrow")} {t("sup.imports")}</Link>}
       />
       {id ? <ImportReview importId={id} area="supplier" /> : null}
     </div>

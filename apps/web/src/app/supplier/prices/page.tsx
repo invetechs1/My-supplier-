@@ -38,12 +38,12 @@ export default function SupplierPricesPage() {
     if (!inline) return;
     const price = Number(inline.price);
     if (!inline.price || Number.isNaN(price) || price <= 0) {
-      setFlash({ kind: "error", message: "Enter a valid price." });
+      setFlash({ kind: "error", message: t("common.enterValidPrice") });
       return;
     }
     const stock = inline.stock.trim() === "" ? null : Math.max(0, Math.floor(Number(inline.stock)));
     if (stock !== null && Number.isNaN(stock)) {
-      setFlash({ kind: "error", message: "Stock must be a number (leave blank for on request)." });
+      setFlash({ kind: "error", message: t("sup.prices.errStock") });
       return;
     }
     setInlineSaving(true);
@@ -51,7 +51,7 @@ export default function SupplierPricesPage() {
       const updated = await api.updateSupplierPrice(inline.id, { price, stock });
       state.setData((prev) => (prev ? { ...prev, data: prev.data.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)) } : prev));
       setInline(null);
-      setFlash({ kind: "success", message: "Listing updated." });
+      setFlash({ kind: "success", message: t("sup.prices.listingUpdated") });
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
     } finally {
@@ -89,10 +89,10 @@ export default function SupplierPricesPage() {
 
   const save = async () => {
     const next: Record<string, string> = {};
-    if (!form.material) next.material = "Select a material.";
+    if (!form.material) next.material = t("sup.prices.errMaterial");
     const price = Number(form.price);
-    if (!form.price || Number.isNaN(price) || price <= 0) next.price = "Enter a valid price.";
-    if (!form.city) next.city = "Select a city.";
+    if (!form.price || Number.isNaN(price) || price <= 0) next.price = t("common.enterValidPrice");
+    if (!form.city) next.city = t("sup.prices.errCity");
     setErrors(next);
     if (Object.keys(next).length > 0 || !form.material) return;
     setSaving(true);
@@ -110,10 +110,10 @@ export default function SupplierPricesPage() {
       } catch (err) {
         // The API refuses to silently replace a live offer for the same material + city; ask before overwriting.
         if (!(err instanceof ApiRequestError && err.status === 409) || modal.editing) throw err;
-        if (!window.confirm(`${errorMessage(err)}\n\nReplace the existing offer with SAR ${price}?`)) return;
+        if (!window.confirm(`${errorMessage(err)}\n\n${t("sup.prices.replaceExisting")} SAR ${price}?`)) return;
         await api.upsertPrice({ ...payload, overwrite: true });
       }
-      setFlash({ kind: "success", message: modal.editing ? "Price updated." : "Price listing added." });
+      setFlash({ kind: "success", message: modal.editing ? t("sup.prices.priceUpdated") : t("sup.prices.listingAdded") });
       setModal({ open: false, editing: null });
       state.reload();
     } catch (err) {
@@ -124,11 +124,11 @@ export default function SupplierPricesPage() {
   };
 
   const remove = async (l: PriceListing) => {
-    if (!window.confirm(`Delete price for ${l.material?.name ?? l.materialId} in ${l.city}?`)) return;
+    if (!window.confirm(`${t("sup.prices.deletePriceFor")} ${l.material?.name ?? l.materialId} ${t("sup.prices.in")} ${l.city}?`)) return;
     setDeleting(l.id);
     try {
       await api.deletePrice(l.id);
-      setFlash({ kind: "success", message: "Listing deleted." });
+      setFlash({ kind: "success", message: t("sup.prices.listingDeleted") });
       state.reload();
     } catch (err) {
       setFlash({ kind: "error", message: errorMessage(err) });
@@ -149,7 +149,7 @@ export default function SupplierPricesPage() {
         const [materialId, price, city, minQty, leadTimeDays] = line.split(",").map((s) => s.trim());
         const p = Number(price);
         if (!materialId || !price || Number.isNaN(p) || p <= 0) {
-          errs.push(`Line ${i + 1}: needs materialId and a positive price.`);
+          errs.push(`${t("common.line")} ${i + 1}: ${t("sup.prices.bulkLineNeeds")}`);
           return;
         }
         rows.push({
@@ -168,7 +168,7 @@ export default function SupplierPricesPage() {
     setBulkBusy(true);
     try {
       const res = await api.bulkPrices(bulkPreview.rows);
-      setFlash({ kind: "success", message: `${res.upserted} listings upserted.` });
+      setFlash({ kind: "success", message: `${res.upserted} ${t("sup.prices.listingsUpserted")}` });
       setBulk("");
       setBulkPreview(null);
       state.reload();
@@ -180,32 +180,32 @@ export default function SupplierPricesPage() {
   };
 
   const columns: Column<SupplierListing>[] = [
-    { key: "material", header: "Material", render: (l) => (
+    { key: "material", header: t("common.material"), render: (l) => (
       <div>
         <p className="font-medium text-slate-900">{l.material ? <Link href={`/shop/products/${l.material.id}`} className="hover:text-brand-700">{l.material.name}</Link> : l.materialId}</p>
-        <p className="text-xs text-slate-500">{l.material?.sku}{l.material ? ` · per ${l.material.unit}` : ""}</p>
+        <p className="text-xs text-slate-500">{l.material?.sku}{l.material ? ` · ${t("shop.per")} ${l.material.unit}` : ""}</p>
       </div>
     ) },
     { key: "city", header: t("common.city"), render: (l) => l.city },
-    { key: "price", header: "Price", align: "end", render: (l) =>
+    { key: "price", header: t("product.price"), align: "end", render: (l) =>
       inline?.id === l.id ? (
-        <Input name={`price-${l.id}`} type="number" min={0} step="0.01" value={inline.price} onChange={(e) => setInline({ ...inline, price: e.target.value })} className="w-28" dir="ltr" aria-label="Price" autoFocus />
+        <Input name={`price-${l.id}`} type="number" min={0} step="0.01" value={inline.price} onChange={(e) => setInline({ ...inline, price: e.target.value })} className="w-28" dir="ltr" aria-label={t("product.price")} autoFocus />
       ) : (
         <span className="font-semibold tabular-nums">{formatSar(l.price, lang)}</span>
       ) },
-    { key: "stock", header: "Stock", align: "end", render: (l) =>
+    { key: "stock", header: t("product.stock"), align: "end", render: (l) =>
       inline?.id === l.id ? (
-        <Input name={`stock-${l.id}`} type="number" min={0} value={inline.stock} onChange={(e) => setInline({ ...inline, stock: e.target.value })} className="w-24" dir="ltr" placeholder="—" aria-label="Stock" />
+        <Input name={`stock-${l.id}`} type="number" min={0} value={inline.stock} onChange={(e) => setInline({ ...inline, stock: e.target.value })} className="w-24" dir="ltr" placeholder="—" aria-label={t("product.stock")} />
       ) : l.stock === null || l.stock === undefined ? (
-        <Badge tone="slate">On request</Badge>
+        <Badge tone="slate">{t("shop.onRequest")}</Badge>
       ) : l.stock > 0 ? (
         <span className="tabular-nums text-emerald-700">{l.stock}</span>
       ) : (
-        <Badge tone="red">Out of stock</Badge>
+        <Badge tone="red">{t("shop.outOfStock")}</Badge>
       ) },
-    { key: "minQty", header: "Min qty", align: "end", render: (l) => l.minQty },
-    { key: "lead", header: "Lead time", align: "end", render: (l) => `${l.leadTimeDays} d` },
-    { key: "updated", header: "Updated", render: (l) => <span className="text-slate-500">{timeAgo(l.updatedAt)}</span> },
+    { key: "minQty", header: t("product.minQty"), align: "end", render: (l) => l.minQty },
+    { key: "lead", header: t("product.leadTime"), align: "end", render: (l) => `${l.leadTimeDays} ${t("common.dayShort")}` },
+    { key: "updated", header: t("sup.products.updated"), render: (l) => <span className="text-slate-500">{timeAgo(l.updatedAt)}</span> },
     { key: "actions", header: "", align: "end", render: (l) => (
       inline?.id === l.id ? (
         <div className="flex justify-end gap-2">
@@ -214,8 +214,8 @@ export default function SupplierPricesPage() {
         </div>
       ) : (
         <div className="flex justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={() => startInline(l)}>Edit</Button>
-          <Button size="sm" variant="ghost" onClick={() => openEdit(l)} title="Lead time, min qty, validity">More</Button>
+          <Button size="sm" variant="outline" onClick={() => startInline(l)}>{t("common.edit")}</Button>
+          <Button size="sm" variant="ghost" onClick={() => openEdit(l)} title={t("sup.prices.moreTitle")}>{t("sup.prices.more")}</Button>
           <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(l)} loading={deleting === l.id}>{t("common.delete")}</Button>
         </div>
       )
@@ -226,7 +226,7 @@ export default function SupplierPricesPage() {
     <div>
       <PageHeader
         title={t("sup.prices")}
-        subtitle="Published prices appear in the shop and on material pages, and feed the market index. Click Edit to change price and stock inline."
+        subtitle={t("sup.prices.subtitle")}
         action={
           <>
             <LinkButton href="/supplier/catalog" variant="outline">{t("sup.catalog")}</LinkButton>
@@ -234,52 +234,52 @@ export default function SupplierPricesPage() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
               </svg>
-              Import from PDF / Excel / photo
+              {t("sup.prices.importFrom")}
             </LinkButton>
-            <Button variant="accent" onClick={openCreate}>+ Add price</Button>
+            <Button variant="accent" onClick={openCreate}>+ {t("sup.prices.addPrice")}</Button>
           </>
         }
       />
       <FlashMessage flash={flash} className="mb-4" />
       {state.loading ? <LoadingBlock /> : state.error ? <Alert onRetry={state.reload}>{state.error}</Alert> : (
         <Card>
-          <Table columns={columns} rows={state.data?.data ?? []} rowKey={(l) => l.id} empty={<EmptyState title="No prices published" description="Add prices one by one or paste a CSV below." action={<Button onClick={openCreate}>Add first price</Button>} />} />
+          <Table columns={columns} rows={state.data?.data ?? []} rowKey={(l) => l.id} empty={<EmptyState title={t("sup.prices.emptyTitle")} description={t("sup.prices.emptyDesc")} action={<Button onClick={openCreate}>{t("sup.prices.addFirst")}</Button>} />} />
           {state.data && <Pagination page={state.data.page} pageSize={state.data.pageSize} total={state.data.total} onChange={setPage} />}
         </Card>
       )}
 
       <Card className="mt-6">
-        <CardHeader title="Bulk upload" subtitle="One listing per line: materialId,price,city,minQty,leadTimeDays (city and the last two are optional)." />
+        <CardHeader title={t("sup.prices.bulkTitle")} subtitle={t("sup.prices.bulkSubtitle")} />
         <CardBody className="space-y-3">
           <Textarea name="bulk" value={bulk} onChange={(e) => { setBulk(e.target.value); setBulkPreview(null); }} placeholder={`materialId,price,city,minQty,leadTimeDays\nclx123abc,18.5,Riyadh,50,3\nclx456def,2650,Jeddah,1,7`} className="font-mono text-xs" rows={6} />
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={parseBulk} disabled={!bulk.trim()}>Preview</Button>
+            <Button variant="outline" onClick={parseBulk} disabled={!bulk.trim()}>{t("sup.prices.preview")}</Button>
             {bulkPreview && (
               <>
-                <span className="text-sm text-slate-600">{bulkPreview.rows.length} valid rows{bulkPreview.errors.length ? `, ${bulkPreview.errors.length} skipped` : ""}</span>
-                <Button onClick={submitBulk} loading={bulkBusy} disabled={bulkPreview.rows.length === 0}>Upload {bulkPreview.rows.length} rows</Button>
+                <span className="text-sm text-slate-600">{bulkPreview.rows.length} {t("sup.prices.validRows")}{bulkPreview.errors.length ? `, ${bulkPreview.errors.length} ${t("common.skipped")}` : ""}</span>
+                <Button onClick={submitBulk} loading={bulkBusy} disabled={bulkPreview.rows.length === 0}>{t("sup.prices.upload")} {bulkPreview.rows.length} {t("common.rows")}</Button>
               </>
             )}
           </div>
           {bulkPreview && bulkPreview.errors.length > 0 && (
-            <Alert kind="warning"><ul className="list-disc ps-4">{bulkPreview.errors.slice(0, 5).map((e) => <li key={e}>{e}</li>)}{bulkPreview.errors.length > 5 && <li>…and {bulkPreview.errors.length - 5} more</li>}</ul></Alert>
+            <Alert kind="warning"><ul className="list-disc ps-4">{bulkPreview.errors.slice(0, 5).map((e) => <li key={e}>{e}</li>)}{bulkPreview.errors.length > 5 && <li>{t("common.andPrefix")} {bulkPreview.errors.length - 5} {t("common.moreSuffix")}</li>}</ul></Alert>
           )}
         </CardBody>
       </Card>
 
-      <Modal open={modal.open} title={modal.editing ? "Edit price" : "Add price"} onClose={() => setModal({ open: false, editing: null })} footer={<><Button variant="outline" onClick={() => setModal({ open: false, editing: null })}>{t("common.cancel")}</Button><Button onClick={save} loading={saving}>{t("common.save")}</Button></>}>
+      <Modal open={modal.open} title={modal.editing ? t("sup.prices.editPrice") : t("sup.prices.addPrice")} onClose={() => setModal({ open: false, editing: null })} footer={<><Button variant="outline" onClick={() => setModal({ open: false, editing: null })}>{t("common.cancel")}</Button><Button onClick={save} loading={saving}>{t("common.save")}</Button></>}>
         <div className="space-y-4">
           {modal.editing ? (
-            <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm"><span className="text-slate-500">Material:</span> <span className="font-medium text-slate-900">{form.material?.name}</span></div>
+            <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm"><span className="text-slate-500">{t("common.material")}:</span> <span className="font-medium text-slate-900">{form.material?.name}</span></div>
           ) : (
-            <MaterialAutocomplete label="Material" value={form.material} onChange={(m) => setForm({ ...form, material: m })} error={errors.material} required />
+            <MaterialAutocomplete label={t("common.material")} value={form.material} onChange={(m) => setForm({ ...form, material: m })} error={errors.material} required />
           )}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Input label={`Price (SAR${form.material?.unit ? ` / ${form.material.unit}` : ""})`} name="price" type="number" min={0} step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} error={errors.price} required dir="ltr" />
-            <Select label="City" name="city" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} options={SAUDI_CITIES.map((c) => ({ value: c, label: c }))} error={errors.city} disabled={!!modal.editing} required />
-            <Input label="Minimum quantity" name="minQty" type="number" min={1} value={form.minQty} onChange={(e) => setForm({ ...form, minQty: e.target.value })} dir="ltr" />
-            <Input label="Lead time (days)" name="leadTimeDays" type="number" min={0} value={form.leadTimeDays} onChange={(e) => setForm({ ...form, leadTimeDays: e.target.value })} dir="ltr" />
-            <Input label="Valid until" name="validUntil" type="date" value={form.validUntil} onChange={(e) => setForm({ ...form, validUntil: e.target.value })} className="sm:col-span-2" />
+            <Input label={`${t("product.price")} (SAR${form.material?.unit ? ` / ${form.material.unit}` : ""})`} name="price" type="number" min={0} step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} error={errors.price} required dir="ltr" />
+            <Select label={t("common.city")} name="city" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} options={SAUDI_CITIES.map((c) => ({ value: c, label: c }))} error={errors.city} disabled={!!modal.editing} required />
+            <Input label={t("common.minimumQuantity")} name="minQty" type="number" min={1} value={form.minQty} onChange={(e) => setForm({ ...form, minQty: e.target.value })} dir="ltr" />
+            <Input label={t("common.leadTimeDays")} name="leadTimeDays" type="number" min={0} value={form.leadTimeDays} onChange={(e) => setForm({ ...form, leadTimeDays: e.target.value })} dir="ltr" />
+            <Input label={t("sup.prices.validUntil")} name="validUntil" type="date" value={form.validUntil} onChange={(e) => setForm({ ...form, validUntil: e.target.value })} className="sm:col-span-2" />
           </div>
         </div>
       </Modal>

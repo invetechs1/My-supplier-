@@ -17,7 +17,7 @@ export default function SupplierImportsPage() {
     <div>
       <PageHeader
         title={t("sup.imports")}
-        subtitle="Upload your price list — PDF, Excel, photo or paste; our AI reads it and matches it to the catalogue. You review every row before anything goes live."
+        subtitle={t("sup.imports.subtitle")}
         action={<LinkButton href="/supplier/prices" variant="outline">{t("sup.prices")}</LinkButton>}
       />
 
@@ -30,8 +30,8 @@ export default function SupplierImportsPage() {
               </svg>
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-base font-semibold text-slate-900">Upload your price list — PDF, Excel, photo or paste</p>
-              <p className="text-sm text-slate-600">Our AI reads it and matches every line to the MySupplier catalogue. Approve the matches and your prices are live in the shop within minutes.</p>
+              <p className="text-base font-semibold text-slate-900">{t("sup.imports.heroTitle")}</p>
+              <p className="text-sm text-slate-600">{t("sup.imports.heroDesc")}</p>
             </div>
           </div>
         </div>
@@ -47,7 +47,7 @@ export default function SupplierImportsPage() {
         </CardBody>
       </Card>
 
-      <ImportList area="supplier" refreshKey={refreshKey} title="My imports" />
+      <ImportList area="supplier" refreshKey={refreshKey} title={t("sup.imports.myImports")} />
     </div>
   );
 }

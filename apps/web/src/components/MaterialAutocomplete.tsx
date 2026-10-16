@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { Material } from "@mysupplier/shared";
 import { api } from "@/lib/api";
 import { useDebounce } from "@/lib/hooks";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/format";
 import { Label, Spinner } from "./ui";
 
@@ -17,7 +18,8 @@ interface Props {
   error?: string | null;
 }
 
-export function MaterialAutocomplete({ label, value, onChange, placeholder = "Search materials by name or SKU…", className, required, error }: Props) {
+export function MaterialAutocomplete({ label, value, onChange, placeholder, className, required, error }: Props) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Material[]>([]);
   const [open, setOpen] = useState(false);
@@ -78,7 +80,7 @@ export function MaterialAutocomplete({ label, value, onChange, placeholder = "Se
             </p>
           </div>
           <button type="button" onClick={() => onChange(null)} className="shrink-0 text-xs font-semibold text-brand-700 hover:underline">
-            Change
+            {t("common.change")}
           </button>
         </div>
       ) : (
@@ -86,7 +88,7 @@ export function MaterialAutocomplete({ label, value, onChange, placeholder = "Se
           <input
             type="text"
             value={query}
-            placeholder={placeholder}
+            placeholder={placeholder ?? t("common.searchMaterials")}
             onChange={(e) => {
               setQuery(e.target.value);
               setOpen(true);
@@ -129,7 +131,7 @@ export function MaterialAutocomplete({ label, value, onChange, placeholder = "Se
           </span>
           {open && query.trim().length > 0 && (
             <ul id={listId} role="listbox" className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
-              {results.length === 0 && !loading && <li className="px-3 py-2 text-sm text-slate-500">No materials found</li>}
+              {results.length === 0 && !loading && <li className="px-3 py-2 text-sm text-slate-500">{t("common.noMaterialsFound")}</li>}
               {results.map((m, i) => (
                 <li
                   key={m.id}

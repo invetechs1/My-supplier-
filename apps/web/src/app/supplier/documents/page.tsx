@@ -6,29 +6,30 @@ import type { CompanyDocument, DocumentType, VerificationStatus } from "@mysuppl
 import { api, errorMessage, openDownload, supplierDocumentFilePath } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useAsync, useFlash } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { cn, formatDateTime } from "@/lib/format";
 import { Alert, Badge, Button, Card, CardHeader, FlashMessage, LoadingBlock, PageHeader, StatusBadge, VerificationBadge } from "@/components/ui";
 import { RoleGuard } from "@/components/RoleGuard";
 
-const DOC_TYPES: Array<{ type: DocumentType; title: string; hint: string; required: boolean }> = [
-  { type: "CR", title: "Commercial registration (CR)", hint: "Valid CR certificate from the Ministry of Commerce.", required: true },
-  { type: "VAT", title: "VAT registration certificate", hint: "ZATCA VAT certificate showing your 15-digit VAT number.", required: true },
-  { type: "LICENSE", title: "Trade / municipal license", hint: "Baladi license or industrial license, if applicable.", required: false },
-  { type: "OTHER", title: "Other supporting documents", hint: "ISO certificates, SASO conformity, authorised distributor letters…", required: false },
+const DOC_TYPES: Array<{ type: DocumentType; titleKey: TranslationKey; hintKey: TranslationKey; required: boolean }> = [
+  { type: "CR", titleKey: "sup.documents.cr", hintKey: "sup.documents.crHint", required: true },
+  { type: "VAT", titleKey: "sup.documents.vat", hintKey: "sup.documents.vatHint", required: true },
+  { type: "LICENSE", titleKey: "sup.documents.license", hintKey: "sup.documents.licenseHint", required: false },
+  { type: "OTHER", titleKey: "sup.documents.other", hintKey: "sup.documents.otherHint", required: false },
 ];
 
 const ACCEPT = ".pdf,.png,.jpg,.jpeg";
 const MAX_MB = 10;
 
-const STATUS_COPY: Record<VerificationStatus, { title: string; body: string; kind: "info" | "warning" | "success" | "error" }> = {
-  PENDING: { title: "Not verified yet", body: "Upload your commercial registration and VAT certificate. Verified suppliers get a badge, rank higher in search and can receive card payments.", kind: "warning" },
-  UNDER_REVIEW: { title: "Under review", body: "Thanks — our team is checking your documents. This usually takes 1–2 business days. You can keep publishing prices meanwhile.", kind: "info" },
-  VERIFIED: { title: "Verified supplier", body: "Your company is verified. Keep your documents current; we will ask for renewals when a certificate expires.", kind: "success" },
-  REJECTED: { title: "Verification rejected", body: "One or more documents could not be accepted. Check the notes below, upload corrected files and we will review again.", kind: "error" },
+const STATUS_COPY: Record<VerificationStatus, { titleKey: TranslationKey; bodyKey: TranslationKey; kind: "info" | "warning" | "success" | "error" }> = {
+  PENDING: { titleKey: "sup.documents.pendingTitle", bodyKey: "sup.documents.pendingBody", kind: "warning" },
+  UNDER_REVIEW: { titleKey: "verification.UNDER_REVIEW", bodyKey: "sup.documents.reviewBody", kind: "info" },
+  VERIFIED: { titleKey: "sup.documents.verifiedTitle", bodyKey: "sup.documents.verifiedBody", kind: "success" },
+  REJECTED: { titleKey: "sup.documents.rejectedTitle", bodyKey: "sup.documents.rejectedBody", kind: "error" },
 };
 
 function DocumentCard({ def, docs, onUploaded, onDeleted, onError }: { def: (typeof DOC_TYPES)[number]; docs: CompanyDocument[]; onUploaded: (d: CompanyDocument) => void; onDeleted: (id: string) => void; onError: (m: string) => void }) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -39,18 +40,18 @@ function DocumentCard({ def, docs, onUploaded, onDeleted, onError }: { def: (typ
     if (!f) return;
     const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
     if (!["pdf", "png", "jpg", "jpeg"].includes(ext)) {
-      onError(`"${f.name}" is not supported. Upload a PDF, PNG or JPG.`);
+      onError(`"${f.name}" ${t("sup.documents.unsupported")}`);
       return;
     }
     if (f.size > MAX_MB * 1024 * 1024) {
-      onError(`"${f.name}" is too large. The limit is ${MAX_MB} MB.`);
+      onError(`"${f.name}" ${t("sup.documents.tooLarge")} ${MAX_MB} ${t("sup.documents.mb")}.`);
       return;
     }
     setBusy(true);
     try {
       onUploaded(await api.uploadCompanyDocument(f, def.type));
     } catch (err) {
-      onError(errorMessage(err, "Upload failed."));
+      onError(errorMessage(err, t("sup.documents.uploadFailed")));
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -58,7 +59,7 @@ function DocumentCard({ def, docs, onUploaded, onDeleted, onError }: { def: (typ
   };
 
   const remove = async (d: CompanyDocument) => {
-    if (!window.confirm(`Delete ${d.fileName}?`)) return;
+    if (!window.confirm(`${t("sup.documents.confirmDelete")} ${d.fileName}?`)) return;
     setDeleting(d.id);
     try {
       await api.deleteCompanyDocument(d.id);
@@ -73,9 +74,9 @@ function DocumentCard({ def, docs, onUploaded, onDeleted, onError }: { def: (typ
   return (
     <Card className="flex flex-col">
       <CardHeader
-        title={<span className="inline-flex items-center gap-2">{def.title}{def.required && <Badge tone="amber">Required</Badge>}</span>}
-        subtitle={def.hint}
-        action={latest ? <StatusBadge status={latest.status} /> : <Badge tone="slate">Not uploaded</Badge>}
+        title={<span className="inline-flex items-center gap-2">{t(def.titleKey)}{def.required && <Badge tone="amber">{t("sup.documents.required")}</Badge>}</span>}
+        subtitle={t(def.hintKey)}
+        action={latest ? <StatusBadge status={latest.status} /> : <Badge tone="slate">{t("sup.documents.notUploaded")}</Badge>}
       />
       <div className="flex-1 space-y-3 px-5 py-4">
         <div
@@ -104,11 +105,11 @@ function DocumentCard({ def, docs, onUploaded, onDeleted, onError }: { def: (typ
           )}
         >
           {busy ? (
-            <span className="text-sm text-slate-600">Uploading…</span>
+            <span className="text-sm text-slate-600">{t("sup.documents.uploading")}</span>
           ) : (
             <>
-              <p className="text-sm font-medium text-slate-900">{latest ? "Upload a new version" : "Drag & drop or click to upload"}</p>
-              <p className="mt-1 text-xs text-slate-500">PDF, PNG or JPG · up to {MAX_MB} MB</p>
+              <p className="text-sm font-medium text-slate-900">{latest ? t("sup.documents.uploadNew") : t("sup.documents.dragDrop")}</p>
+              <p className="mt-1 text-xs text-slate-500">{t("sup.documents.formats")} {MAX_MB} {t("sup.documents.mb")}</p>
             </>
           )}
           <input ref={inputRef} type="file" accept={ACCEPT} className="sr-only" tabIndex={-1} onChange={(e) => void pick(e.target.files?.[0])} />
@@ -117,13 +118,13 @@ function DocumentCard({ def, docs, onUploaded, onDeleted, onError }: { def: (typ
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
             {docs.map((d) => (
               <li key={d.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-sm">
-                <a href="#" onClick={(e) => { e.preventDefault(); void openDownload(supplierDocumentFilePath(d.id)); }} title="Opens securely with a short-lived download link" className="min-w-0 flex-1 truncate font-medium text-brand-700 hover:underline" dir="ltr">{d.fileName}</a>
+                <a href="#" onClick={(e) => { e.preventDefault(); void openDownload(supplierDocumentFilePath(d.id)); }} title={t("sup.documents.opensSecurely")} className="min-w-0 flex-1 truncate font-medium text-brand-700 hover:underline" dir="ltr">{d.fileName}</a>
                 <StatusBadge status={d.status} />
                 <span className="text-xs text-slate-400">{formatDateTime(d.createdAt)}</span>
                 {d.status === "PENDING" && (
-                  <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(d)} loading={deleting === d.id}>Delete</Button>
+                  <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(d)} loading={deleting === d.id}>{t("common.delete")}</Button>
                 )}
-                {d.notes && <p className={cn("w-full rounded-lg px-2 py-1 text-xs", d.status === "REJECTED" ? "bg-red-50 text-red-700" : "bg-slate-50 text-slate-600")}><span className="font-semibold">Admin notes:</span> {d.notes}</p>}
+                {d.notes && <p className={cn("w-full rounded-lg px-2 py-1 text-xs", d.status === "REJECTED" ? "bg-red-50 text-red-700" : "bg-slate-50 text-slate-600")}><span className="font-semibold">{t("sup.documents.adminNotes")}</span> {d.notes}</p>}
               </li>
             ))}
           </ul>
@@ -145,23 +146,23 @@ function DocumentsInner() {
 
   const onUploaded = (d: CompanyDocument) => {
     docs.setData((prev) => [d, ...(prev ?? [])]);
-    setFlash({ kind: "success", message: `${d.fileName} uploaded. We'll review it shortly.` });
+    setFlash({ kind: "success", message: `${t("sup.documents.uploadedWord")} ${d.fileName}. ${t("sup.documents.reviewShortly")}` });
     company.reload();
     void refresh();
   };
   const onDeleted = (id: string) => {
     docs.setData((prev) => (prev ?? []).filter((d) => d.id !== id));
-    setFlash({ kind: "success", message: "Document deleted." });
+    setFlash({ kind: "success", message: t("sup.documents.deleted") });
   };
 
   return (
     <div>
-      <PageHeader title={t("sup.documents")} subtitle="Verification builds trust with buyers and unlocks card payments and payouts." action={<VerificationBadge status={status} />} />
+      <PageHeader title={t("sup.documents")} subtitle={t("sup.documents.subtitle")} action={<VerificationBadge status={status} />} />
       <Alert kind={copy.kind} className="mb-4">
-        <p className="font-semibold">{copy.title}</p>
-        <p className="mt-0.5">{copy.body}</p>
-        {status === "REJECTED" && company.data?.verificationNotes && <p className="mt-2 rounded-lg bg-white/60 px-3 py-2 text-sm"><span className="font-semibold">Reviewer notes:</span> {company.data.verificationNotes}</p>}
-        {status === "VERIFIED" && <p className="mt-2 text-xs"><Link href="/supplier/company" className="font-semibold underline">Complete your storefront</Link> to make the most of your badge.</p>}
+        <p className="font-semibold">{t(copy.titleKey)}</p>
+        <p className="mt-0.5">{t(copy.bodyKey)}</p>
+        {status === "REJECTED" && company.data?.verificationNotes && <p className="mt-2 rounded-lg bg-white/60 px-3 py-2 text-sm"><span className="font-semibold">{t("sup.documents.reviewerNotes")}</span> {company.data.verificationNotes}</p>}
+        {status === "VERIFIED" && <p className="mt-2 text-xs"><Link href="/supplier/company" className="font-semibold underline">{t("sup.documents.completeStorefront")}</Link> {t("sup.documents.makeMostBadge")}</p>}
       </Alert>
       <FlashMessage flash={flash} className="mb-4" />
       {docs.loading ? (

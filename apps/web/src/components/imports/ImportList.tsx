@@ -5,13 +5,20 @@ import { useState } from "react";
 import type { ImportKind, ImportStatus, PriceImport } from "@mysupplier/shared";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/format";
 import { Alert, Badge, Card, CardHeader, EmptyState, LoadingBlock, Pagination, Select, StatusBadge, Table, type Column } from "@/components/ui";
-import { KIND_LABEL, KIND_TONE, type ImportArea } from "./ImportReview";
+import { KIND_LABEL_KEY, KIND_TONE, type ImportArea } from "./ImportReview";
 
 const STATUSES: ImportStatus[] = ["REVIEW", "PUBLISHED", "REJECTED", "FAILED", "PROCESSING"];
 const KINDS: ImportKind[] = ["SUPPLIER_PRICE_LIST", "BUYER_QUOTATION", "WEB_PAGE", "TEXT"];
+const STATUS_LABEL_KEY: Record<ImportStatus, TranslationKey> = {
+  REVIEW: "sup.imports.statusReview",
+  PUBLISHED: "sup.imports.statusPublished",
+  REJECTED: "sup.imports.statusRejected",
+  FAILED: "sup.imports.statusFailed",
+  PROCESSING: "sup.imports.statusProcessing",
+};
 
 export const AREA_BASE: Record<ImportArea, string> = {
   supplier: "/supplier/imports",
@@ -30,8 +37,9 @@ export interface ImportListProps {
   onTotal?: (total: number) => void;
 }
 
-export function ImportList({ area, fixedKind, refreshKey = 0, title = "Imports", onTotal }: ImportListProps) {
+export function ImportList({ area, fixedKind, refreshKey = 0, title, onTotal }: ImportListProps) {
   const { t, lang } = useI18n();
+  const heading = title ?? t("sup.imports.imports");
   const [status, setStatus] = useState<ImportStatus | "">("");
   const [kind, setKind] = useState<ImportKind | "">(fixedKind ?? "");
   const [page, setPage] = useState(1);
@@ -48,18 +56,18 @@ export function ImportList({ area, fixedKind, refreshKey = 0, title = "Imports",
 
   const base = AREA_BASE[area];
   const columns: Column<PriceImport>[] = [
-    { key: "date", header: "Date", render: (i) => <span className="whitespace-nowrap text-slate-600">{formatDateTime(i.createdAt, lang)}</span> },
-    ...(fixedKind ? [] : [{ key: "kind", header: "Kind", render: (i: PriceImport) => <Badge tone={KIND_TONE[i.kind] ?? "slate"}>{KIND_LABEL[i.kind] ?? i.kind}</Badge> } as Column<PriceImport>]),
+    { key: "date", header: t("common.date"), render: (i) => <span className="whitespace-nowrap text-slate-600">{formatDateTime(i.createdAt, lang)}</span> },
+    ...(fixedKind ? [] : [{ key: "kind", header: t("sup.imports.kind"), render: (i: PriceImport) => <Badge tone={KIND_TONE[i.kind] ?? "slate"}>{KIND_LABEL_KEY[i.kind] ? t(KIND_LABEL_KEY[i.kind]) : i.kind}</Badge> } as Column<PriceImport>]),
     {
       key: "source",
-      header: "Source",
+      header: t("product.source"),
       render: (i) => (
         <div className="min-w-0">
           <Link href={`${base}/${i.id}`} className="font-medium text-slate-900 hover:text-brand-700">
-            {i.sourceName || i.supplierName || i.fileName || "Untitled import"}
+            {i.sourceName || i.supplierName || i.fileName || t("sup.imports.untitled")}
           </Link>
           <p className="truncate text-xs text-slate-500" dir="ltr">
-            {i.fileName ?? (i.kind === "TEXT" ? "pasted text" : "")}
+            {i.fileName ?? (i.kind === "TEXT" ? t("sup.imports.pastedTextSource") : "")}
             {i.city ? ` · ${i.city}` : ""}
           </p>
         </div>
@@ -68,7 +76,7 @@ export function ImportList({ area, fixedKind, refreshKey = 0, title = "Imports",
     { key: "status", header: t("common.status"), render: (i) => <StatusBadge status={i.status} /> },
     {
       key: "counts",
-      header: "Extracted / published",
+      header: t("sup.imports.extractedPublished"),
       align: "end",
       render: (i) => (
         <span className="tabular-nums">
@@ -80,7 +88,7 @@ export function ImportList({ area, fixedKind, refreshKey = 0, title = "Imports",
       ? [
           {
             key: "uploader",
-            header: "Uploaded by",
+            header: t("sup.imports.uploadedBy"),
             render: (i: PriceImport) => (
               <span className="text-slate-600">
                 {i.uploadedBy?.name ?? "—"}
@@ -97,7 +105,7 @@ export function ImportList({ area, fixedKind, refreshKey = 0, title = "Imports",
       align: "end",
       render: (i) => (
         <Link href={`${base}/${i.id}`} className="text-sm font-semibold text-brand-700 hover:underline">
-          {i.status === "REVIEW" ? "Review →" : "Open →"}
+          {i.status === "REVIEW" ? t("sup.imports.reviewArrow") : t("sup.imports.openArrow")}
         </Link>
       ),
     },
@@ -106,8 +114,8 @@ export function ImportList({ area, fixedKind, refreshKey = 0, title = "Imports",
   return (
     <Card>
       <CardHeader
-        title={title}
-        subtitle={state.data ? `${state.data.total} total` : undefined}
+        title={heading}
+        subtitle={state.data ? `${state.data.total} ${t("sup.imports.totalSuffix")}` : undefined}
         action={
           <div className="flex flex-wrap gap-2">
             <Select
@@ -117,8 +125,8 @@ export function ImportList({ area, fixedKind, refreshKey = 0, title = "Imports",
                 setStatus(e.target.value as ImportStatus | "");
                 setPage(1);
               }}
-              placeholder="All statuses"
-              options={STATUSES.map((s) => ({ value: s, label: s.charAt(0) + s.slice(1).toLowerCase() }))}
+              placeholder={t("common.allStatuses")}
+              options={STATUSES.map((s) => ({ value: s, label: t(STATUS_LABEL_KEY[s]) }))}
               className="w-40"
             />
             {!fixedKind && (
@@ -129,8 +137,8 @@ export function ImportList({ area, fixedKind, refreshKey = 0, title = "Imports",
                   setKind(e.target.value as ImportKind | "");
                   setPage(1);
                 }}
-                placeholder="All kinds"
-                options={KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))}
+                placeholder={t("sup.imports.allKinds")}
+                options={KINDS.map((k) => ({ value: k, label: t(KIND_LABEL_KEY[k]) }))}
                 className="w-44"
               />
             )}
@@ -145,7 +153,7 @@ export function ImportList({ area, fixedKind, refreshKey = 0, title = "Imports",
         </div>
       ) : (
         <>
-          <Table columns={columns} rows={state.data?.data ?? []} rowKey={(i) => i.id} empty={<EmptyState title="No imports yet" description="Upload a document above and it will appear here for review." />} />
+          <Table columns={columns} rows={state.data?.data ?? []} rowKey={(i) => i.id} empty={<EmptyState title={t("sup.imports.emptyTitle")} description={t("sup.imports.emptyDesc")} />} />
           {state.data && <Pagination page={state.data.page} pageSize={state.data.pageSize} total={state.data.total} onChange={setPage} />}
         </>
       )}
