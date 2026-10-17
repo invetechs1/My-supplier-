@@ -154,7 +154,7 @@ router.post("/admin/demand/outreach", admin, asyncHandler(async (req, res) => {
   const body = z.object({
     materialIds: z.array(z.string()).min(1).max(50),
     city: z.string().optional(),
-    channel: z.enum(["EMAIL", "WHATSAPP", "LINK"]).default("LINK"),
+    channel: z.enum(["EMAIL", "WHATSAPP", "SMS", "LINK"]).default("LINK"),
     companyIds: z.array(z.string()).max(100).optional(),
     note: z.string().max(500).optional(),
   }).parse(req.body);

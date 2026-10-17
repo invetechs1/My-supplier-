@@ -24,6 +24,6 @@ export const demandApi = {
   launchList: (query: { city?: string; size?: number; freshDays?: number; status?: LaunchStatus } = {}) => request<LaunchList>("/admin/demand/launch-list", { query }),
   launchListCsvPath: () => "/admin/demand/launch-list.csv",
   outreachCandidates: (materialIds: string[], city?: string, limit = 25) => request<OutreachCandidates>("/admin/demand/outreach/candidates", { query: { materialIds: materialIds.join(","), city: city || undefined, limit } }),
-  sendOutreach: (body: { materialIds: string[]; city?: string; channel: "EMAIL" | "WHATSAPP" | "LINK"; companyIds?: string[]; note?: string }) => request<OutreachSendResult>("/admin/demand/outreach", { method: "POST", body }),
+  sendOutreach: (body: { materialIds: string[]; city?: string; channel: "EMAIL" | "WHATSAPP" | "SMS" | "LINK"; companyIds?: string[]; note?: string }) => request<OutreachSendResult>("/admin/demand/outreach", { method: "POST", body }),
   refresh: () => request<{ updated: number; digest: { sent: boolean } }>("/admin/demand/refresh", { method: "POST", body: {} }),
 };

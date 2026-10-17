@@ -37,7 +37,7 @@ function OutreachModal({ materialIds, city, onClose, onSent }: { materialIds: st
   const open = Boolean(materialIds && materialIds.length);
   const state = useAsync(() => (open ? demandApi.outreachCandidates(materialIds!, city, 30) : Promise.resolve(null)), [open, materialIds?.join(","), city]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [channel, setChannel] = useState<"EMAIL" | "WHATSAPP" | "LINK">("LINK");
+  const [channel, setChannel] = useState<"EMAIL" | "WHATSAPP" | "SMS" | "LINK">("LINK");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<OutreachSendResult | null>(null);
@@ -61,7 +61,7 @@ function OutreachModal({ materialIds, city, onClose, onSent }: { materialIds: st
           <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
             {result.results.map((r) => (
               <li key={r.companyId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-                <span className="font-medium text-slate-800">{r.companyName}{r.emailed && <Badge tone="green" className="ms-2">emailed</Badge>}</span>
+                <span className="font-medium text-slate-800">{r.companyName}{r.emailed && <Badge tone="green" className="ms-2">emailed</Badge>}{r.messaged && <Badge tone="green" className="ms-2">{r.messaged === "WHATSAPP" ? "WhatsApp sent" : "SMS sent"}</Badge>}</span>
                 <span className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => copy(r.link)}>Copy link</Button>
                   {r.whatsappUrl && <a href={r.whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100">WhatsApp</a>}
@@ -88,7 +88,7 @@ function OutreachModal({ materialIds, city, onClose, onSent }: { materialIds: st
             </ul>
           )}
           <div className="grid gap-3 sm:grid-cols-2">
-            <Select label="Channel" name="channel" value={channel} onChange={(e) => setChannel(e.target.value as typeof channel)} options={[{ value: "LINK", label: "Create links (I will send them)" }, { value: "EMAIL", label: "Email the supplier" }, { value: "WHATSAPP", label: "WhatsApp (opens chat with the message)" }]} />
+            <Select label="Channel" name="channel" value={channel} onChange={(e) => setChannel(e.target.value as typeof channel)} options={[{ value: "LINK", label: "Create links (I will send them)" }, { value: "EMAIL", label: "Email the supplier" }, { value: "WHATSAPP", label: "WhatsApp (sent automatically when configured, else opens chat)" }, { value: "SMS", label: "SMS (Unifonic)" }]} />
             <Input label="Note to suppliers (optional)" name="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Several contractors need these this month" />
           </div>
           {error && <Alert>{error}</Alert>}

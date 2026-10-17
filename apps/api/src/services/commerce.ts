@@ -299,6 +299,7 @@ export async function createDirectOrders(input: CreateDirectOrdersInput) {
         title: `New order ${reference}`,
         body: `${g.lines.length} item(s), SAR ${total.toLocaleString("en-US")} incl. VAT, deliver to ${input.deliveryCity}.${input.poNumber ? ` PO ${input.poNumber}.` : ""} Please confirm.`,
         link: `/supplier/orders/${order.id}`,
+        alert: { kind: "NEW_ORDER", titleAr: `طلب جديد ${reference}`, bodyAr: `${g.lines.length} بند، ${total.toLocaleString("en-US")} ر.س شامل الضريبة، التسليم إلى ${input.deliveryCity}. يرجى التأكيد.` },
       });
     }
   } catch (err) {

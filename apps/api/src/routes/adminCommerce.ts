@@ -17,6 +17,7 @@ import { audit } from "../lib/audit";
 import { notify } from "../services/notifications";
 import { normaliseCode } from "../services/coupons";
 import { round2 } from "../services/pricing";
+import { messagingSummary } from "../services/messaging";
 
 const router = Router();
 const admin = requireAuth("ADMIN");
@@ -289,6 +290,18 @@ router.patch("/admin/contact/:id", admin, asyncHandler(async (req, res) => {
   const msg = await prisma.contactMessage.update({ where: { id: req.params.id }, data: { ...body, ...(body.status === "RESOLVED" ? { resolvedAt: new Date() } : {}) }, include: { user: { select: { id: true, name: true, role: true } } } });
   await audit(req, "support.update", "ContactMessage", msg.id, body as Record<string, unknown>);
   res.json(serialize(msg));
+}));
+
+// ------------------------------------------------------------------ SMS / WhatsApp message log
+router.get("/admin/messages", admin, asyncHandler(async (req, res) => {
+  const qy = z.object({ channel: z.enum(["SMS", "WHATSAPP"]).optional(), status: z.enum(["SENT", "FAILED", "SKIPPED", "DEV"]).optional(), kind: z.string().optional(), days: z.coerce.number().int().min(1).max(365).default(30) }).parse(req.query);
+  const { page, pageSize, skip, take } = paginate(req.query);
+  const where = { ...(qy.channel ? { channel: qy.channel } : {}), ...(qy.status ? { status: qy.status } : {}), ...(qy.kind ? { kind: qy.kind } : {}), createdAt: { gte: new Date(Date.now() - qy.days * 86_400_000) } };
+  const [total, rows, summary] = await Promise.all([prisma.messageLog.count({ where }), prisma.messageLog.findMany({ where, orderBy: { createdAt: "desc" }, skip, take }), messagingSummary(qy.days)]);
+  const userIds = [...new Set(rows.map((r) => r.userId).filter((x): x is string => Boolean(x)))];
+  const users = userIds.length ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, company: { select: { name: true } } } }) : [];
+  const byUser = new Map(users.map((u) => [u.id, { name: u.name, companyName: u.company?.name ?? null }]));
+  res.json({ ...paged(serialize(rows.map((r) => ({ ...r, to: r.to.replace(/(\+966\d{2})\d{4}(\d{3})/, "$1••••$2"), user: r.userId ? byUser.get(r.userId) ?? null : null }))), page, pageSize, total), summary });
 }));
 
 export default router;

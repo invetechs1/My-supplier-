@@ -114,7 +114,7 @@ export interface OutreachCandidates {
 
 export interface OutreachSendResult {
   sent: number;
-  results: { companyId: string; companyName: string; link: string; whatsappUrl: string | null; emailed: boolean }[];
+  results: { companyId: string; companyName: string; link: string; whatsappUrl: string | null; emailed: boolean; messaged?: "WHATSAPP" | "SMS" | null }[];
 }
 
 export interface CreateMaterialFromDemandPayload {

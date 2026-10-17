@@ -103,6 +103,7 @@ router.patch(
       title: `Order ${order.reference} is now ${status.replace("_", " ").toLowerCase()}`,
       body: `Updated by ${user.name}.`,
       link: user.role === "BUYER" ? `/supplier/orders/${order.id}` : `/dashboard/orders/${order.id}`,
+      alert: { kind: "ORDER_STATUS", titleAr: `الطلب ${order.reference} أصبح: ${({ PENDING: "قيد الانتظار", CONFIRMED: "مؤكد", IN_TRANSIT: "في الطريق", DELIVERED: "تم التسليم", CANCELLED: "ملغى" } as Record<string, string>)[status] ?? status}`, bodyAr: `تم التحديث بواسطة ${user.name}.` },
     });
     res.json(serialize(updated));
   }),

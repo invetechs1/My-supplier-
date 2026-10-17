@@ -615,7 +615,7 @@ export const api = {
   register: (payload: RegisterPayload) =>
     request<AuthResponse>("/auth/register", { method: "POST", body: payload, auth: false }),
   me: () => request<User>("/auth/me"),
-  updateMe: (body: { name?: string; phone?: string; locale?: "en" | "ar" }) =>
+  updateMe: (body: { name?: string; phone?: string; locale?: "en" | "ar"; alertSms?: boolean; alertWhatsapp?: boolean }) =>
     request<User>("/auth/me", { method: "PATCH", body }),
   forgotPassword: (email: string) =>
     request<{ ok: true }>("/auth/forgot-password", { method: "POST", body: { email }, auth: false }),

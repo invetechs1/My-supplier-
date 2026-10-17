@@ -97,7 +97,7 @@ router.patch(
   requireAuth(),
   asyncHandler(async (req, res) => {
     const data = z
-      .object({ name: z.string().min(2).optional(), phone: z.string().optional(), locale: z.enum(["en", "ar"]).optional() })
+      .object({ name: z.string().min(2).optional(), phone: z.string().optional(), locale: z.enum(["en", "ar"]).optional(), alertSms: z.boolean().optional(), alertWhatsapp: z.boolean().optional() })
       .parse(req.body);
     const current = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { phone: true } });
     // A changed number must be verified again before it can be used for OTP login.

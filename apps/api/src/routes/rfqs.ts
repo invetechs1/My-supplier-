@@ -111,6 +111,7 @@ router.post(
       title: `New RFQ in ${body.deliveryCity}: ${body.title}`,
       body: `${body.items.length} item(s). Bidding closes ${body.closesAt.toISOString().slice(0, 10)}.`,
       link: `/supplier/marketplace/${rfq.id}`,
+      alert: { kind: "NEW_RFQ", titleAr: `طلب تسعير جديد في ${body.deliveryCity}: ${body.title}`, bodyAr: `${body.items.length} بند. يغلق التقديم في ${body.closesAt.toISOString().slice(0, 10)}.` },
     });
     await emitWebhook("rfq.created", suppliers.map((s) => s.id), { rfq: shapeRfq(rfq) });
     res.status(201).json(serialize({ ...shapeRfq(rfq), bidCount: 0, lowestBid: null }));
@@ -300,6 +301,7 @@ router.post(
       title: `${existing ? "Updated" : "New"} bid on ${rfq.reference}`,
       body: `${bid.company.name} quoted SAR ${totalPrice.toLocaleString("en-US")} (delivery in ${body.deliveryDays} days).`,
       link: `/dashboard/rfqs/${rfq.id}`,
+      alert: { kind: "NEW_BID", titleAr: `${existing ? "تحديث عطاء" : "عطاء جديد"} على ${rfq.reference}`, bodyAr: `${bid.company.name} قدّم ${totalPrice.toLocaleString("en-US")} ر.س (التوريد خلال ${body.deliveryDays} يوم).` },
     });
     await emitWebhook("bid.received", await companyIdsOfUsers([rfq.buyerId]), { bid, rfq: { id: rfq.id, reference: rfq.reference, title: rfq.title } });
     res.status(existing ? 200 : 201).json(serialize(bid));
@@ -380,6 +382,7 @@ router.post(
       title: `You won ${bid.rfq.reference}`,
       body: `Order ${reference} created for SAR ${Number(bid.totalPrice).toLocaleString("en-US")}. Please confirm it.`,
       link: `/supplier/orders/${order.id}`,
+      alert: { kind: "BID_WON", titleAr: `فزت بطلب التسعير ${bid.rfq.reference}`, bodyAr: `تم إنشاء الطلب ${reference} بقيمة ${Number(bid.totalPrice).toLocaleString("en-US")} ر.س. يرجى تأكيده.` },
     });
     await emitWebhook("bid.accepted", [bid.companyId], { bid: { id: bid.id, totalPrice: Number(bid.totalPrice), currency: bid.currency, deliveryDays: bid.deliveryDays }, rfq: { id: bid.rfq.id, reference: bid.rfq.reference, title: bid.rfq.title }, order: { id: order.id, reference: order.reference } });
     await emitOrderWebhook("order.created", order.id, { source: "RFQ_AWARD" });

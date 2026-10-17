@@ -200,7 +200,7 @@ Verification documents are now served only through `GET /supplier/company/docume
 | POST | `/auth/register` | body `RegisterPayload` -> `AuthResponse` (SUPPLIER must include `company`) |
 | POST | `/auth/login` | body `LoginPayload` -> `AuthResponse` |
 | GET | `/auth/me` | `User` (company embedded) |
-| PATCH | `/auth/me` | `{ name?, phone?, locale? }` -> `User` |
+| PATCH | `/auth/me` | `{ name?, phone?, locale?, alertSms?, alertWhatsapp? }` -> `User` (alert flags control WhatsApp/SMS alerts to the phone) |
 | POST | `/auth/logout` | Revokes every session token issued so far for the user (bumps `tokenVersion`); password change/reset, role change and deactivation do the same |
 | POST | `/auth/download-token` | `{ path }` -> `{ token, expiresIn: 60 }`. Path-bound 60-second token for links that cannot send a header: `/orders/:id/invoice.html`, `/orders/:id/delivery-note.html`, `/orders/:id/einvoice.xml`, `/supplier/inventory/export.csv`, `/supplier/finance/statement.csv`, `/supplier/company/documents/:id/file`, `/admin/companies/:id/documents/:docId/file`, `/payments/:orderId/page`. Append it as `?token=`; session JWTs are rejected in URLs and download tokens are rejected as sessions |
 
@@ -368,6 +368,13 @@ Every BOQ line (`POST /boq/analyze`), RFQ item (`POST /rfqs`) and shop search wi
 | GET | `/admin/demand/outreach/candidates?materialIds=a,b&city=&limit=` | Suppliers worth asking to price those products: serve the city, sell in the same categories, verified first; excludes companies that already list them all |
 | POST | `/admin/demand/outreach` | `{ materialIds, city?, channel: EMAIL|WHATSAPP|LINK, companyIds?, note? }` → one price-update request per supplier (top 10 candidates when `companyIds` is omitted) with the products pre-filled on the magic-link page; matching demand groups become PLANNED |
 | POST | `/admin/demand/refresh` | Re-count coverage now and send the weekly digest if due |
+
+### Phone alerts (WhatsApp / SMS)
+New orders, new RFQs in the supplier's cities, bids received, bids won, order status changes and price requests are also sent to the phone: WhatsApp (Meta Cloud API, `WHATSAPP_*` env) first, Unifonic SMS as fallback, in the user's language, honouring `alertSms`/`alertWhatsapp` and a per-user daily cap (`ALERT_DAILY_CAP`, default 15). Every message is logged.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/admin/messages?channel=&status=&kind=&days=30&page=` | Message log (numbers masked) + `summary { configured, byChannel, byStatus, byKind }` |
 
 ## Product discovery
 Amazon-class search, browse and engagement on top of the shop. Offers everywhere (`bestOffer`, `offers[]`, cart) now carry `OfferPricing`: `salePrice` (live only: `saleEndsAt` null or in the future), `compareAtPrice` (list price while a sale is live), `effectivePrice` (what the buyer pays) and `tiers: [{ minQty, price }]` sorted by `minQty`. Product enrichment (`bestOffer`, `minPrice`, `avgPrice`, `isDeal`, price sorts/filters) uses effective prices. Shared types live in `packages/shared/src/marketplace.ts`.

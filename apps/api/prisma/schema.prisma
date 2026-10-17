@@ -131,6 +131,9 @@ model User {
   companyRole   CompanyRole?
   lastLoginAt   DateTime?
   phoneVerified Boolean        @default(false)
+  // Instant alerts (new orders, RFQs, price requests, order updates) by SMS / WhatsApp to the user's phone.
+  alertSms      Boolean        @default(true)
+  alertWhatsapp Boolean        @default(true)
   rfqs          Rfq[]
   orders        Order[]
   notifications Notification[]
@@ -588,6 +591,7 @@ enum ImportRowStatus {
 enum OutreachChannel {
   EMAIL
   WHATSAPP
+  SMS
   LINK
 }
 
@@ -1346,4 +1350,34 @@ model DemandCluster {
 
   @@index([gapType, status, requests])
   @@index([lastRequestedAt])
+}
+
+// ------------------------------------------------------------------ SMS / WhatsApp message log
+enum MessageChannel {
+  SMS
+  WHATSAPP
+}
+
+enum MessageStatus {
+  SENT
+  FAILED
+  SKIPPED
+  DEV
+}
+
+model MessageLog {
+  id         String         @id @default(cuid())
+  userId     String?
+  companyId  String?
+  channel    MessageChannel
+  kind       String
+  to         String
+  body       String
+  status     MessageStatus
+  providerId String?
+  error      String?
+  createdAt  DateTime       @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }

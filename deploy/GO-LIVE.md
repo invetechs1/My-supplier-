@@ -60,6 +60,9 @@ Then log in at `https://mysupplier.sa/admin`, create categories/materials or imp
 * **Monitoring**: create a Sentry project → `SENTRY_DSN`. API 5xx errors and web/mobile client errors are captured. Add an uptime monitor on `/api/v1/health`.
 * **ZATCA phase 2**: every order has a UBL 2.1 e-invoice with hash chain at `/orders/:id/einvoice`. To report to Fatoora you need onboarding (CSR → CSID) and XAdES signing with your EGS certificate; then set `ZATCA_*`. Plan this with your accountant before your phase-2 wave date.
 
+## 4c. WhatsApp / SMS alerts
+Suppliers answer WhatsApp within minutes. Create a Meta Business account, add a WhatsApp Business phone number, create a message template named `mysupplier_alert` (category UTILITY, language Arabic, body `{{1}}`) and put `WHATSAPP_PHONE_NUMBER_ID` and a permanent `WHATSAPP_ACCESS_TOKEN` in `deploy/.env`. Until then alerts fall back to Unifonic SMS (`UNIFONIC_APP_SID`). Watch cost and delivery in Admin → Messages; `ALERT_DAILY_CAP` limits alerts per user per day.
+
 ## 5. Email
 Set SMTP variables and restart. Send yourself a password-reset email from `/forgot-password` to verify.
 Add SPF/DKIM/DMARC records for the sending domain to avoid spam folders.

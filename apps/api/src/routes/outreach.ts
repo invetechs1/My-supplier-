@@ -10,6 +10,8 @@ import { serialize } from "../lib/serialize";
 import { escapeHtml, layout, mailEnabled, sendMail } from "../services/mailer";
 import { importCatalog, type ImportRow } from "../services/catalogImport";
 import { snapshotHistory } from "../services/catalog";
+import { deliver, whatsappEnabled } from "../services/messaging";
+import { normaliseSaudiPhone } from "../lib/security";
 
 const router = Router();
 const hash = (t: string) => crypto.createHash("sha256").update(t).digest("hex");
@@ -49,7 +51,7 @@ export interface OutreachRequestOptions {
   note?: string | null;
 }
 
-export async function createUpdateRequest(companyId: string, channel: "EMAIL" | "WHATSAPP" | "LINK", createdById?: string, message?: string, opts: OutreachRequestOptions = {}) {
+export async function createUpdateRequest(companyId: string, channel: "EMAIL" | "WHATSAPP" | "SMS" | "LINK", createdById?: string, message?: string, opts: OutreachRequestOptions = {}) {
   const company = await prisma.company.findUniqueOrThrow({ where: { id: companyId }, include: { users: { where: { active: true }, take: 1 } } });
   const requestedIds = [...new Set(opts.requestedMaterialIds ?? [])].slice(0, 50);
   const requested = requestedIds.length ? await prisma.material.findMany({ where: { id: { in: requestedIds } }, select: { id: true, name: true, unit: true } }) : [];
@@ -64,6 +66,16 @@ export async function createUpdateRequest(companyId: string, channel: "EMAIL" | 
   const phone = (company.phone ?? company.users[0]?.phone ?? "").replace(/[^\d]/g, "");
   const whatsappUrl = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : null;
   let emailed = false;
+  let messaged: "WHATSAPP" | "SMS" | null = null;
+  // Phone channels: WhatsApp through the Cloud API when configured (else the wa.me link below), SMS through Unifonic.
+  const e164 = phone ? normaliseSaudiPhone(phone) : null;
+  if (channel === "WHATSAPP" && e164 && whatsappEnabled()) {
+    const st = await deliver({ channel: "WHATSAPP", to: e164, text, kind: "PRICE_REQUEST", userId: null, companyId });
+    if (st === "SENT") messaged = "WHATSAPP";
+  } else if (channel === "SMS" && e164) {
+    const st = await deliver({ channel: "SMS", to: e164, text, kind: "PRICE_REQUEST", userId: null, companyId });
+    if (st === "SENT" || st === "DEV") messaged = "SMS";
+  }
   const email = company.users[0]?.email;
   if (channel === "EMAIL" && email && mailEnabled) {
     const intro = requested.length
@@ -72,7 +84,7 @@ export async function createUpdateRequest(companyId: string, channel: "EMAIL" | 
     await sendMail(email, requested.length ? "Buyers are asking for your products on MySupplier" : "Please update your prices on MySupplier", layout(requested.length ? "Buyers are asking for these products" : "Update your prices", intro, { label: requested.length ? "Add my prices" : "Update prices", url: link }), text);
     emailed = true;
   }
-  return { companyId, companyName: company.name, link, whatsappUrl, emailed };
+  return { companyId, companyName: company.name, link, whatsappUrl, emailed, messaged };
 }
 
 router.get(
@@ -88,7 +100,7 @@ router.post(
   "/admin/outreach/requests",
   requireAuth("ADMIN"),
   asyncHandler(async (req, res) => {
-    const { companyIds, channel, message } = z.object({ companyIds: z.array(z.string()).min(1).max(200), channel: z.enum(["EMAIL", "WHATSAPP", "LINK"]), message: z.string().optional() }).parse(req.body);
+    const { companyIds, channel, message } = z.object({ companyIds: z.array(z.string()).min(1).max(200), channel: z.enum(["EMAIL", "WHATSAPP", "SMS", "LINK"]), message: z.string().optional() }).parse(req.body);
     const results = [];
     for (const id of companyIds) results.push(await createUpdateRequest(id, channel, req.user!.id, message));
     res.json(results);

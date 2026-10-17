@@ -32,6 +32,9 @@ export interface User {
   company?: Company | null;
   companyRole?: CompanyRole | null;
   phoneVerified?: boolean;
+  /** Phone alerts (WhatsApp / SMS) for orders, RFQs, bids and price requests. */
+  alertSms?: boolean;
+  alertWhatsapp?: boolean;
   createdAt: string;
 }
 

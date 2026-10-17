@@ -121,6 +121,9 @@ export function fileUrl(path: string | null | undefined): string | null {
   return `${API_ORIGIN}${path.startsWith("/") ? "" : "/"}${path}`;
 }
 
+export interface MessageLogEntry { id: string; userId: string | null; companyId: string | null; channel: "SMS" | "WHATSAPP"; kind: string; to: string; body: string; status: "SENT" | "FAILED" | "SKIPPED" | "DEV"; providerId: string | null; error: string | null; createdAt: string; user: { name: string; companyName: string | null } | null }
+export interface MessagingSummary { days: number; configured: { whatsapp: boolean; sms: boolean; template: string | null; dailyCap: number }; byChannel: Record<string, number>; byStatus: Record<string, number>; byKind: Record<string, number> }
+
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
 export const TOKEN_KEY = "ms_token";
@@ -553,7 +556,7 @@ export const api = {
   register: (payload: RegisterPayload) => request<AuthResponse>("/auth/register", { method: "POST", body: payload }),
   login: (payload: LoginPayload) => request<AuthResponse>("/auth/login", { method: "POST", body: payload }),
   me: () => request<User>("/auth/me"),
-  updateMe: (body: { name?: string; phone?: string; locale?: "en" | "ar" }) =>
+  updateMe: (body: { name?: string; phone?: string; locale?: "en" | "ar"; alertSms?: boolean; alertWhatsapp?: boolean }) =>
     request<User>("/auth/me", { method: "PATCH", body }),
   forgotPassword: (email: string) => request<{ ok: boolean }>("/auth/forgot-password", { method: "POST", body: { email } }),
   resetPassword: (token: string, password: string) =>
@@ -684,6 +687,8 @@ export const api = {
   adminDeleteReview: (id: string) => request<{ ok: boolean }>(`/admin/reviews/${encodeURIComponent(id)}`, { method: "DELETE" }),
   adminPayments: (query: { status?: string; provider?: string; q?: string; page?: number } = {}) => request<AdminPaymentsResponse>("/admin/payments", { query }),
   adminReports: (days = 30) => request<AdminReports>("/admin/reports", { query: { days } }),
+  adminMessages: (query: { channel?: string; status?: string; kind?: string; days?: number; page?: number } = {}) =>
+    request<Paginated<MessageLogEntry> & { summary: MessagingSummary }>("/admin/messages", { query }),
   adminAudit: (query: { entity?: string; action?: string; q?: string; page?: number } = {}) => request<Paginated<AuditLogEntry>>("/admin/audit", { query }),
   adminAnnouncements: (query: { page?: number } = {}) => request<Paginated<AuditLogEntry>>("/admin/announcements", { query }),
   adminSendAnnouncement: (body: AnnouncementPayload) => request<{ ok: boolean; recipients: number }>("/admin/announcements", { method: "POST", body }),

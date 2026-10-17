@@ -140,6 +140,7 @@ export const adminNav: NavItem[] = [
   { href: "/admin/credit", labelKey: "admin.credit", icon: <Icon>{I.card}</Icon>, group: "admin.group.partners" },
   { href: "/admin/shipping", labelKey: "admin.shipping", icon: <Icon>{I.truck}</Icon>, group: "admin.group.partners" },
   { href: "/admin/announcements", labelKey: "admin.announcements", icon: <Icon>{I.bell}</Icon>, group: "admin.group.system" },
+  { href: "/admin/messages", labelKey: "admin.messages", icon: <Icon>{I.megaphone}</Icon>, group: "admin.group.system" },
   { href: "/admin/audit", labelKey: "admin.audit", icon: <Icon>{I.clock}</Icon>, group: "admin.group.system" },
   { href: "/admin/settings", labelKey: "admin.settings", icon: <Icon>{I.cog}</Icon>, group: "admin.group.system" },
 ];

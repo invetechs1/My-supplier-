@@ -10,7 +10,7 @@ import { useFlash, usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { formatDate } from "@/lib/format";
 import { formatSaudiPhone, normaliseSaudiPhone } from "@/lib/phone";
-import { Alert, Badge, Button, Card, CardBody, CardHeader, FlashMessage, Input, LoadingBlock, Modal, PageHeader, Select, VerifiedBadge } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardBody, CardHeader, FlashMessage, Input, LoadingBlock, Modal, PageHeader, Select, VerifiedBadge, Toggle } from "@/components/ui";
 import { OtpCodeInput } from "@/components/OtpCodeInput";
 import { ResendButton } from "@/components/PhoneOtpLogin";
 
@@ -34,6 +34,8 @@ export default function AccountPage() {
   usePageTitle(t("nav.account"));
 
   const [profile, setProfile] = useState({ name: "", phone: "", locale: "en" as "en" | "ar" });
+  const [alerts, setAlerts] = useState({ alertSms: true, alertWhatsapp: true });
+  const [alertsBusy, setAlertsBusy] = useState(false);
   const [profileFlash, setProfileFlash] = useFlash();
   const [savingProfile, setSavingProfile] = useState(false);
 
@@ -60,7 +62,7 @@ export default function AccountPage() {
   }, [loading, user, router, pathname]);
 
   useEffect(() => {
-    if (user) setProfile({ name: user.name ?? "", phone: user.phone ?? "", locale: user.locale ?? "en" });
+    if (user) { setProfile({ name: user.name ?? "", phone: user.phone ?? "", locale: user.locale ?? "en" }); setAlerts({ alertSms: user.alertSms ?? true, alertWhatsapp: user.alertWhatsapp ?? true }); }
   }, [user]);
 
   if (loading || !user) return <LoadingBlock label={t("common.loading")} className="min-h-[60vh]" />;
@@ -239,6 +241,22 @@ export default function AccountPage() {
               <Select label="Preferred language" name="locale" value={profile.locale} onChange={(e) => setProfile({ ...profile, locale: e.target.value as "en" | "ar" })} options={[{ value: "en", label: "English" }, { value: "ar", label: "العربية" }]} />
               <Button type="submit" loading={savingProfile}>{t("common.save")}</Button>
             </form>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader title={t("account.alerts")} subtitle={t("account.alertsHint")} />
+          <CardBody className="space-y-4">
+            {[{ key: "alertWhatsapp" as const, label: "WhatsApp", hint: t("account.alertWhatsappHint") }, { key: "alertSms" as const, label: "SMS", hint: t("account.alertSmsHint") }].map((row) => (
+              <div key={row.key} className="flex items-start justify-between gap-4">
+                <div><p className="text-sm font-medium text-slate-900">{row.label}</p><p className="text-xs text-slate-500">{row.hint}</p></div>
+                <Toggle checked={alerts[row.key]} disabled={alertsBusy} label={row.label} onChange={async (next) => {
+                  const prev = alerts; const draft = { ...alerts, [row.key]: next }; setAlerts(draft); setAlertsBusy(true);
+                  try { await api.updateMe({ [row.key]: next }); } catch { setAlerts(prev); } finally { setAlertsBusy(false); }
+                }} />
+              </div>
+            ))}
+            {!normaliseSaudiPhone(profile.phone) && <p className="text-xs text-amber-700">{t("account.alertsNeedPhone")}</p>}
           </CardBody>
         </Card>
 

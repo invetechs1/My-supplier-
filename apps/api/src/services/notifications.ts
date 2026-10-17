@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
 import { escapeHtml, layout, mailEnabled, sendMail } from "./mailer";
 import { sendPush } from "./push";
+import { alertUsers, type AlertKind } from "./messaging";
 
 interface Notify {
   userIds: string[];
@@ -12,18 +13,21 @@ interface Notify {
   link?: string;
   /** Also email (default true for everything except SYSTEM). */
   email?: boolean;
+  /** Also WhatsApp/SMS to the phone (respects user preferences and the daily cap); optional Arabic copy. */
+  alert?: { kind: AlertKind; titleAr?: string; bodyAr?: string };
 }
 
 /**
  * Fan-out: in-app inbox (always) + Expo push to registered devices + email when SMTP is configured.
  * Push/email are best-effort and never fail the calling request.
  */
-export async function notify({ userIds, type, title, body, link, email }: Notify) {
+export async function notify({ userIds, type, title, body, link, email, alert }: Notify) {
   const unique = [...new Set(userIds)].filter(Boolean);
   if (!unique.length) return;
   await prisma.notification.createMany({ data: unique.map((userId) => ({ userId, type, title, body, link })) });
 
   void sendPush(unique, { title, body, data: { link, type } });
+  if (alert) void alertUsers({ userIds: unique, kind: alert.kind, title, body, link, titleAr: alert.titleAr, bodyAr: alert.bodyAr }).catch((e) => console.error("[alerts] failed", e));
 
   if ((email ?? type !== "SYSTEM") && mailEnabled) {
     const users = await prisma.user.findMany({ where: { id: { in: unique }, active: true }, select: { email: true, name: true } });

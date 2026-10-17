@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import { Screen, Button, Card, SectionHeader, TextField, KeyValue, RequireAuth } from "@/components";
@@ -30,6 +30,7 @@ function AccountContent() {
 
   const [name, setName] = useState(user?.name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
+  const [alertPrefs, setAlertPrefs] = useState({ alertSms: user?.alertSms ?? true, alertWhatsapp: user?.alertWhatsapp ?? true });
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -189,6 +190,17 @@ function AccountContent() {
         />
         {profileMsg ? <Text style={[styles.msg, { color: profileMsg.ok ? colors.success : colors.danger }]}>{profileMsg.text}</Text> : null}
         <Button title={t("save")} onPress={saveProfile} loading={savingProfile} fullWidth />
+      </Card>
+
+      <SectionHeader title={t("phoneAlerts")} />
+      <Card>
+        <Text style={[typography.caption, { marginBottom: spacing.sm }]}>{t("phoneAlertsHint")}</Text>
+        {([["alertWhatsapp", "WhatsApp"], ["alertSms", "SMS"]] as const).map(([key, label]) => (
+          <View key={key} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: spacing.xs }}>
+            <Text style={typography.body}>{label}</Text>
+            <Switch value={alertPrefs[key]} onValueChange={async (next) => { const prev = alertPrefs; setAlertPrefs({ ...alertPrefs, [key]: next }); try { const updated = await api.updateMe({ [key]: next }); setUser(updated); } catch { setAlertPrefs(prev); } }} trackColor={{ true: colors.primary }} />
+          </View>
+        ))}
       </Card>
 
       <SectionHeader title={t("verifyPhone")} />
