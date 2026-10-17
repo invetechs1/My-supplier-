@@ -8,6 +8,7 @@
 import { Prisma, type CarrierCode, type PaymentMethod } from "@prisma/client";
 import type { CartItemPricing, CreditInfo, ListingTier } from "@mysupplier/shared";
 import { prisma } from "../lib/prisma";
+import { track } from "./analytics";
 import { emitOrderWebhook } from "./webhooks";
 import { badRequest } from "../lib/errors";
 import { round2 } from "./pricing";
@@ -194,6 +195,8 @@ export interface CreateDirectOrdersInput {
   couponCode?: string | null;
   carrierBySupplier?: Record<string, CarrierCode>;
   recurringOrderId?: string | null;
+  /** Anonymous analytics session id (X-Session-Id header) so the order joins the visitor's funnel. */
+  sessionId?: string | null;
   now?: Date;
 }
 
@@ -293,6 +296,7 @@ export async function createDirectOrders(input: CreateDirectOrdersInput) {
       });
       orders.push(order);
       void emitOrderWebhook("order.created", order.id);
+      track("order_created", { userId: input.userId, role: "BUYER", city: input.deliveryCity, sessionId: input.sessionId ?? null, props: { total, items: g.lines.length, paymentMethod: input.paymentMethod, source: "DIRECT" } });
       await notify({
         userIds: await companyUserIds([g.companyId]),
         type: "ORDER_UPDATE",

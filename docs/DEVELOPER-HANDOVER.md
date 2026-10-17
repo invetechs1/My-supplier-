@@ -167,6 +167,8 @@ Redeploying after a code change is the same deploy.sh command. Migrations run au
 
 
 ### Admin console
+- **Phone alerts** (`services/messaging.ts`): WhatsApp Cloud API with Unifonic SMS fallback for new orders, RFQs, bids, order updates and price requests; per-user opt-out, daily cap, admin log at `/admin/messages`.
+- **Funnel & analytics** (`services/analytics.ts`, `/admin/analytics`): consent-gated browser events plus server-side conversions; shop and BOQ→RFQ funnels, top searches, pages, cities.
 - **Demand intelligence** (`services/demand.ts`, `routes/demand.ts`, admin page `/admin/demand`): BOQ lines, RFQ items and zero-result searches are clustered per product; admins are notified at 3/10/25/50 requests and weekly; the launch list ranks products by demand and shows per-city coverage against the "3 fresh offers per SKU" rule.
 
 - **Overview and reports:** KPIs, GMV and order trends with period-over-period change, average order value, RFQ conversion, top products, suppliers, categories and cities, payment-method split, CSV export.

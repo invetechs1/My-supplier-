@@ -10,6 +10,7 @@ import { nextReference } from "../lib/reference";
 import { activeListingWhere } from "../services/catalog";
 import { companyUserIds, notify } from "../services/notifications";
 import { recordDemand } from "../services/demand";
+import { sessionIdOf, track } from "../services/analytics";
 import {
   matchLine, materialTokens, normaliseUnit, optimise, parseBoqText, round2,
   type CatalogueMaterial, type LineForOptimiser, type OfferLike,
@@ -124,6 +125,7 @@ router.post(
     });
 
     // Demand intelligence: every analysed line is a signal (matched or not), recorded off the request path.
+    track("boq_analyzed", { userId: req.user?.id ?? null, role: req.user?.role ?? null, sessionId: sessionIdOf(req), city: body.city ?? null, props: { lines: lines.length, matched: result.matchedLines, unmatched: result.unmatchedLines } });
     void recordDemand(lines.map((l) => ({
       source: "BOQ" as const, rawText: l.description, quantity: l.quantity, unit: l.unit, city: body.city ?? null,
       materialId: l.match && l.match.confidence >= 0.45 ? l.match.material.id : null, confidence: l.match?.confidence ?? null,

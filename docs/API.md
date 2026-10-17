@@ -369,6 +369,14 @@ Every BOQ line (`POST /boq/analyze`), RFQ item (`POST /rfqs`) and shop search wi
 | POST | `/admin/demand/outreach` | `{ materialIds, city?, channel: EMAIL|WHATSAPP|LINK, companyIds?, note? }` → one price-update request per supplier (top 10 candidates when `companyIds` is omitted) with the products pre-filled on the magic-link page; matching demand groups become PLANNED |
 | POST | `/admin/demand/refresh` | Re-count coverage now and send the weekly digest if due |
 
+### Product analytics (first-party, consent-gated)
+Browser events are sent only after the visitor accepts analytics in the consent banner, keyed by an anonymous session id (`X-Session-Id` header on API calls so server-side conversions join the same session). Conversions (`order_created`, `rfq_created`, `boq_analyzed`, `signup_buyer`, `signup_supplier`, `bid_submitted`, `price_listed`) are recorded by the API. No personal data in props; events are purged after 180 days.
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/analytics/events` | `{ sessionId, events: [{ name, path?, city?, props?, at? }] }` (max 20; JSON or `text/plain` for `sendBeacon`) → `202 { accepted }`. Names: page_view, search, product_view, add_to_cart, checkout_start, boq_start, rfq_start, supplier_cta |
+| GET | `/admin/analytics/funnel?days=30` | Shop funnel (visit → search → product → cart → checkout → order) and BOQ → RFQ → bids funnel with step conversion, weekly series, top searches (with zero-result counts), top pages, activity by city, visits by role |
+
 ### Phone alerts (WhatsApp / SMS)
 New orders, new RFQs in the supplier's cities, bids received, bids won, order status changes and price requests are also sent to the phone: WhatsApp (Meta Cloud API, `WHATSAPP_*` env) first, Unifonic SMS as fallback, in the user's language, honouring `alertSms`/`alertWhatsapp` and a per-user daily cap (`ALERT_DAILY_CAP`, default 15). Every message is logged.
 

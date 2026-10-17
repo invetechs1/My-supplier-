@@ -120,6 +120,7 @@ export function navForRole(items: NavItem[], role: CompanyRole): NavItem[] {
 export const adminNav: NavItem[] = [
   { href: "/admin", labelKey: "dash.overview", exact: true, icon: <Icon>{I.home}</Icon>, group: "admin.group.overview" },
   { href: "/admin/reports", labelKey: "admin.reports", icon: <Icon>{I.chart}</Icon>, group: "admin.group.overview" },
+  { href: "/admin/analytics", labelKey: "admin.analytics", icon: <Icon>{I.sparkle}</Icon>, badge: "NEW", group: "admin.group.overview" },
   { href: "/admin/orders", labelKey: "admin.orders", icon: <Icon>{I.box}</Icon>, group: "admin.group.commerce" },
   { href: "/admin/payments", labelKey: "admin.payments", icon: <Icon>{I.card}</Icon>, group: "admin.group.commerce" },
   { href: "/admin/coupons", labelKey: "admin.coupons", icon: <Icon>{I.ticket}</Icon>, group: "admin.group.commerce" },

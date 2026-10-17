@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { SAUDI_CITIES, UNITS, type CreateRfqPayload, type Material } from "@mysupplier/shared";
 import { api, errorMessage } from "@/lib/api";
+import { track } from "@/lib/analytics";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { toDateTimeLocal } from "@/lib/format";
@@ -38,6 +39,7 @@ function NewRfqInner() {
   const materialId = params.get("materialId");
 
   const defaultCloses = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+  useEffect(() => { track("rfq_start"); }, []);
   const [form, setForm] = useState({
     title: "",
     deliveryCity: user?.company?.city ?? "Riyadh",

@@ -10,6 +10,7 @@ import { paged, paginate } from "../lib/pagination";
 import { nextReference } from "../lib/reference";
 import { companyUserIds, notify } from "../services/notifications";
 import { recordDemand } from "../services/demand";
+import { sessionIdOf, track } from "../services/analytics";
 import { bidTotal, rankBids } from "../services/pricing";
 import { recordOrderEvent } from "../services/portal";
 import { companyIdsOfUsers, emitOrderWebhook, emitWebhook } from "../services/webhooks";
@@ -114,6 +115,7 @@ router.post(
       alert: { kind: "NEW_RFQ", titleAr: `طلب تسعير جديد في ${body.deliveryCity}: ${body.title}`, bodyAr: `${body.items.length} بند. يغلق التقديم في ${body.closesAt.toISOString().slice(0, 10)}.` },
     });
     await emitWebhook("rfq.created", suppliers.map((s) => s.id), { rfq: shapeRfq(rfq) });
+    track("rfq_created", { userId: req.user!.id, role: req.user!.role, sessionId: sessionIdOf(req), city: body.deliveryCity, props: { items: body.items.length } });
     res.status(201).json(serialize({ ...shapeRfq(rfq), bidCount: 0, lowestBid: null }));
   }),
 );
@@ -304,6 +306,7 @@ router.post(
       alert: { kind: "NEW_BID", titleAr: `${existing ? "تحديث عطاء" : "عطاء جديد"} على ${rfq.reference}`, bodyAr: `${bid.company.name} قدّم ${totalPrice.toLocaleString("en-US")} ر.س (التوريد خلال ${body.deliveryDays} يوم).` },
     });
     await emitWebhook("bid.received", await companyIdsOfUsers([rfq.buyerId]), { bid, rfq: { id: rfq.id, reference: rfq.reference, title: rfq.title } });
+    if (!existing) track("bid_submitted", { userId: req.user!.id, role: "SUPPLIER", city: rfq.deliveryCity, props: { total: totalPrice } });
     res.status(existing ? 200 : 201).json(serialize(bid));
   }),
 );

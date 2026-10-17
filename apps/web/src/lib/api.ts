@@ -124,6 +124,17 @@ export function fileUrl(path: string | null | undefined): string | null {
 export interface MessageLogEntry { id: string; userId: string | null; companyId: string | null; channel: "SMS" | "WHATSAPP"; kind: string; to: string; body: string; status: "SENT" | "FAILED" | "SKIPPED" | "DEV"; providerId: string | null; error: string | null; createdAt: string; user: { name: string; companyName: string | null } | null }
 export interface MessagingSummary { days: number; configured: { whatsapp: boolean; sms: boolean; template: string | null; dailyCap: number }; byChannel: Record<string, number>; byStatus: Record<string, number>; byKind: Record<string, number> }
 
+/** Anonymous analytics session id (set by lib/analytics after consent); read lazily to avoid an import cycle. */
+function analyticsSessionId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const consent = window.localStorage.getItem("ms_consent");
+    if (!consent || (JSON.parse(consent) as { value?: string }).value !== "accepted") return null;
+    const raw = window.sessionStorage.getItem("ms_sid");
+    return raw ? (JSON.parse(raw) as { id: string }).id : null;
+  } catch { return null; }
+}
+
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
 export const TOKEN_KEY = "ms_token";
@@ -188,6 +199,8 @@ export async function requestWithHeaders<T>(path: string, options: RequestOption
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
+  const sid = analyticsSessionId();
+  if (sid) headers["X-Session-Id"] = sid;
 
   let res: Response;
   try {

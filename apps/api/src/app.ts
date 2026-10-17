@@ -34,6 +34,7 @@ import shippingRoutes from "./routes/shipping";
 import einvoiceRoutes from "./routes/einvoice";
 import adminCommerceRoutes from "./routes/adminCommerce";
 import demandRouter from "./routes/demand";
+import analyticsRouter from "./routes/analytics";
 import supplierProductRoutes from "./routes/supplierProducts";
 import commerceRoutes from "./routes/commerce";
 import marketplaceRoutes from "./routes/marketplace";
@@ -87,6 +88,7 @@ export function createApp() {
   api.use(adminRoutes);
   api.use(adminCommerceRoutes);
   api.use(demandRouter);
+  api.use(analyticsRouter);
   app.use("/api/v1", api);
   app.use("/uploads", express.static(PUBLIC_DIR, { maxAge: "7d", immutable: true }));
 

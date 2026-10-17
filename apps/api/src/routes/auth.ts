@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { sessionIdOf, track } from "../services/analytics";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
@@ -64,6 +65,7 @@ router.post(
       include: userInclude,
     });
     const token = signToken({ id: user.id, email: user.email, role: user.role, companyId: user.companyId, name: user.name, tokenVersion: user.tokenVersion });
+    track(user.role === "SUPPLIER" ? "signup_supplier" : "signup_buyer", { userId: user.id, role: user.role, sessionId: sessionIdOf(req), city: body.company?.city ?? null, props: { withCompany: Boolean(body.company) } });
     res.status(201).json({ token, user: serialize(user) });
   }),
 );

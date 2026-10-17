@@ -16,12 +16,13 @@ import { ResendButton } from "@/components/PhoneOtpLogin";
 
 /** Green "Phone verified" pill shown next to the phone field and in the profile header. */
 function PhoneVerifiedBadge() {
+  const { t } = useI18n();
   return (
     <Badge tone="green" className="gap-1">
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3" aria-hidden>
         <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
       </svg>
-      Phone verified
+      {t("account.phoneVerified")}
     </Badge>
   );
 }
@@ -70,7 +71,7 @@ export default function AccountPage() {
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (profile.name.trim().length < 2) {
-      setProfileFlash({ kind: "error", message: "Please enter your full name." });
+      setProfileFlash({ kind: "error", message: t("account.enterFullName") });
       return;
     }
     setSavingProfile(true);
@@ -78,7 +79,7 @@ export default function AccountPage() {
       await api.updateMe({ name: profile.name.trim(), phone: profile.phone.trim() || undefined, locale: profile.locale });
       await refresh();
       if (profile.locale !== lang) setLang(profile.locale);
-      setProfileFlash({ kind: "success", message: "Profile updated." });
+      setProfileFlash({ kind: "success", message: t("account.profileUpdated") });
     } catch (err) {
       setProfileFlash({ kind: "error", message: errorMessage(err) });
     } finally {
@@ -89,17 +90,17 @@ export default function AccountPage() {
   const changePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPwError(null);
-    if (!pw.current) return setPwError("Enter your current password.");
-    if (pw.next.length < 8) return setPwError("New password must be at least 8 characters.");
-    if (pw.next !== pw.confirm) return setPwError("New passwords do not match.");
-    if (pw.next === pw.current) return setPwError("Choose a password different from the current one.");
+    if (!pw.current) return setPwError(t("account.enterCurrentPassword"));
+    if (pw.next.length < 8) return setPwError(t("account.pwMinLength"));
+    if (pw.next !== pw.confirm) return setPwError(t("account.pwMismatch"));
+    if (pw.next === pw.current) return setPwError(t("account.pwSameAsCurrent"));
     setSavingPw(true);
     try {
       await api.changePassword(pw.current, pw.next);
       setPw({ current: "", next: "", confirm: "" });
-      setPwFlash({ kind: "success", message: "Password changed." });
+      setPwFlash({ kind: "success", message: t("account.passwordChanged") });
     } catch (err) {
-      setPwError(errorMessage(err, "Could not change the password."));
+      setPwError(errorMessage(err, t("account.passwordChangeFailed")));
     } finally {
       setSavingPw(false);
     }
@@ -112,7 +113,7 @@ export default function AccountPage() {
   const startVerifyPhone = async () => {
     const target = normaliseSaudiPhone(profile.phone);
     if (!target) {
-      setProfileFlash({ kind: "error", message: "Enter a valid Saudi mobile number (05xxxxxxxx) first." });
+      setProfileFlash({ kind: "error", message: t("account.enterValidSaudiMobile") });
       return;
     }
     setVerifyBusy(true);
@@ -130,7 +131,7 @@ export default function AccountPage() {
       setVerifyKey((k) => k + 1);
       setVerifyOpen(true);
     } catch (err) {
-      setProfileFlash({ kind: "error", message: errorMessage(err, "Could not send the verification code.") });
+      setProfileFlash({ kind: "error", message: errorMessage(err, t("account.sendCodeFailed")) });
     } finally {
       setVerifyBusy(false);
     }
@@ -157,9 +158,9 @@ export default function AccountPage() {
       await api.verifyPhone(code);
       await refresh();
       setVerifyOpen(false);
-      setProfileFlash({ kind: "success", message: "Phone number verified." });
+      setProfileFlash({ kind: "success", message: t("account.phoneNumberVerified") });
     } catch (err) {
-      setVerifyError(errorMessage(err, "Invalid or expired code."));
+      setVerifyError(errorMessage(err, t("account.invalidOrExpiredCode")));
     } finally {
       setVerifyBusy(false);
     }
@@ -174,7 +175,7 @@ export default function AccountPage() {
       logout();
       router.push("/");
     } catch (err) {
-      setDeleteError(errorMessage(err, "Could not delete the account."));
+      setDeleteError(errorMessage(err, t("account.deleteFailed")));
     } finally {
       setDeleting(false);
     }
@@ -186,10 +187,10 @@ export default function AccountPage() {
     <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
         title={t("nav.account")}
-        subtitle="Manage your profile, password and account."
+        subtitle={t("account.subtitle")}
         action={
           <Link href={homeForRole(user.role)} className="text-sm font-semibold text-brand-700 hover:underline">
-            ← {t("nav.dashboard")}
+            {t("common.backArrow")} {t("nav.dashboard")}
           </Link>
         }
       />
@@ -207,38 +208,38 @@ export default function AccountPage() {
                 {user.company.name} <VerifiedBadge verified={user.company.verified} />
               </span>
             )}
-            <span className="text-xs text-slate-400">Member since {formatDate(user.createdAt, lang)}</span>
+            <span className="text-xs text-slate-400">{t("account.memberSince")} {formatDate(user.createdAt, lang)}</span>
           </div>
         </div>
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Profile" subtitle="Your name and phone appear on RFQs, bids and invoices." />
+          <CardHeader title={t("account.profile")} subtitle={t("account.profileHint")} />
           <CardBody>
             <form onSubmit={saveProfile} className="space-y-4" noValidate>
               <FlashMessage flash={profileFlash} />
-              <Input label="Full name" name="name" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} required />
-              <Input label="Email" name="email" value={user.email} disabled hint="Contact support to change your email address." dir="ltr" />
+              <Input label={t("auth.name")} name="name" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} required />
+              <Input label={t("auth.email")} name="email" value={user.email} disabled hint={t("account.emailHint")} dir="ltr" />
               <div>
-                <Input label="Phone" name="phone" type="tel" dir="ltr" placeholder="+9665XXXXXXXX" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+                <Input label={t("orders.phone")} name="phone" type="tel" dir="ltr" placeholder="+9665XXXXXXXX" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {phoneVerified && !phoneDirty ? (
                     <>
                       <PhoneVerifiedBadge />
-                      <span className="text-xs text-slate-500">{formatSaudiPhone(savedPhone)} can receive order updates by SMS.</span>
+                      <span className="text-xs text-slate-500">{formatSaudiPhone(savedPhone)} {t("account.phoneCanReceiveSms")}</span>
                     </>
                   ) : (
                     <>
                       <Button type="button" size="sm" variant="outline" onClick={startVerifyPhone} loading={verifyBusy && !verifyOpen} disabled={!normaliseSaudiPhone(profile.phone)}>
-                        Verify phone
+                        {t("account.verifyPhone")}
                       </Button>
-                      <span className="text-xs text-slate-500">{phoneVerified && phoneDirty ? "Changing the number requires verifying it again." : "We will text a 6-digit code to confirm the number."}</span>
+                      <span className="text-xs text-slate-500">{phoneVerified && phoneDirty ? t("account.reverifyHint") : t("account.verifyHint")}</span>
                     </>
                   )}
                 </div>
               </div>
-              <Select label="Preferred language" name="locale" value={profile.locale} onChange={(e) => setProfile({ ...profile, locale: e.target.value as "en" | "ar" })} options={[{ value: "en", label: "English" }, { value: "ar", label: "العربية" }]} />
+              <Select label={t("account.preferredLanguage")} name="locale" value={profile.locale} onChange={(e) => setProfile({ ...profile, locale: e.target.value as "en" | "ar" })} options={[{ value: "en", label: "English" }, { value: "ar", label: "العربية" }]} />
               <Button type="submit" loading={savingProfile}>{t("common.save")}</Button>
             </form>
           </CardBody>
@@ -261,48 +262,48 @@ export default function AccountPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Change password" subtitle="Use at least 8 characters. You stay signed in on this device." />
+          <CardHeader title={t("account.changePassword")} subtitle={t("account.changePasswordHint")} />
           <CardBody>
             <form onSubmit={changePassword} className="space-y-4" noValidate>
               <FlashMessage flash={pwFlash} />
               {pwError && <Alert>{pwError}</Alert>}
-              <Input label="Current password" name="currentPassword" type="password" autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} required />
-              <Input label="New password" name="newPassword" type="password" autoComplete="new-password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} required />
-              <Input label="Confirm new password" name="confirmPassword" type="password" autoComplete="new-password" value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} required />
-              <Button type="submit" variant="outline" loading={savingPw}>Update password</Button>
+              <Input label={t("account.currentPassword")} name="currentPassword" type="password" autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} required />
+              <Input label={t("account.newPassword")} name="newPassword" type="password" autoComplete="new-password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} required />
+              <Input label={t("account.confirmNewPassword")} name="confirmPassword" type="password" autoComplete="new-password" value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} required />
+              <Button type="submit" variant="outline" loading={savingPw}>{t("account.updatePassword")}</Button>
             </form>
           </CardBody>
         </Card>
       </div>
 
       <Card className="mt-6 border-red-200">
-        <CardHeader title={<span className="text-red-700">Danger zone</span>} subtitle="Deleting your account deactivates it and removes your access. Orders and invoices are retained as required by Saudi tax regulations." />
+        <CardHeader title={<span className="text-red-700">{t("account.dangerZone")}</span>} subtitle={t("account.dangerZoneHint")} />
         <CardBody className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-slate-600">This cannot be undone from the app. Contact support if you change your mind.</p>
+          <p className="text-sm text-slate-600">{t("account.deleteIrreversible")}</p>
           <Button variant="danger" onClick={() => { setDeleteConfirm(""); setDeleteError(null); setDeleteOpen(true); }}>
-            Delete my account
+            {t("account.deleteMyAccount")}
           </Button>
         </CardBody>
       </Card>
 
       <Modal
         open={verifyOpen}
-        title="Verify your phone"
+        title={t("account.verifyYourPhone")}
         onClose={() => (verifyBusy ? undefined : setVerifyOpen(false))}
         footer={
           <>
             <Button variant="outline" onClick={() => setVerifyOpen(false)} disabled={verifyBusy}>{t("common.cancel")}</Button>
-            <Button onClick={() => confirmVerifyPhone()} loading={verifyBusy} disabled={verifyCode.length !== 6}>Confirm</Button>
+            <Button onClick={() => confirmVerifyPhone()} loading={verifyBusy} disabled={verifyCode.length !== 6}>{t("account.confirm")}</Button>
           </>
         }
       >
         <div className="space-y-4 text-sm text-slate-600">
-          <p>Enter the 6-digit code we sent to <span className="font-semibold text-slate-900" dir="ltr">{formatSaudiPhone(verifyPhone)}</span>.</p>
+          <p>{t("account.enterCodeSentTo")} <span className="font-semibold text-slate-900" dir="ltr">{formatSaudiPhone(verifyPhone)}</span>.</p>
           {verifyError && <Alert>{verifyError}</Alert>}
           <OtpCodeInput value={verifyCode} onChange={setVerifyCode} onComplete={(c) => void confirmVerifyPhone(c)} disabled={verifyBusy} autoFocus error={!!verifyError} />
           {verifyDevCode && (
             <Alert kind="info" className="text-xs">
-              <span className="font-semibold">Development mode:</span> your code is <button type="button" className="font-mono font-bold underline" onClick={() => setVerifyCode(verifyDevCode)}>{verifyDevCode}</button>.
+              <span className="font-semibold">{t("account.devMode")}</span> {t("account.yourCodeIs")} <button type="button" className="font-mono font-bold underline" onClick={() => setVerifyCode(verifyDevCode)}>{verifyDevCode}</button>.
             </Alert>
           )}
           <div className="flex justify-end">
@@ -313,21 +314,21 @@ export default function AccountPage() {
 
       <Modal
         open={deleteOpen}
-        title="Delete your account?"
+        title={t("account.deleteAccountQuestion")}
         onClose={() => (deleting ? undefined : setDeleteOpen(false))}
         footer={
           <>
             <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting}>{t("common.cancel")}</Button>
             <Button variant="danger" onClick={deleteAccount} loading={deleting} disabled={deleteConfirm.trim().toUpperCase() !== "DELETE"}>
-              Permanently delete
+              {t("account.permanentlyDelete")}
             </Button>
           </>
         }
       >
         <div className="space-y-3 text-sm text-slate-600">
-          <p>Your account <strong className="text-slate-900">{user.email}</strong> will be deactivated immediately and you will be signed out. Open RFQs and bids will be closed.</p>
+          <p>{t("account.deleteWarn1")} <strong className="text-slate-900">{user.email}</strong> {t("account.deleteWarn2")}</p>
           {deleteError && <Alert>{deleteError}</Alert>}
-          <Input label="Type DELETE to confirm" name="deleteConfirm" value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} autoComplete="off" dir="ltr" />
+          <Input label={t("account.typeDeleteToConfirm")} name="deleteConfirm" value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} autoComplete="off" dir="ltr" />
         </div>
       </Modal>
     </div>

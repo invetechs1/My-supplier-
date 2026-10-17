@@ -11,6 +11,7 @@ import { snapshotHistory } from "../services/catalog";
 import { importCatalog, type ImportRow } from "../services/catalogImport";
 import { validateTiers } from "../services/commerce";
 import { applyStockMovement } from "../services/portal";
+import { track } from "../services/analytics";
 
 const router = Router();
 
@@ -67,6 +68,7 @@ router.post(
       if (existing) throw conflict(`You already list ${material.name} in ${body.city} at SAR ${Number(existing.price)}. Edit that offer or confirm the overwrite.`);
     }
     const listing = await upsertPrice(companyId, body);
+    track("price_listed", { userId: req.user!.id, role: "SUPPLIER", city: body.city, props: { overwrite } });
     await snapshotHistory([body.materialId]);
     res.status(201).json(serialize(listing));
   }),

@@ -1381,3 +1381,20 @@ model MessageLog {
   @@index([userId, createdAt])
   @@index([createdAt])
 }
+
+// ------------------------------------------------------------------ product analytics (first-party, consent-gated)
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  name      String
+  sessionId String?
+  userId    String?
+  role      String?
+  path      String?
+  city      String?
+  props     Json?
+  createdAt DateTime @default(now())
+
+  @@index([name, createdAt])
+  @@index([sessionId, createdAt])
+  @@index([createdAt])
+}

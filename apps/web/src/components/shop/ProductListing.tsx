@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { marketplaceApi } from "@/lib/api/marketplace";
+import { track } from "@/lib/analytics";
 import { useAsync, usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/format";
@@ -100,6 +101,11 @@ export function ProductListing({
       }),
     [filters.q, filters.categoryId, filters.city, brandParam, filters.minPrice, filters.maxPrice, filters.inStock, filters.minRating, filters.sort, filters.page, specKey],
   );
+  useEffect(() => {
+    if (!products.data) return;
+    if (filters.q || filters.categoryId || brandParam) track("search", { q: filters.q || undefined, categoryId: filters.categoryId || undefined, brand: brandParam || undefined, results: products.data.total }, { city: filters.city || null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products.data]);
 
   const facets = products.data?.facets ?? null;
   const categoryList = categories.data ?? [];

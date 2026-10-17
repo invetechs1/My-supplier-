@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { sessionIdOf } from "../services/analytics";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
@@ -162,7 +163,7 @@ router.post("/checkout", asyncHandler(async (req, res) => {
       userId, groups: groupBySupplier(cart.items),
       deliveryCity: deliveryCity!, deliveryAddress: deliveryAddress!, contactPhone: contactPhone!,
       paymentMethod: body.paymentMethod, notes: body.notes, addressId: body.addressId, poNumber: body.poNumber || undefined,
-      couponCode: body.couponCode, carrierBySupplier: body.carrierBySupplier,
+      couponCode: body.couponCode, carrierBySupplier: body.carrierBySupplier, sessionId: sessionIdOf(req),
     });
   } catch (err) {
     await prisma.cartItem.createMany({ data: cart.items.map((i) => ({ cartId: cart.id, listingId: i.listingId, quantity: i.quantity })), skipDuplicates: true }).catch(() => undefined);

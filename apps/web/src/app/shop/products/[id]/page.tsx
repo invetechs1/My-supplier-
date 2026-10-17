@@ -8,6 +8,7 @@ import { type MaterialWithLogistics } from "@/lib/api";
 import { asPriced, bestTier, fileUrl, isOnSale, marketplaceApi, nextTierFor, savingsPercent, tierFor, unitPriceFor, videoEmbedUrl, type PricedOffer } from "@/lib/api/marketplace";
 import { clampQty, isPurchasable, minQtyFor, useCart } from "@/lib/cart";
 import { useAsync, usePageTitle } from "@/lib/hooks";
+import { track } from "@/lib/analytics";
 import { useI18n } from "@/lib/i18n";
 import { cn, formatDate, formatSar, safeHref } from "@/lib/format";
 import { Alert, Badge, Button, Card, CardHeader, EmptyState, LoadingBlock, SourceBadge, Stars, Table, VerifiedBadge, type Column } from "@/components/ui";
@@ -129,6 +130,7 @@ export default function ShopProductPage() {
   const state = useAsync(() => marketplaceApi.product(id, deliveryCity || undefined), [id, deliveryCity]);
 
   const p = state.data;
+  useEffect(() => { if (p) track("product_view", { productId: p.id, categoryId: p.category?.id, offers: p.offers?.length ?? 0, hasBest: Boolean(p.bestOffer) }, { city: deliveryCity || null }); }, [p?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const offers = useMemo(() => (p?.offers ?? []).map((o) => asPriced(o)!).sort((a, b) => a.effectivePrice - b.effectivePrice), [p?.offers]);
   const best: PricedOffer | null = asPriced(p?.bestOffer) ?? offers.find((o) => isPurchasable(o)) ?? offers[0] ?? null;
   const [qty, setQty] = useState(1);
@@ -171,6 +173,7 @@ export default function ShopProductPage() {
     setPending(mode);
     try {
       const ok = await add(best.listingId, clampQty(best, qty), { offer: best, material: p });
+      if (ok) track("add_to_cart", { productId: p.id, qty: clampQty(best, qty), price: best.effectivePrice }, { city: deliveryCity || null });
       if (ok && mode === "buy") router.push("/cart");
     } finally {
       setPending(null);

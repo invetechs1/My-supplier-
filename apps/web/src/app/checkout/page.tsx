@@ -12,6 +12,7 @@ import { supplierKey, useCart } from "@/lib/cart";
 import { SupplierDeliveryChooser } from "@/components/shop/DeliveryOptions";
 import { LinePricingSummary } from "@/app/cart/LinePricing";
 import { useAsync, usePageTitle } from "@/lib/hooks";
+import { track } from "@/lib/analytics";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { usePaymentConfig } from "@/lib/payments";
 import { cn, formatSar } from "@/lib/format";
@@ -156,6 +157,7 @@ export default function CheckoutPage() {
   const { config: paymentConfig } = usePaymentConfig();
   const cardEnabled = !!paymentConfig?.cardPaymentsEnabled;
   usePageTitle(t("checkout.title"));
+  useEffect(() => { track("checkout_start"); }, []);
   const paymentMethodLabel = (value: string | null | undefined) => {
     const m = PAYMENT_METHODS.find((x) => x.value === value);
     return m ? t(m.labelKey) : value ?? "";
