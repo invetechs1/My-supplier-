@@ -27,7 +27,7 @@
 | Web routes (pages) | 97 |
 | Mobile screens | 42 |
 | Database models | 57 |
-| Database migrations | 13 (all must be applied) |
+| Database migrations | 17 (all must be applied) |
 | Background jobs | 3 (daily price snapshot; hourly price alerts, recurring orders, demand-coverage refresh and weekly demand digest; webhook dispatcher every minute) |
 | Automated tests | 111 API unit tests, API smoke script, Playwright browser e2e (10 checks), 178-page render sweep |
 | Standard catalogue (seed) | 62 categories, 1,305 products, 185 category attributes, 39 demo suppliers, ~12,000 price listings |
@@ -141,7 +141,7 @@ Copy from `deploy/.env.production.example`. The API refuses to start without the
 Never commit `deploy/.env`; rotate any key that was ever pasted into chat or a ticket.
 
 ### 3.4 Database
-- All **13 migrations applied**: `docker compose exec api npx prisma migrate status` must print "Database schema is up to date". The api container runs `prisma migrate deploy` on every start; if it fails, the api never becomes healthy — read `docker compose logs api`.
+- All **17 migrations applied**: `docker compose exec api npx prisma migrate status` must print "Database schema is up to date". The api container runs `prisma migrate deploy` on every start; if it fails, the api never becomes healthy — read `docker compose logs api`.
 - Extension `pg_trgm` installed (created by migration `pg_trgm_search`) — fuzzy search depends on it.
 - **Catalogue present**: 62 categories and the standard products. Production: `SEED_MODE=catalogue npx tsx prisma/seed.ts` (catalogue only), then `seed-admin.ts` (your administrator) and `seed-house.ts` (the Phase 0 “MySupplier Direct” seller with the 50 Riyadh products) — see GO-LIVE §3b. Staging only: `deploy/scripts/seed-demo.sh` (demo suppliers, accounts and orders; refused in production). An empty shop means the seed was never run.
 - Demo accounts (`admin@mysupplier.sa / Admin123!`, `buyer@…`, `supplier@…`, `warehouse@…`, `sales@<supplier>.sa`) **must be deleted or given new passwords** before the public launch; create the real admin account.
@@ -230,7 +230,7 @@ docker compose -f deploy/docker-compose.prod.yml exec caddy caddy list-certifica
 |---|---|---|---|---|
 | 1 | Deployed commit = reference commit (`5105139` or newer) | `git rev-parse --short HEAD` output | | |
 | 2 | 5 containers Up, db and api healthy | `docker compose ps` output | | |
-| 3 | `prisma migrate status` = up to date (13 migrations) | log line | | |
+| 3 | `prisma migrate status` = up to date (17 migrations) | log line | | |
 | 4 | `verify-deployment.sh` → 0 FAIL | script summary line | | |
 | 5 | Catalogue counts (categories ≥ 62, products > 0) | SQL output | | |
 | 6 | Demo accounts removed / passwords changed; real admin created | admin user list | | |

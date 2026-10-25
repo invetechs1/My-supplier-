@@ -182,6 +182,8 @@ model Company {
   citiesServed String[]      @default([])
   minOrderValue Decimal?     @db.Decimal(14, 2)
   deliveryFee   Decimal?     @db.Decimal(14, 2)
+  // Order subtotal (excl. VAT) from which the supplier delivers for free; null = never.
+  freeDeliveryAbove Decimal? @db.Decimal(14, 2)
   deliveryDays  Int?
   workingHours  String?
   email         String?

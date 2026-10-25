@@ -14,7 +14,7 @@ import { badRequest } from "../lib/errors";
 import { round2 } from "./pricing";
 import { VAT_RATE, deliveryFee, isPurchasable, toOffer, type ListingWithCompany } from "./shop";
 import { applyStockMovement } from "./portal";
-import { carrierName, quoteForSupplier } from "./shipping";
+import { carrierName, quoteForSupplier, isFreeDelivery } from "./shipping";
 import { splitDiscount, validateCoupon } from "./coupons";
 import { companyUserIds, notify } from "./notifications";
 
@@ -169,12 +169,18 @@ export function groupBySupplier(lines: OrderLine[]): OrderGroup[] {
 
 export type SupplierQuote = Awaited<ReturnType<typeof quoteForSupplier>>["quotes"][number];
 
+/** Fallback fee (no carrier quote) honouring the supplier's free-delivery threshold. Pure. */
+export function feeWithFreeDelivery(fee: number, subtotal: number, freeAbove: number | null | undefined): number {
+  return isFreeDelivery(subtotal, freeAbove) ? 0 : fee;
+}
+
 /** Cheapest (or chosen) delivery quote per supplier for a set of lines (null when quoting is impossible). */
 export async function quotesForGroups(groups: OrderGroup[], deliveryCity?: string, carrierBySupplier: Record<string, CarrierCode> = {}) {
   const out: Record<string, SupplierQuote | null> = {};
   if (!deliveryCity) return out;
   for (const g of groups) {
-    const { quotes } = await quoteForSupplier(g.companyId, g.items.map((i) => ({ materialId: i.listing.materialId, quantity: i.quantity })), deliveryCity);
+    const subtotal = round2(g.items.reduce((s, i) => s + Number(i.listing.price) * i.quantity, 0));
+    const { quotes } = await quoteForSupplier(g.companyId, g.items.map((i) => ({ materialId: i.listing.materialId, quantity: i.quantity })), deliveryCity, undefined, subtotal);
     const wanted = carrierBySupplier[g.companyId];
     out[g.companyId] = (wanted ? quotes.find((q) => q.carrier === wanted) : undefined) ?? quotes[0] ?? null;
   }
@@ -242,8 +248,9 @@ export async function createDirectOrders(input: CreateDirectOrdersInput) {
     const subtotal = groupSubtotals[gi];
     const discount = discounts[gi];
     const vat = round2((subtotal - discount) * VAT_RATE);
+    const freeAbove = g.items[0].listing.company?.freeDeliveryAbove;
     const quote = quotes[g.companyId] ?? null;
-    const fee = quote?.price ?? deliveryFee(g.items[0].listing.city, input.deliveryCity);
+    const fee = quote?.price ?? feeWithFreeDelivery(deliveryFee(g.items[0].listing.city, input.deliveryCity), subtotal, freeAbove === null || freeAbove === undefined ? null : Number(freeAbove));
     return { subtotal, discount, vat, fee, quote, total: round2(subtotal - discount + vat + fee) };
   });
   const grandTotal = round2(totals.reduce((s, t) => s + t.total, 0));

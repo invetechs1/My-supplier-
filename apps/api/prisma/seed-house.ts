@@ -23,15 +23,16 @@ export const HOUSE_COMPANY = {
   city: "Riyadh",
   region: "Central",
   description:
-    "Fulfilled directly by the MySupplier team in Riyadh: we source from authorised distributors and factories, check quality on pickup and deliver to your site, usually next working day. Tax invoice from MySupplier, cash on delivery or bank transfer, returns within 48 hours for unopened goods.",
+    "Fulfilled directly by the MySupplier team in Riyadh: we source from authorised distributors and factories, check quality on pickup and deliver to your site, usually next working day (orders confirmed before 14:00). Delivery 120 SAR per order anywhere in Riyadh, free for orders above 3,000 SAR. Tax invoice from MySupplier, cash on delivery or bank transfer, returns within 48 hours for unopened goods.",
   descriptionAr:
-    "يُنفَّذ مباشرةً من فريق موردي في الرياض: نشتري من الموزعين والمصانع المعتمدين، نفحص الجودة عند الاستلام ونوصّل إلى موقعك عادةً في يوم العمل التالي. فاتورة ضريبية من موردي، الدفع عند الاستلام أو تحويل بنكي، والإرجاع خلال 48 ساعة للبضاعة غير المفتوحة.",
+    "يُنفَّذ مباشرةً من فريق موردي في الرياض: نشتري من الموزعين والمصانع المعتمدين، نفحص الجودة عند الاستلام ونوصّل إلى موقعك عادةً في يوم العمل التالي (للطلبات المؤكدة قبل الساعة 2 ظهراً). التوصيل 120 ر.س للطلب داخل الرياض، ومجاني للطلبات فوق 3,000 ر.س. فاتورة ضريبية من موردي، الدفع عند الاستلام أو تحويل بنكي، والإرجاع خلال 48 ساعة للبضاعة غير المفتوحة.",
   phone: process.env.HOUSE_SUPPLIER_PHONE ?? "+966500000000",
   email: process.env.HOUSE_SUPPLIER_EMAIL ?? "direct@mysupplier.sa",
   workingHours: "Sat–Thu 7:00–18:00",
   deliveryDays: 1,
   minOrderValue: 300,
   deliveryFee: 120,
+  freeDeliveryAbove: 3000,
 };
 
 /** sku, list price (SAR excl. VAT), min qty, lead time days, sourcing note for the ops team. */
@@ -109,7 +110,7 @@ async function main() {
   const company = await prisma.company.upsert({
     where: { slug: HOUSE_COMPANY.slug },
     create: { ...HOUSE_COMPANY, type: "SUPPLIER", verified: true, verificationStatus: "VERIFIED", citiesServed: ["Riyadh"], branches: { create: { name: "Riyadh hub", city: "Riyadh", address: "Riyadh", phone: HOUSE_COMPANY.phone, isDefault: true } } },
-    update: { name: HOUSE_COMPANY.name, nameAr: HOUSE_COMPANY.nameAr, description: HOUSE_COMPANY.description, descriptionAr: HOUSE_COMPANY.descriptionAr, deliveryDays: HOUSE_COMPANY.deliveryDays, minOrderValue: HOUSE_COMPANY.minOrderValue, deliveryFee: HOUSE_COMPANY.deliveryFee, workingHours: HOUSE_COMPANY.workingHours, verified: true, verificationStatus: "VERIFIED" },
+    update: { name: HOUSE_COMPANY.name, nameAr: HOUSE_COMPANY.nameAr, description: HOUSE_COMPANY.description, descriptionAr: HOUSE_COMPANY.descriptionAr, deliveryDays: HOUSE_COMPANY.deliveryDays, minOrderValue: HOUSE_COMPANY.minOrderValue, deliveryFee: HOUSE_COMPANY.deliveryFee, freeDeliveryAbove: HOUSE_COMPANY.freeDeliveryAbove, workingHours: HOUSE_COMPANY.workingHours, verified: true, verificationStatus: "VERIFIED" },
   });
 
   const password = process.env.HOUSE_SUPPLIER_PASSWORD ?? crypto.randomBytes(9).toString("base64url");

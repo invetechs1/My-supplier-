@@ -11,7 +11,7 @@ import { notify } from "../services/notifications";
 import { DELIVERY_FEE_SAME_CITY, VAT_RATE, deliveryFee, toOffer } from "../services/shop";
 import { round2 } from "../services/pricing";
 import { publicCoupon, validateCoupon } from "../services/coupons";
-import { assertPurchasable, createDirectOrders, creditInfoFor, groupBySupplier, orderLineInclude, pricingFor, quotesForGroups } from "../services/commerce";
+import { assertPurchasable, createDirectOrders, creditInfoFor, groupBySupplier, orderLineInclude, pricingFor, quotesForGroups, feeWithFreeDelivery } from "../services/commerce";
 import type { CarrierCode } from "@prisma/client";
 
 const router = Router();
@@ -52,7 +52,20 @@ export async function shapeCart(cart: CartRow, deliveryCity?: string, carrierByS
   for (const i of items) if (i.offer.companyId) supplierCities.set(i.offer.companyId, i.offer.city);
   const groups = groupBySupplier(cart.items);
   const quotes = await quotesForGroups(groups, deliveryCity, carrierBySupplier);
-  const fee = [...supplierCities.entries()].reduce((s, [companyId, c]) => s + (quotes[companyId]?.price ?? (deliveryCity ? deliveryFee(c, deliveryCity) : DELIVERY_FEE_SAME_CITY)), 0);
+  // Per-supplier subtotal decides "free delivery above" thresholds for the flat-fee fallback (quotes already apply it).
+  const subtotalBy = new Map<string, number>();
+  const freeAboveBy = new Map<string, number | null>();
+  for (const i of items) {
+    if (!i.offer.companyId) continue;
+    subtotalBy.set(i.offer.companyId, round2((subtotalBy.get(i.offer.companyId) ?? 0) + i.lineTotal));
+  }
+  const publishedFeeBy = new Map<string, number | null>();
+  for (const ci of cart.items) {
+    if (!ci.listing.companyId) continue;
+    freeAboveBy.set(ci.listing.companyId, ci.listing.company?.freeDeliveryAbove === null || ci.listing.company?.freeDeliveryAbove === undefined ? null : Number(ci.listing.company.freeDeliveryAbove));
+    publishedFeeBy.set(ci.listing.companyId, ci.listing.company?.deliveryFee === null || ci.listing.company?.deliveryFee === undefined ? null : Number(ci.listing.company.deliveryFee));
+  }
+  const fee = [...supplierCities.entries()].reduce((s, [companyId, c]) => s + (quotes[companyId]?.price ?? feeWithFreeDelivery(deliveryCity ? deliveryFee(c, deliveryCity) : publishedFeeBy.get(companyId) ?? DELIVERY_FEE_SAME_CITY, subtotalBy.get(companyId) ?? 0, freeAboveBy.get(companyId))), 0);
   const check = await validateCoupon(couponCode, subtotal);
   const discount = check?.ok ? check.discount : 0;
   const vat = round2((subtotal - discount) * VAT_RATE);

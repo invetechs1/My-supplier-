@@ -157,6 +157,7 @@ export default function SupplierProfilePage() {
               <dl className="space-y-1.5">
                 <div className="flex justify-between"><dt className="text-slate-500">Minimum order</dt><dd className="font-medium text-slate-900">{c.minOrderValue ? formatSar(c.minOrderValue, lang) : "None"}</dd></div>
                 <div className="flex justify-between"><dt className="text-slate-500">Delivery fee</dt><dd className="font-medium text-slate-900">{c.deliveryFee === 0 ? "Free" : c.deliveryFee ? formatSar(c.deliveryFee, lang) : "Quoted per order"}</dd></div>
+                {c.freeDeliveryAbove ? <div className="flex justify-between"><dt className="text-slate-500">Free delivery</dt><dd className="font-medium text-emerald-700">Orders above {formatSar(c.freeDeliveryAbove, lang)}</dd></div> : null}
                 <div className="flex justify-between"><dt className="text-slate-500">Delivery time</dt><dd className="font-medium text-slate-900">{c.deliveryDays !== null && c.deliveryDays !== undefined ? `${c.deliveryDays} day${c.deliveryDays === 1 ? "" : "s"}` : "Per listing"}</dd></div>
               </dl>
             </div>

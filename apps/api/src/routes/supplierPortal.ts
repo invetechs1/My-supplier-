@@ -106,7 +106,7 @@ const profileSchema = z.object({
   name: z.string().min(2).optional(), nameAr: z.string().nullable().optional(), slug: z.string().min(3).max(60).regex(/^[a-z0-9-]+$/).nullable().optional(),
   description: z.string().max(3000).nullable().optional(), descriptionAr: z.string().max(3000).nullable().optional(),
   citiesServed: z.array(z.string()).max(30).optional(), minOrderValue: z.coerce.number().nonnegative().nullable().optional(),
-  deliveryFee: z.coerce.number().nonnegative().nullable().optional(), deliveryDays: z.coerce.number().int().min(0).nullable().optional(),
+  deliveryFee: z.coerce.number().nonnegative().nullable().optional(), freeDeliveryAbove: z.coerce.number().nonnegative().nullable().optional(), deliveryDays: z.coerce.number().int().min(0).nullable().optional(),
   workingHours: z.string().max(200).nullable().optional(), phone: z.string().nullable().optional(), email: z.string().email().nullable().optional(),
   website: httpUrl.nullable().optional(), bankName: z.string().nullable().optional(), iban: z.string().nullable().optional(), beneficiary: z.string().nullable().optional(),
   lowStockThreshold: z.coerce.number().int().min(0).optional(), city: z.string().optional(), crNumber: z.string().nullable().optional(), vatNumber: z.string().nullable().optional(),

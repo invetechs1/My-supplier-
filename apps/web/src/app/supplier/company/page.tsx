@@ -20,6 +20,7 @@ interface FormState {
   citiesServed: string[];
   minOrderValue: string;
   deliveryFee: string;
+  freeDeliveryAbove: string;
   deliveryDays: string;
   workingHours: string;
   phone: string;
@@ -43,6 +44,7 @@ function toForm(c: CompanyProfile): FormState {
     citiesServed: Array.isArray(c.citiesServed) ? [...c.citiesServed] : [],
     minOrderValue: str(c.minOrderValue),
     deliveryFee: str(c.deliveryFee),
+    freeDeliveryAbove: str(c.freeDeliveryAbove),
     deliveryDays: str(c.deliveryDays),
     workingHours: str(c.workingHours),
     phone: str(c.phone),
@@ -159,7 +161,7 @@ function CompanyPageInner() {
     if (form.slug && !/^[a-z0-9؀-ۿ]+(?:-[a-z0-9؀-ۿ]+)*$/.test(form.slug)) next.slug = t("sup.company.errSlug");
     if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) next.email = t("sup.company.errEmail");
     if (form.website && !/^https?:\/\//i.test(form.website)) next.website = t("sup.company.errWebsite");
-    for (const key of ["minOrderValue", "deliveryFee", "deliveryDays", "lowStockThreshold"] as const) {
+    for (const key of ["minOrderValue", "deliveryFee", "freeDeliveryAbove", "deliveryDays", "lowStockThreshold"] as const) {
       const v = form[key];
       if (v.trim() !== "" && (Number.isNaN(Number(v)) || Number(v) < 0)) next[key] = t("sup.company.errNumber");
     }
@@ -180,6 +182,7 @@ function CompanyPageInner() {
       citiesServed: form.citiesServed,
       minOrderValue: numOrNull(form.minOrderValue),
       deliveryFee: numOrNull(form.deliveryFee),
+      freeDeliveryAbove: numOrNull(form.freeDeliveryAbove),
       deliveryDays: numOrNull(form.deliveryDays),
       workingHours: form.workingHours.trim() || null,
       phone: form.phone.trim() || null,
@@ -300,9 +303,10 @@ function CompanyPageInner() {
               </div>
               <p className="mt-2 text-xs text-slate-500">{form.citiesServed.length} {t("sup.company.of")} {SAUDI_CITIES.length} {t("sup.company.citiesSelected")}{form.citiesServed.length === 0 ? ` – ${t("sup.company.defaultsTo")} ${c.city}` : ""}.</p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
               <Input label={t("sup.company.minOrder")} name="minOrderValue" type="number" min={0} step="0.01" dir="ltr" value={form.minOrderValue} onChange={(e) => set("minOrderValue", e.target.value)} error={errors.minOrderValue} />
               <Input label={t("sup.company.deliveryFee")} name="deliveryFee" type="number" min={0} step="0.01" dir="ltr" value={form.deliveryFee} onChange={(e) => set("deliveryFee", e.target.value)} error={errors.deliveryFee} hint={t("sup.company.deliveryFeeHint")} />
+              <Input label={t("sup.company.freeDeliveryAbove")} name="freeDeliveryAbove" type="number" min={0} step="1" dir="ltr" value={form.freeDeliveryAbove} onChange={(e) => set("freeDeliveryAbove", e.target.value)} error={errors.freeDeliveryAbove} hint={t("sup.company.freeDeliveryAboveHint")} placeholder="3000" />
               <Input label={t("sup.company.deliveryDays")} name="deliveryDays" type="number" min={0} dir="ltr" value={form.deliveryDays} onChange={(e) => set("deliveryDays", e.target.value)} error={errors.deliveryDays} />
               <Input label={t("sup.company.workingHours")} name="workingHours" value={form.workingHours} onChange={(e) => set("workingHours", e.target.value)} placeholder={t("sup.company.workingHoursPlaceholder")} />
             </div>

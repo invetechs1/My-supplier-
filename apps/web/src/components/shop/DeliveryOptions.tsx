@@ -42,9 +42,17 @@ export function QuoteLine({ quote, className }: { quote: DeliveryQuote | null | 
       <span className="font-medium text-slate-900">{quote.carrierName}</span>
       <span>· {quote.service}</span>
       <span>· {t("checkout.eta")} {etaText(quote.etaDays, t)}</span>
-      <span className="font-semibold tabular-nums text-slate-900">· {formatSar(quote.price, lang)}</span>
+      {quote.free ? <span className="font-semibold text-emerald-700">· {t("checkout.freeDelivery")}</span> : <span className="font-semibold tabular-nums text-slate-900">· {formatSar(quote.price, lang)}</span>}
+      {quote.free === false && quote.freeAbove ? <span className="text-xs text-emerald-700">· {t("checkout.freeAbove")} {formatSar(quote.freeAbove, lang)}</span> : null}
     </span>
   );
+}
+
+/** "Add SAR X more for free delivery" nudge for a supplier group that has not reached the threshold yet. */
+export function FreeDeliveryNudge({ quote, subtotal, className }: { quote: DeliveryQuote | null | undefined; subtotal: number; className?: string }) {
+  const { t, lang } = useI18n();
+  if (!quote || quote.free || !quote.freeAbove || subtotal >= quote.freeAbove) return null;
+  return <span className={cn("text-xs text-emerald-700", className)}>{t("checkout.addForFree").replace("{amount}", formatSar(Math.max(0, quote.freeAbove - subtotal), lang))}</span>;
 }
 
 function TruckIcon() {
@@ -70,7 +78,8 @@ export function QuoteOptionList({ quotes, selected, onSelect, includeSupplierFal
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
                   {q.carrierName}
-                  {q.price === cheapest && <Badge tone="green">{t("checkout.cheapest")}</Badge>}
+                  {q.free && <Badge tone="green">{t("checkout.freeDelivery")}</Badge>}
+                  {!q.free && q.price === cheapest && <Badge tone="green">{t("checkout.cheapest")}</Badge>}
                   {q.etaDays <= 1 && <Badge tone="blue">{t("checkout.fast")}</Badge>}
                 </span>
                 <span className="block text-xs text-slate-500">
@@ -80,7 +89,7 @@ export function QuoteOptionList({ quotes, selected, onSelect, includeSupplierFal
                 </span>
                 {q.notes && <span className="block text-xs text-slate-500">{q.notes}</span>}
               </span>
-              <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatSar(q.price, lang)}</span>
+              <span className={cn("shrink-0 text-sm font-semibold tabular-nums", q.free ? "text-emerald-700" : "text-slate-900")}>{q.free ? t("checkout.freeDelivery") : formatSar(q.price, lang)}</span>
             </label>
           </li>
         );

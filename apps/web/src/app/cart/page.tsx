@@ -12,7 +12,7 @@ import { useI18n } from "@/lib/i18n";
 import { formatSar } from "@/lib/format";
 import { Alert, Button, Card, CardHeader, EmptyState, LinkButton, LoadingBlock, PageHeader, Select, VerifiedBadge } from "@/components/ui";
 import { ProductImage, StockPill } from "@/components/shop/ProductCard";
-import { QuoteLine } from "@/components/shop/DeliveryOptions";
+import { QuoteLine, FreeDeliveryNudge } from "@/components/shop/DeliveryOptions";
 import type { CartLine, CommerceCart } from "@/lib/api/commerce";
 import { LineBadges, LineUnitPrice, NextTierHint } from "./LinePricing";
 
@@ -246,6 +246,7 @@ export default function CartPage() {
                       <span className="text-xs text-slate-500">{t("cart.chooseCityHint")}</span>
                     )}
                     {deliveryCity && g.companyId && quotes[g.companyId] && <span className="text-xs text-slate-500">{t("cart.to")} {deliveryCity} · {t("cart.moreAtCheckout")}</span>}
+                    {deliveryCity && g.companyId && <FreeDeliveryNudge quote={quotes[g.companyId]} subtotal={g.items.reduce((sum, it) => sum + it.lineTotal, 0)} className="basis-full" />}
                   </div>
                 )}
               </Card>

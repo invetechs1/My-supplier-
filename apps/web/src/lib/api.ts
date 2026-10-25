@@ -446,6 +446,7 @@ export type CompanyProfilePatch = Partial<
     | "citiesServed"
     | "minOrderValue"
     | "deliveryFee"
+    | "freeDeliveryAbove"
     | "deliveryDays"
     | "workingHours"
     | "phone"

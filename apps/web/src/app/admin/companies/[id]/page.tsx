@@ -194,7 +194,7 @@ export default function AdminCompanyDetailPage() {
               <div><dt className="text-slate-500">Phone / email</dt><dd className="font-medium text-slate-900" dir="ltr">{c.phone ?? "—"} / {c.email ?? "—"}</dd></div>
               <div><dt className="text-slate-500">Website</dt><dd className="font-medium text-slate-900" dir="ltr">{c.website ?? "—"}</dd></div>
               <div><dt className="text-slate-500">Cities served</dt><dd className="font-medium text-slate-900">{(c.citiesServed ?? []).join(", ") || "—"}</dd></div>
-              <div><dt className="text-slate-500">Delivery</dt><dd className="font-medium text-slate-900">min {c.minOrderValue ? formatSar(c.minOrderValue, lang) : "—"} · fee {c.deliveryFee !== null && c.deliveryFee !== undefined ? formatSar(c.deliveryFee, lang) : "—"} · {c.deliveryDays ?? "—"} days</dd></div>
+              <div><dt className="text-slate-500">Delivery</dt><dd className="font-medium text-slate-900">min {c.minOrderValue ? formatSar(c.minOrderValue, lang) : "—"} · fee {c.deliveryFee !== null && c.deliveryFee !== undefined ? formatSar(c.deliveryFee, lang) : "—"}{c.freeDeliveryAbove ? ` (free above ${formatSar(c.freeDeliveryAbove, lang)})` : ""} · {c.deliveryDays ?? "—"} days</dd></div>
               <div><dt className="text-slate-500">Working hours</dt><dd className="font-medium text-slate-900">{c.workingHours ?? "—"}</dd></div>
               <div><dt className="text-slate-500">Low-stock threshold</dt><dd className="font-medium text-slate-900">{c.lowStockThreshold}</dd></div>
               {c.description && <div><dt className="text-slate-500">Description</dt><dd className="whitespace-pre-line text-slate-700">{c.description}</dd></div>}

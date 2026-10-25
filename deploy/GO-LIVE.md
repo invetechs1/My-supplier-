@@ -58,6 +58,8 @@ The demo seed (`prisma/seed.ts` without `SEED_MODE`) deletes everything and refu
 
 **Phase 0 (first ~3 months): MySupplier Direct.** Until third-party suppliers list, MySupplier itself is the verified seller of the 50 core products in Riyadh and fulfils every order (buy from distributors, deliver, invoice). The list, prices, min quantities, sourcing channels and operating rules are in `docs/HOUSE-SUPPLIER-TOP50.xlsx`; prices live in `apps/api/prisma/seed-house.ts` (re-run `seed:house` to refresh, or edit in Supplier → My products as `direct@mysupplier.sa`). Prices expire after 30 days. When a product has 3 third-party offers for 4 weeks, pause the house listing (Demand & gaps → Launch list shows coverage).
 
+**Delivery policy (approved 25 Oct 2026):** all of Riyadh city, 120 SAR per order, free when the order subtotal (excl. VAT) is 3,000 SAR or more. `seed:house` sets this on the company (`deliveryFee` 120, `freeDeliveryAbove` 3000, `citiesServed` Riyadh); change it any time in Supplier → Company → Delivery as `direct@mysupplier.sa`. The rule applies to the supplier's own delivery only; third-party carriers (Trukker, Trella, SMSA, Aramex) remain paid, and the cart tells buyers how much more to add for free delivery.
+
 ## 4. Payments (Moyasar)
 1. In the Moyasar dashboard create live API keys → `MOYASAR_SECRET_KEY`, `MOYASAR_PUBLISHABLE_KEY`.
 2. Add a webhook: URL `https://api.mysupplier.sa/api/v1/payments/webhook/moyasar`, event `payment_paid`,

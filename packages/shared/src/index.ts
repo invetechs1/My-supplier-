@@ -743,6 +743,8 @@ export interface CompanyProfile extends Company {
   citiesServed: string[];
   minOrderValue?: number | null;
   deliveryFee?: number | null;
+  /** Order subtotal (excl. VAT) from which delivery is free; null = never. */
+  freeDeliveryAbove?: number | null;
   deliveryDays?: number | null;
   workingHours?: string | null;
   email?: string | null;
@@ -984,6 +986,9 @@ export interface DeliveryQuote {
   price: number; // SAR excl. VAT
   etaDays: number;
   notes?: string | null;
+  /** True when the supplier's free-delivery threshold was reached. */
+  free?: boolean;
+  freeAbove?: number | null;
 }
 
 export interface ShipmentEvent {

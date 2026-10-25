@@ -69,16 +69,32 @@ export function priceRate(rate: RateCard, weightKg: number, volumeM3: number): n
   return round2(Math.max(rate.minFee, price));
 }
 
-export function quoteAll(rates: RateCard[], zone: ShippingZone, weightKg: number, volumeM3: number, supplierFlatFee?: number | null) {
+/** Free delivery rule: only the supplier's own fleet is free, third-party carriers stay paid. Pure. */
+export function isFreeDelivery(subtotal: number | null | undefined, freeAbove: number | null | undefined): boolean {
+  if (freeAbove === null || freeAbove === undefined || subtotal === null || subtotal === undefined) return false;
+  const threshold = Number(freeAbove);
+  return threshold > 0 && subtotal >= threshold;
+}
+
+export function quoteAll(rates: RateCard[], zone: ShippingZone, weightKg: number, volumeM3: number, supplierFlatFee?: number | null, freeDelivery?: { subtotal: number; freeAbove: number | null }) {
   const quotes = rates
     .filter((r) => r.zone === zone && carrierEnabled(r.carrier))
-    .map((r) => ({ carrier: r.carrier, carrierName: carrierName(r.carrier), service: r.service, zone, weightKg, volumeM3, price: priceRate(r, weightKg, volumeM3), etaDays: r.etaDays, notes: r.carrier === "SUPPLIER" ? "Delivered by the supplier's own trucks" : null }))
+    .map((r) => ({ carrier: r.carrier, carrierName: carrierName(r.carrier), service: r.service, zone, weightKg, volumeM3, price: priceRate(r, weightKg, volumeM3), etaDays: r.etaDays, notes: (r.carrier === "SUPPLIER" ? "Delivered by the supplier's own trucks" : null) as string | null, free: false as boolean, freeAbove: null as number | null }))
     .filter((q): q is typeof q & { price: number } => q.price !== null);
   // A supplier's own configured delivery fee overrides the generic own-fleet card.
   if (supplierFlatFee !== null && supplierFlatFee !== undefined) {
     const idx = quotes.findIndex((q) => q.carrier === "SUPPLIER");
-    const own = { carrier: "SUPPLIER" as CarrierCode, carrierName: carrierName("SUPPLIER"), service: "Supplier delivery", zone, weightKg, volumeM3, price: round2(supplierFlatFee), etaDays: quotes[idx]?.etaDays ?? 2, notes: "Supplier's published delivery fee" };
+    const own = { carrier: "SUPPLIER" as CarrierCode, carrierName: carrierName("SUPPLIER"), service: "Supplier delivery", zone, weightKg, volumeM3, price: round2(supplierFlatFee), etaDays: quotes[idx]?.etaDays ?? 2, notes: "Supplier's published delivery fee" as string | null, free: false, freeAbove: null as number | null };
     if (idx >= 0) quotes[idx] = own; else quotes.unshift(own);
+  }
+  // The supplier's own delivery becomes free once the order (excl. VAT) reaches the supplier's threshold.
+  if (freeDelivery && isFreeDelivery(freeDelivery.subtotal, freeDelivery.freeAbove)) {
+    const idx = quotes.findIndex((q) => q.carrier === "SUPPLIER");
+    const threshold = Number(freeDelivery.freeAbove);
+    if (idx >= 0) quotes[idx] = { ...quotes[idx], price: 0, free: true, freeAbove: threshold, notes: `Free delivery for orders above SAR ${threshold.toLocaleString("en-US")}` };
+  } else if (freeDelivery && freeDelivery.freeAbove !== null && Number(freeDelivery.freeAbove) > 0) {
+    const idx = quotes.findIndex((q) => q.carrier === "SUPPLIER");
+    if (idx >= 0) quotes[idx] = { ...quotes[idx], free: false, freeAbove: Number(freeDelivery.freeAbove) };
   }
   return quotes.sort((a, b) => a.price - b.price);
 }
@@ -89,13 +105,24 @@ export async function loadRates(): Promise<RateCard[]> {
 }
 
 /** Quotes for one supplier's basket delivered to a city. */
-export async function quoteForSupplier(companyId: string, items: QuoteItem[], deliveryCity: string, pickupCity?: string) {
+export async function quoteForSupplier(companyId: string, items: QuoteItem[], deliveryCity: string, pickupCity?: string, subtotal?: number) {
   const company = await prisma.company.findUnique({ where: { id: companyId }, include: { branches: { where: { isDefault: true }, take: 1 } } });
   const from = pickupCity ?? company?.branches[0]?.city ?? company?.city ?? deliveryCity;
   const { weightKg, volumeM3 } = await loadForQuote(items);
   const rates = await loadRates();
-  const quotes = quoteAll(rates, zoneFor(from, deliveryCity), weightKg, volumeM3, company?.deliveryFee === null || company?.deliveryFee === undefined ? undefined : Number(company.deliveryFee));
-  return { from, quotes };
+  // Without a caller-supplied subtotal (public /shipping/quote), price the items at this supplier's own listings.
+  const merchandise = subtotal ?? (await subtotalAtSupplier(companyId, items));
+  const freeAbove = company?.freeDeliveryAbove === null || company?.freeDeliveryAbove === undefined ? null : Number(company.freeDeliveryAbove);
+  const quotes = quoteAll(rates, zoneFor(from, deliveryCity), weightKg, volumeM3, company?.deliveryFee === null || company?.deliveryFee === undefined ? undefined : Number(company.deliveryFee), { subtotal: merchandise, freeAbove });
+  return { from, quotes, subtotal: merchandise, freeAbove };
+}
+
+/** Σ quantity × the supplier's current price for each material (0 for materials it does not list). */
+async function subtotalAtSupplier(companyId: string, items: QuoteItem[]): Promise<number> {
+  if (!items.length) return 0;
+  const listings = await prisma.priceListing.findMany({ where: { companyId, materialId: { in: items.map((i) => i.materialId) }, active: true, OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }] }, select: { materialId: true, price: true } });
+  const priceBy = new Map(listings.map((l) => [l.materialId, Number(l.price)]));
+  return round2(items.reduce((s, i) => s + (priceBy.get(i.materialId) ?? 0) * i.quantity, 0));
 }
 
 export const DEFAULT_RATES: Omit<Prisma.ShippingRateCreateManyInput, "id">[] = [

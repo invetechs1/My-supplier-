@@ -116,7 +116,7 @@ Every supplier endpoint is scoped to the caller's `companyId`. Company roles: `O
 
 ### Company profile, storefront, documents, branches
 | GET | `/supplier/company` | `CompanyProfile` |
-| PATCH | `/supplier/company` | OWNER/MANAGER: any `CompanyProfile` editable field (`name, nameAr, slug, description, descriptionAr, citiesServed, minOrderValue, deliveryFee, deliveryDays, workingHours, phone, email, website, bankName, iban, beneficiary, lowStockThreshold`) -> `CompanyProfile` |
+| PATCH | `/supplier/company` | OWNER/MANAGER: any `CompanyProfile` editable field (`name, nameAr, slug, description, descriptionAr, citiesServed, minOrderValue, deliveryFee, freeDeliveryAbove, deliveryDays, workingHours, phone, email, website, bankName, iban, beneficiary, lowStockThreshold`) -> `CompanyProfile` |
 | POST | `/supplier/company/logo` | multipart `file` (png/jpg/webp ≤ 2 MB) -> `CompanyProfile` (logoUrl) |
 | GET | `/supplier/company/documents` | `CompanyDocument[]` |
 | POST | `/supplier/company/documents` | multipart `file` (pdf/png/jpg ≤ 10 MB) + `type` -> `CompanyDocument` (sets verificationStatus UNDER_REVIEW) |
@@ -177,7 +177,7 @@ Checkout records `OUT` movements per order item; cancelling a PENDING/CONFIRMED 
 ### Shipments & carriers
 | GET | `/shipping/carriers` | `Carrier[]` (enabled carriers) |
 | POST | `/shipping/quote` | public: `{ supplierCompanyId?, items: [{ materialId, quantity }], deliveryCity, pickupCity? }` -> `DeliveryQuote[]` sorted by price (zone from pickup vs delivery city, weight/volume from material logistics data, rate cards) |
-| GET | `/cart?deliveryCity=` | (existing) `deliveryFee` now comes from the cheapest quote per supplier, falling back to the flat fee; `Cart` gains `quotes: Record<supplierId, DeliveryQuote | null>` |
+| GET | `/cart?deliveryCity=` | (existing) `deliveryFee` now comes from the cheapest quote per supplier, falling back to the flat fee; `Cart` gains `quotes: Record<supplierId, DeliveryQuote | null>`. When a supplier set `freeDeliveryAbove` and the group's subtotal (excl. VAT) reaches it, the supplier's own-fleet quote is `price: 0, free: true, freeAbove`; third-party carriers stay paid |
 | POST | `/checkout` | (existing) accepts optional `carrierBySupplier: Record<supplierId, CarrierCode>`; the chosen quote's price becomes the order's `deliveryFee` and a `PENDING` shipment is created per order |
 | GET | `/orders/:id/shipments` | `Shipment[]` (buyer, supplier, admin) |
 | POST | `/orders/:id/shipments` | supplier: `CreateShipmentPayload` -> `Shipment` (status BOOKED; sets order IN_TRANSIT when it moves) |

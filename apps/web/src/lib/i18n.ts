@@ -1920,6 +1920,11 @@ const dictionary = {
     "admin.messages.allChannels": "All channels",
     "admin.messages.emptyDesc": "Alerts appear here as soon as an order, RFQ, bid or price request triggers one.",
     "admin.analytics": "Funnel & analytics",
+    "sup.company.freeDeliveryAbove": "Free delivery above (SAR)",
+    "sup.company.freeDeliveryAboveHint": "Order value excl. VAT; leave empty for never",
+    "checkout.freeDelivery": "Free delivery",
+    "checkout.freeAbove": "Free above",
+    "checkout.addForFree": "Add {amount} more to this supplier for free delivery",
     "footer.tagline": "Build for less. Transparent building-material pricing for the Kingdom.",
   },
   ar: {
@@ -3836,6 +3841,11 @@ const dictionary = {
     "admin.messages.allChannels": "كل القنوات",
     "admin.messages.emptyDesc": "تظهر التنبيهات هنا فور أن يُطلقها طلب أو طلب تسعير أو عطاء أو طلب سعر.",
     "admin.analytics": "مسار التحويل والتحليلات",
+    "sup.company.freeDeliveryAbove": "توصيل مجاني فوق (ر.س)",
+    "sup.company.freeDeliveryAboveHint": "قيمة الطلب بدون الضريبة؛ اتركه فارغاً إن لم يوجد",
+    "checkout.freeDelivery": "توصيل مجاني",
+    "checkout.freeAbove": "مجاني فوق",
+    "checkout.addForFree": "أضف {amount} من هذا المورد للحصول على توصيل مجاني",
     "footer.tagline": "ابنِ بتكلفة أقل. تسعير شفاف لمواد البناء في المملكة.",
   },
 } as const;
