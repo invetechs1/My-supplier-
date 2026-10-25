@@ -45,6 +45,19 @@ new PrismaClient().user.create({data:{email:'admin@mysupplier.sa',passwordHash:b
 ```
 Then log in at `https://mysupplier.sa/admin`, create categories/materials or import a feed, and verify suppliers as they register.
 
+## 3b. Data on a fresh production database (run once, in this order)
+```
+# 1. catalogue only: 62 categories, 1,305 products, 185 attributes — no demo suppliers, accounts or orders
+docker compose -f docker-compose.prod.yml exec api sh -c "cd /app/apps/api && SEED_MODE=catalogue npx tsx prisma/seed.ts"
+# 2. your administrator
+docker compose -f docker-compose.prod.yml exec api sh -c "cd /app/apps/api && ADMIN_EMAIL=you@company.sa ADMIN_PASSWORD='…' ADMIN_NAME='…' npx tsx prisma/seed-admin.ts"
+# 3. Phase 0 house supplier "MySupplier Direct": the 50 highest-demand Riyadh products with list prices
+docker compose -f docker-compose.prod.yml exec api sh -c "cd /app/apps/api && HOUSE_SUPPLIER_PASSWORD='…' HOUSE_SUPPLIER_PHONE='+9665…' npx tsx prisma/seed-house.ts"
+```
+The demo seed (`prisma/seed.ts` without `SEED_MODE`) deletes everything and refuses to run when `NODE_ENV=production` unless `ALLOW_DEMO_SEED=1` (staging only). `deploy/scripts/seed-demo.sh` is for staging.
+
+**Phase 0 (first ~3 months): MySupplier Direct.** Until third-party suppliers list, MySupplier itself is the verified seller of the 50 core products in Riyadh and fulfils every order (buy from distributors, deliver, invoice). The list, prices, min quantities, sourcing channels and operating rules are in `docs/HOUSE-SUPPLIER-TOP50.xlsx`; prices live in `apps/api/prisma/seed-house.ts` (re-run `seed:house` to refresh, or edit in Supplier → My products as `direct@mysupplier.sa`). Prices expire after 30 days. When a product has 3 third-party offers for 4 weeks, pause the house listing (Demand & gaps → Launch list shows coverage).
+
 ## 4. Payments (Moyasar)
 1. In the Moyasar dashboard create live API keys → `MOYASAR_SECRET_KEY`, `MOYASAR_PUBLISHABLE_KEY`.
 2. Add a webhook: URL `https://api.mysupplier.sa/api/v1/payments/webhook/moyasar`, event `payment_paid`,

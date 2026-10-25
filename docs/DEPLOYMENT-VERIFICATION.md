@@ -143,7 +143,7 @@ Never commit `deploy/.env`; rotate any key that was ever pasted into chat or a t
 ### 3.4 Database
 - All **13 migrations applied**: `docker compose exec api npx prisma migrate status` must print "Database schema is up to date". The api container runs `prisma migrate deploy` on every start; if it fails, the api never becomes healthy — read `docker compose logs api`.
 - Extension `pg_trgm` installed (created by migration `pg_trgm_search`) — fuzzy search depends on it.
-- **Catalogue present**: 62 categories and the standard products. Decide explicitly: run `deploy/scripts/seed-demo.sh` for a first launch / staging (creates the catalogue **and** demo accounts and demo suppliers), or load the production catalogue only. An empty shop means the seed was never run.
+- **Catalogue present**: 62 categories and the standard products. Production: `SEED_MODE=catalogue npx tsx prisma/seed.ts` (catalogue only), then `seed-admin.ts` (your administrator) and `seed-house.ts` (the Phase 0 “MySupplier Direct” seller with the 50 Riyadh products) — see GO-LIVE §3b. Staging only: `deploy/scripts/seed-demo.sh` (demo suppliers, accounts and orders; refused in production). An empty shop means the seed was never run.
 - Demo accounts (`admin@mysupplier.sa / Admin123!`, `buyer@…`, `supplier@…`, `warehouse@…`, `sales@<supplier>.sa`) **must be deleted or given new passwords** before the public launch; create the real admin account.
 - Platform settings set in Admin → Settings: commission %, payout day, low-stock default. Shipping rate cards entered in Admin → Shipping.
 

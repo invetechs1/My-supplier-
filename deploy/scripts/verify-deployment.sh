@@ -35,6 +35,7 @@ cats=$(body "$API_BASE/categories" | python3 -c "import sys,json; print(len(json
 prods=$(body "$API_BASE/shop/products?pageSize=1" | num total); [ "${prods:-0}" -gt 0 ] && ok "$prods products in the shop" || bad "shop has 0 products"
 sups=$(body "$API_BASE/suppliers" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else d.get('total',0))" 2>/dev/null || echo 0); [ "${sups:-0}" -gt 0 ] && ok "$sups suppliers listed" || wr "no suppliers listed yet"
 [ "$(code "$API_BASE/shop/home")" = "200" ] && ok "shop home (deals, featured, categories)" || bad "shop/home not 200"
+[ "$(code "$API_BASE/suppliers/mysupplier-direct")" = "200" ] && ok "Phase 0 house supplier (MySupplier Direct) is live" || wr "MySupplier Direct storefront not found → run prisma/seed-house.ts if you are launching with the house supplier"
 [ "$(code "$API_BASE/shop/suggest?q=cem")" = "200" ] && ok "search suggestions" || bad "shop/suggest not 200"
 [ "$(code "$API_BASE/shop/brands")" = "200" ] && ok "brands" || bad "shop/brands not 200"
 [ "$(code "$API_BASE/shipping/carriers")" = "200" ] && ok "carriers / shipping rate cards" || bad "shipping/carriers not 200"

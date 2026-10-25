@@ -15,7 +15,10 @@
     "prisma:seed": "tsx prisma/seed.ts"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "seed:catalogue": "SEED_MODE=catalogue tsx prisma/seed.ts",
+    "seed:house": "tsx prisma/seed-house.ts",
+    "seed:admin": "tsx prisma/seed-admin.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

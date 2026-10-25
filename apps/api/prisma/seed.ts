@@ -407,7 +407,41 @@ const rand = rng(42);
 const jitter = (spread: number) => 1 + (rand() * 2 - 1) * spread;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * SEED_MODE=catalogue (production launch): only categories, materials and category attributes, nothing is
+ * deleted, and it refuses to run on a database that already has a catalogue. The default (demo) mode wipes
+ * everything and loads demo suppliers, accounts and orders — never run that against production.
+ */
+const CATALOGUE_ONLY = process.env.SEED_MODE === "catalogue";
+
+async function seedCatalogueOnly() {
+  const existing = await prisma.material.count();
+  if (existing > 0) throw new Error(`Catalogue already has ${existing} products; SEED_MODE=catalogue only runs on an empty catalogue.`);
+  console.log("Seeding catalogue only (categories, products, attributes)…");
+  const catBySlug = new Map<string, string>();
+  for (const c of allCategories) {
+    const created = await prisma.category.upsert({ where: { slug: c.slug }, create: c, update: {} });
+    catBySlug.set(c.slug, created.id);
+  }
+  let count = 0;
+  for (const m of allMaterials) {
+    const specs = specPatches[m.sku] ? { ...specPatches[m.sku], ...(m.specs ?? {}) } : m.specs;
+    await prisma.material.create({ data: { sku: m.sku, name: m.name, nameAr: m.nameAr, unit: m.unit, brand: m.brand, categoryId: catBySlug.get(m.cat)!, specs: specs && Object.keys(specs).length ? specs : Prisma.JsonNull, description: `${m.name}.`, featured: m.featured ?? false, tags: m.tags ?? [], popularity: 0 } });
+    count++;
+  }
+  const attributeRows: Prisma.CategoryAttributeCreateManyInput[] = [];
+  for (const [slug, attrs] of Object.entries(categoryAttributes)) {
+    const categoryId = catBySlug.get(slug);
+    if (!categoryId) continue;
+    attrs.forEach((a, i) => attributeRows.push({ categoryId, key: a.key, label: a.label, labelAr: a.labelAr, type: a.type, unit: a.unit, options: a.options ?? [], filterable: a.filterable ?? true, sortOrder: i }));
+  }
+  await prisma.categoryAttribute.createMany({ data: attributeRows, skipDuplicates: true });
+  console.log(`Seeded ${allCategories.length} categories, ${count} products, ${attributeRows.length} attributes. No demo suppliers, accounts or orders were created.`);
+}
+
 async function main() {
+  if (CATALOGUE_ONLY) return seedCatalogueOnly();
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SEED !== "1") throw new Error("Refusing to run the demo seed in production (it deletes all data). Use SEED_MODE=catalogue, or set ALLOW_DEMO_SEED=1 for a staging box.");
   console.log("Seeding MySupplier…");
   // Product-experience and commerce tables first (they reference users, materials and listings).
   await prisma.productReview.deleteMany();

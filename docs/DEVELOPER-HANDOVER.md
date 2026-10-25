@@ -116,6 +116,9 @@ cd apps/mobile && pnpm typecheck
 CI runs the same jobs on every push (.github/workflows/ci.yml). Keep it green.
 
 
+### Production data bootstrap
+`SEED_MODE=catalogue` seed (catalogue only, safe), `prisma/seed-admin.ts` (administrator), `prisma/seed-house.ts` (Phase 0 house supplier with the 50 Riyadh products). The demo seed refuses to run in production.
+
 ### Database changes
 
 Edit schema.prisma, then generate a migration file with prisma migrate dev --name <name> (interactive) or, in non-interactive environments, prisma migrate diff --from-url $DATABASE_URL --to-schema-datamodel prisma/schema.prisma --script written to a new folder under prisma/migrations, followed by migrate deploy and generate.
