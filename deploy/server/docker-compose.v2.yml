@@ -1,0 +1,63 @@
+# Server-side stack for the Node/Next.js MySupplier (shared host, no domain, plain HTTP on IP:port).
+# Project name: mysupplier-v2.  Lives in /opt/mysupplier-v2 next to the old Python stack (/opt/mysupplier-app).
+# Images are loaded from tar files (docker load); see DEPLOYMENT notes in the repo.
+name: mysupplier-v2
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mysupplier-v2-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mysupplier
+      POSTGRES_USER: mysupplier
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mysupplier -d mysupplier"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: mysupplier-api:1.0
+    container_name: mysupplier-v2-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://mysupplier:${POSTGRES_PASSWORD}@db:5432/mysupplier?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      # every origin the web UI is served from (comma separated)
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      WEB_URL: ${WEB_URL}
+      API_URL: ${API_URL}
+    ports:
+      - "127.0.0.1:${API_PORT}:4000"
+    volumes:
+      - uploads:/app/apps/api/uploads
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits: { memory: 1g }
+
+  web:
+    image: mysupplier-web:1.0-domain
+    container_name: mysupplier-v2-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "127.0.0.1:${WEB_PORT}:3000"
+    depends_on: [api]
+
+volumes:
+  pgdata:
+  uploads:

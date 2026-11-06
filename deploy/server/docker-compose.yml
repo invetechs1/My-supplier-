@@ -1,0 +1,50 @@
+# Server-side stack for My Supplier. Managed by run.sh (project name: mysupplier-app).
+name: mysupplier-app
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mysupplier-app-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mysupplier
+      POSTGRES_USER: mysupplier
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mysupplier"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: mysupplier/api:latest
+    container_name: mysupplier-app-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://mysupplier:${POSTGRES_PASSWORD}@db:5432/mysupplier
+      AUTO_CREATE_TABLES: "0"
+      JOBS_ENABLED: "1"
+      WEB_CONCURRENCY: "2"
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA}
+      CORS_ORIGINS: "*"
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+      WEB_BASE_URL: ${PUBLIC_BASE_URL}
+      PAYMENT_PROVIDER: mock
+      SMS_PROVIDER: console
+      EMAIL_PROVIDER: console
+      OTP_REQUIRED: "0"
+    ports:
+      - "${HOST_PORT}:8000"
+    volumes:
+      - apidata:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  apidata:

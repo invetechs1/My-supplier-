@@ -9,3 +9,46 @@ coverage/
 .DS_Store
 apps/api/prisma/dev.db
 apps/api/uploads/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets and local databases (never commit)
+*.secret
+*.pem
+*.key
+.env.*
+!.env.example
+!.env.production.example
+backend/data/
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+
+# Docker image exports and server bundles
+*.tar
+*.tar.gz
+*.tgz
+deploy/.env
+deploy/backups/*
+!deploy/backups/.gitkeep
+
+# Build caches and tooling
+*.tsbuildinfo
+.turbo/
+.cache/
+.eslintcache
+pnpm-debug.log*
+npm-debug.log*
+yarn-error.log*
+
+# Editors and OS
+.idea/
+*.swp
+Thumbs.db
+desktop.ini

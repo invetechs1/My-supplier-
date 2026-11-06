@@ -1,0 +1,18 @@
+**/node_modules
+**/.next
+**/dist
+**/.expo
+**/coverage
+.git
+.github
+.env
+**/.env
+**/.env.local
+deploy/.env
+deploy/backups
+apps/mobile
+apps/api/uploads
+# leftovers from the old Python layout
+backend
+web
+mobile

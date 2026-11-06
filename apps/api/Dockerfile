@@ -1,5 +1,7 @@
 # MySupplier API
 FROM node:20-alpine AS base
+# Prisma's query/schema engines need OpenSSL, which the alpine image does not ship
+RUN apk add --no-cache openssl
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 WORKDIR /app
 
