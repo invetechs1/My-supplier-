@@ -3,6 +3,9 @@ import { runRecurringOrders } from "../services/commerce";
 import { dispatchWebhooks } from "../services/webhooks";
 import { refreshDemandCoverage, sendDemandDigestIfDue } from "../services/demand";
 import { purgeOldEvents } from "../services/analytics";
+import { pollOpenShipments } from "../services/shipments";
+import { env } from "../lib/env";
+import { reconcileStalePayments } from "../services/payments";
 
 /**
  * Marketplace background jobs. Cheap enough to run every hour on a single instance;
@@ -15,6 +18,9 @@ export async function runMarketplaceJobs() {
   results.demandCoverage = await refreshDemandCoverage().catch((e) => ({ error: String(e) }));
   results.demandDigest = await sendDemandDigestIfDue().catch((e) => ({ error: String(e) }));
   results.analyticsPurged = await purgeOldEvents().catch((e) => ({ error: String(e) }));
+  results.shipmentsPolled = await pollOpenShipments(env.carriers.pollLimit).catch((e) => ({ error: String(e) }));
+  // Gateway payments still INITIATED/AUTHORIZED after an hour: re-fetch (lost webhook) or mark abandoned after 24 h.
+  results.paymentReconciliation = await reconcileStalePayments().catch((e) => ({ error: String(e) }));
   return results;
 }
 

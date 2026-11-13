@@ -242,6 +242,7 @@ export default function LandingPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">{t("landing.forSuppliers")}</p>
           <h3 className="mt-2 text-2xl font-semibold text-slate-900">Win more contracts</h3>
           <p className="mt-2 text-slate-600">Publish your price list, get notified of RFQs in your city and bid in minutes.</p>
+          <p className="mt-2 text-xs text-slate-500">{t("reg.docsNeeded")}</p>
           <div className="mt-6 flex flex-wrap gap-3">
             <LinkButton href="/register?role=SUPPLIER">Join as supplier</LinkButton>
             <LinkButton href="/suppliers" variant="outline">See suppliers</LinkButton>

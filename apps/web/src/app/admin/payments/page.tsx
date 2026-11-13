@@ -3,49 +3,43 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import React, { Suspense, useState } from "react";
-import type { AdminPaymentRow, PaymentProvider, PaymentRecordStatus } from "@mysupplier/shared";
-import { api, errorMessage } from "@/lib/api";
+import type { AdminPaymentRow, PaymentMethod, PaymentProvider, PaymentRecordStatus } from "@mysupplier/shared";
+import { api, errorMessage, openDownload, paymentProofPath } from "@/lib/api";
 import { useAsync, useDebounce, useFlash } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n";
-import { formatDateTime, formatNumber, formatSar } from "@/lib/format";
-import { Alert, Badge, Button, Card, EmptyState, FlashMessage, Input, LoadingBlock, Modal, PageHeader, Pagination, Select, StatTile, Table, Textarea, type Column } from "@/components/ui";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
+import { formatDate, formatDateTime, formatNumber, formatSar } from "@/lib/format";
+import { PaymentRecordBadge } from "@/components/OrderPayments";
+import { Alert, Button, Card, EmptyState, FlashMessage, Input, LoadingBlock, Modal, PageHeader, Pagination, Select, StatTile, Table, Textarea, type Column } from "@/components/ui";
 
-const STATUSES: PaymentRecordStatus[] = ["INITIATED", "PAID", "FAILED", "REFUNDED"];
+const STATUSES: PaymentRecordStatus[] = ["INITIATED", "AUTHORIZED", "CAPTURED", "SUBMITTED", "PAID", "FAILED", "REFUNDED"];
 const PROVIDERS: PaymentProvider[] = ["MOYASAR", "MANUAL"];
+const METHODS: PaymentMethod[] = ["CARD", "BANK_TRANSFER", "COD", "CREDIT"];
+const METHOD_KEY: Record<PaymentMethod, TranslationKey> = { COD: "checkout.cod", BANK_TRANSFER: "checkout.bank", CARD: "checkout.card", CREDIT: "orders.creditNet" };
+const STATUS_KEY: Record<PaymentRecordStatus, TranslationKey> = { INITIATED: "pay.status.INITIATED", AUTHORIZED: "pay.status.AUTHORIZED", CAPTURED: "pay.status.CAPTURED", SUBMITTED: "pay.status.SUBMITTED", PAID: "pay.status.PAID", FAILED: "pay.status.FAILED", REFUNDED: "pay.status.REFUNDED" };
 
-const STATUS_TONE: Record<PaymentRecordStatus, "green" | "slate" | "red" | "amber"> = {
-  PAID: "green",
-  REFUNDED: "slate",
-  FAILED: "red",
-  INITIATED: "amber",
-};
+const oneOf = <T extends string>(list: readonly T[], v: string | null): T | "" => (v && (list as readonly string[]).includes(v) ? (v as T) : "");
 
-const METHOD_LABEL: Record<string, string> = {
-  COD: "Cash on delivery",
-  BANK_TRANSFER: "Bank transfer",
-  CARD: "Card",
-};
-
-function isStatus(v: string | null): v is PaymentRecordStatus {
-  return !!v && (STATUSES as string[]).includes(v);
-}
-function isProvider(v: string | null): v is PaymentProvider {
-  return !!v && (PROVIDERS as string[]).includes(v);
-}
-
+/**
+ * Admin payments ledger: every gateway and manual record with filters (status, provider, method, dates, search),
+ * finance tiles, bank-transfer proof confirmation, Moyasar reconciliation and full/partial refunds.
+ */
 function AdminPaymentsInner() {
   const { t, lang } = useI18n();
   const params = useSearchParams();
-  const [status, setStatus] = useState<PaymentRecordStatus | "">(() => (isStatus(params.get("status")) ? (params.get("status") as PaymentRecordStatus) : ""));
-  const [provider, setProvider] = useState<PaymentProvider | "">(() => (isProvider(params.get("provider")) ? (params.get("provider") as PaymentProvider) : ""));
+  const [status, setStatus] = useState<PaymentRecordStatus | "">(() => oneOf(STATUSES, params.get("status")));
+  const [provider, setProvider] = useState<PaymentProvider | "">(() => oneOf(PROVIDERS, params.get("provider")));
+  const [method, setMethod] = useState<PaymentMethod | "">(() => oneOf(METHODS, params.get("method")));
+  const [from, setFrom] = useState(() => params.get("from") ?? "");
+  const [to, setTo] = useState(() => params.get("to") ?? "");
   const [q, setQ] = useState(() => params.get("q") ?? "");
   const debouncedQ = useDebounce(q, 350);
   const [page, setPage] = useState(1);
   const state = useAsync(
-    () => api.adminPayments({ status: status || undefined, provider: provider || undefined, q: debouncedQ.trim() || undefined, page }),
-    [status, provider, debouncedQ, page],
+    () => api.adminPayments({ status, provider, method, q: debouncedQ.trim(), from: from || undefined, to: to ? `${to}T23:59:59.999Z` : undefined, page }),
+    [status, provider, method, debouncedQ, from, to, page],
   );
   const [flash, setFlash] = useFlash(8000);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const [refundTarget, setRefundTarget] = useState<AdminPaymentRow | null>(null);
   const [refundAmount, setRefundAmount] = useState("");
@@ -85,12 +79,40 @@ function AdminPaymentsInner() {
     }
   };
 
+  const reconcile = async (row: AdminPaymentRow) => {
+    setBusyId(row.id);
+    try {
+      const result = await api.adminReconcilePayment(row.id);
+      const outcome = result.outcomes.map((o) => `${o.outcome}${o.status ? ` → ${t(STATUS_KEY[o.status])}` : ""}`).join(", ");
+      setFlash({ kind: "success", message: `${t("pay.admin.reconciled")}: ${outcome || "no gateway payment found"}.` });
+      state.reload();
+    } catch (err) {
+      setFlash({ kind: "error", message: errorMessage(err, "Reconciliation failed") });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const confirmTransfer = async (row: AdminPaymentRow) => {
+    if (!window.confirm(`${t("pay.confirmPayment")} · ${row.order.reference} · ${formatSar(row.amount, lang)}?`)) return;
+    setBusyId(row.id);
+    try {
+      await api.updateOrderPayment(row.orderId, "PAID");
+      setFlash({ kind: "success", message: t("pay.admin.confirmed") });
+      state.reload();
+    } catch (err) {
+      setFlash({ kind: "error", message: errorMessage(err, "Could not confirm the payment") });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const columns: Column<AdminPaymentRow>[] = [
-    { key: "date", header: "Date", render: (p) => <span className="whitespace-nowrap text-slate-500">{formatDateTime(p.createdAt, lang)}</span> },
-    { key: "order", header: "Order", render: (p) => <Link href={`/admin/orders/${p.order.id}`} className="font-medium text-brand-700 hover:underline">{p.order.reference}</Link> },
+    { key: "date", header: t("common.date"), render: (p) => <span className="whitespace-nowrap text-slate-500">{formatDateTime(p.createdAt, lang)}</span> },
+    { key: "order", header: t("returns.order"), render: (p) => <Link href={`/admin/orders/${p.order.id}`} className="font-medium text-brand-700 hover:underline">{p.order.reference}</Link> },
     {
       key: "buyer",
-      header: "Buyer",
+      header: t("reviews.buyer"),
       render: (p) => (
         <div className="min-w-0">
           <div className="truncate font-medium text-slate-900">{p.order.buyer?.name ?? "—"}</div>
@@ -98,72 +120,77 @@ function AdminPaymentsInner() {
         </div>
       ),
     },
-    { key: "supplier", header: "Supplier", render: (p) => p.order.company ? <Link href={`/admin/companies/${p.order.company.id}`} className="text-slate-700 hover:text-brand-700">{p.order.company.name}</Link> : "—" },
-    { key: "method", header: "Method", render: (p) => <span className="text-slate-700">{p.order.paymentMethod ? METHOD_LABEL[p.order.paymentMethod] ?? p.order.paymentMethod : "—"}</span> },
+    { key: "supplier", header: t("product.supplier"), render: (p) => p.order.company ? <Link href={`/admin/companies/${p.order.company.id}`} className="text-slate-700 hover:text-brand-700">{p.order.company.name}</Link> : "—" },
     {
-      key: "provider",
-      header: "Provider",
-      render: (p) => (
-        <div className="min-w-0">
-          <div className="text-slate-700">{p.provider === "MOYASAR" ? "Moyasar" : "Manual"}</div>
-          {p.providerPaymentId && <div className="max-w-[10rem] truncate font-mono text-xs text-slate-500" dir="ltr" title={p.providerPaymentId}>{p.providerPaymentId}</div>}
-        </div>
-      ),
+      key: "method",
+      header: t("orders.method"),
+      render: (p) => {
+        const m = p.method ?? p.order.paymentMethod;
+        return (
+          <div className="min-w-0">
+            <div className="text-slate-700">{m ? t(METHOD_KEY[m]) : "—"}<span className="ms-1 text-xs text-slate-400">· {p.provider === "MOYASAR" ? "Moyasar" : "Manual"}</span></div>
+            {p.providerPaymentId && <div className="max-w-[12rem] truncate font-mono text-xs text-slate-500" dir="ltr" title={p.providerPaymentId}>{p.providerPaymentId}</div>}
+            {p.reference && <div className="font-mono text-xs text-slate-500" dir="ltr">{t("pay.admin.transferRef")} {p.reference}{p.paidAt ? ` · ${formatDate(p.paidAt, lang)}` : ""}</div>}
+            {p.hasProof && <button type="button" onClick={() => void openDownload(paymentProofPath(p.orderId, p.id))} className="text-xs font-medium text-brand-700 hover:underline">{t("pay.viewReceipt")} ↗</button>}
+          </div>
+        );
+      },
     },
     {
       key: "amount",
-      header: "Amount",
+      header: t("orders.amount"),
       align: "end",
       render: (p) => <span className={`font-semibold tabular-nums ${p.amount < 0 ? "text-red-600" : "text-slate-900"}`} dir="ltr">{p.amount < 0 ? `−${formatSar(Math.abs(p.amount), lang)}` : formatSar(p.amount, lang)}</span>,
     },
-    { key: "status", header: t("common.status"), render: (p) => <Badge tone={STATUS_TONE[p.status] ?? "slate"}>{p.status}</Badge> },
+    { key: "status", header: t("common.status"), render: (p) => <PaymentRecordBadge status={p.status} /> },
     {
       key: "actions",
       header: "",
       align: "end",
-      render: (p) => p.status === "PAID" && p.amount > 0 && p.order.paymentStatus === "PAID" ? (
-        <Button size="sm" variant="outline" className="border-violet-300 text-violet-700 hover:bg-violet-50" onClick={() => openRefund(p)}>Refund</Button>
-      ) : null,
+      render: (p) => (
+        <div className="flex flex-wrap justify-end gap-2">
+          {p.status === "SUBMITTED" && p.order.paymentStatus === "UNPAID" && (
+            <Button size="sm" onClick={() => confirmTransfer(p)} loading={busyId === p.id}>{t("pay.confirmPayment")}</Button>
+          )}
+          {p.provider === "MOYASAR" && p.amount > 0 && (p.status === "INITIATED" || p.status === "AUTHORIZED" || p.status === "FAILED" || p.status === "PAID") && (
+            <Button size="sm" variant="outline" onClick={() => reconcile(p)} loading={busyId === p.id}>{t("pay.admin.reconcile")}</Button>
+          )}
+          {p.status === "PAID" && p.amount > 0 && p.order.paymentStatus === "PAID" && (
+            <Button size="sm" variant="outline" className="border-violet-300 text-violet-700 hover:bg-violet-50" onClick={() => openRefund(p)}>Refund</Button>
+          )}
+        </div>
+      ),
     },
   ];
 
   const rows = state.data?.data ?? [];
-  const summary = state.data?.summary ?? {};
+  const totals = state.data?.totals;
   const outstanding = state.data?.outstanding ?? { count: 0, amount: 0 };
-  const sumOf = (key: PaymentRecordStatus) => summary[key] ?? { count: 0, amount: 0 };
-  const filtered = !!(status || provider || debouncedQ.trim());
+  const filtered = !!(status || provider || method || from || to || debouncedQ.trim());
+  const clear = () => { setStatus(""); setProvider(""); setMethod(""); setFrom(""); setTo(""); setQ(""); setPage(1); };
 
   return (
     <div>
-      <PageHeader
-        title={t("admin.payments")}
-        subtitle="Every gateway and manual payment record, with refunds and outstanding balances."
-        action={
-          <>
-            <Select name="status" value={status} onChange={(e) => { setStatus(e.target.value as PaymentRecordStatus | ""); setPage(1); }} placeholder="All statuses" options={STATUSES.map((s) => ({ value: s, label: s.charAt(0) + s.slice(1).toLowerCase() }))} />
-            <Select name="provider" value={provider} onChange={(e) => { setProvider(e.target.value as PaymentProvider | ""); setPage(1); }} placeholder="All providers" options={[{ value: "MOYASAR", label: "Moyasar" }, { value: "MANUAL", label: "Manual" }]} />
-            <Input
-              name="q"
-              type="search"
-              value={q}
-              onChange={(e) => { setQ(e.target.value); setPage(1); }}
-              onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); state.reload(); } }}
-              placeholder="Order ref, gateway id or buyer"
-              dir="ltr"
-              className="w-64"
-            />
-          </>
-        }
-      />
+      <PageHeader title={t("admin.payments")} subtitle={t("pay.admin.subtitle")} />
+      <Card className="mb-4 p-4">
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <Select name="status" value={status} onChange={(e) => { setStatus(e.target.value as PaymentRecordStatus | ""); setPage(1); }} placeholder={t("pay.admin.allStatuses")} options={STATUSES.map((s) => ({ value: s, label: t(STATUS_KEY[s]) }))} />
+          <Select name="provider" value={provider} onChange={(e) => { setProvider(e.target.value as PaymentProvider | ""); setPage(1); }} placeholder={t("pay.admin.allProviders")} options={[{ value: "MOYASAR", label: "Moyasar" }, { value: "MANUAL", label: "Manual" }]} />
+          <Select name="method" value={method} onChange={(e) => { setMethod(e.target.value as PaymentMethod | ""); setPage(1); }} placeholder={t("pay.admin.allMethods")} options={METHODS.map((m) => ({ value: m, label: t(METHOD_KEY[m]) }))} />
+          <Input name="from" type="date" aria-label={t("pay.admin.from")} value={from} max={to || undefined} onChange={(e) => { setFrom(e.target.value); setPage(1); }} dir="ltr" />
+          <Input name="to" type="date" aria-label={t("pay.admin.to")} value={to} min={from || undefined} onChange={(e) => { setTo(e.target.value); setPage(1); }} dir="ltr" />
+          <Input name="q" type="search" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder="Order ref, gateway id, transfer ref or buyer" dir="ltr" />
+        </div>
+      </Card>
       <FlashMessage flash={flash} className="mb-4" />
 
-      {state.data && (
+      {totals && (
         <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-          <StatTile label="Paid" value={formatSar(sumOf("PAID").amount, lang)} sub={`${formatNumber(sumOf("PAID").count, lang)} payment${sumOf("PAID").count === 1 ? "" : "s"}`} tone="brand" />
-          <StatTile label="Refunded" value={formatSar(sumOf("REFUNDED").amount, lang)} sub={`${formatNumber(sumOf("REFUNDED").count, lang)} refund${sumOf("REFUNDED").count === 1 ? "" : "s"}`} />
-          <StatTile label="Failed" value={formatNumber(sumOf("FAILED").count, lang)} sub={`${formatSar(sumOf("FAILED").amount, lang)} attempted`} />
-          <StatTile label="Initiated" value={formatNumber(sumOf("INITIATED").count, lang)} sub={`${formatSar(sumOf("INITIATED").amount, lang)} awaiting confirmation`} />
-          <StatTile label="Outstanding" value={formatSar(outstanding.amount, lang)} sub={`${formatNumber(outstanding.count, lang)} unpaid order${outstanding.count === 1 ? "" : "s"}`} tone={outstanding.count > 0 ? "amber" : "default"} />
+          <StatTile label={t("pay.admin.collectedToday")} value={formatSar(totals.collectedToday.amount, lang)} sub={`${formatNumber(totals.collectedToday.count, lang)} ${t("pay.admin.records")}`} tone="brand" />
+          <StatTile label={t("pay.admin.collectedMonth")} value={formatSar(totals.collectedMonth.amount, lang)} sub={`${formatNumber(totals.collectedMonth.count, lang)} ${t("pay.admin.records")}`} />
+          <StatTile label={t("pay.admin.pendingTransfers")} value={formatSar(totals.pendingBankTransfers.amount, lang)} sub={`${formatNumber(totals.pendingBankTransfers.count, lang)} ${t("pay.admin.records")}`} tone={totals.pendingBankTransfers.count > 0 ? "amber" : "default"} />
+          <StatTile label={t("pay.admin.refundedMonth")} value={formatSar(totals.refundedMonth.amount, lang)} sub={`${formatNumber(totals.refundedMonth.count, lang)} ${t("pay.admin.records")}`} />
+          <StatTile label={t("pay.admin.outstanding")} value={formatSar(outstanding.amount, lang)} sub={`${formatNumber(outstanding.count, lang)} ${t("pay.admin.unpaidOrders")}`} tone={outstanding.count > 0 ? "amber" : "default"} />
         </div>
       )}
 
@@ -177,8 +204,8 @@ function AdminPaymentsInner() {
             empty={
               <EmptyState
                 title={filtered ? "No matching payments" : "No payments yet"}
-                description={filtered ? "Try clearing the status, provider or search filters." : "Payment records appear here as soon as buyers pay by card or a manual payment is recorded."}
-                action={filtered ? <Button variant="outline" onClick={() => { setStatus(""); setProvider(""); setQ(""); setPage(1); }}>Clear filters</Button> : undefined}
+                description={filtered ? "Try clearing the status, provider, method, date or search filters." : "Payment records appear here as soon as buyers pay by card, submit a transfer proof or a manual payment is recorded."}
+                action={filtered ? <Button variant="outline" onClick={clear}>{t("shop.clearFilters")}</Button> : undefined}
               />
             }
           />
@@ -200,10 +227,10 @@ function AdminPaymentsInner() {
         {refundTarget && (
           <div className="space-y-4">
             <dl className="rounded-xl bg-slate-50 px-4 py-3 text-sm">
-              <div className="flex justify-between"><dt className="text-slate-500">Buyer</dt><dd className="font-medium text-slate-900">{refundTarget.order.buyer?.name ?? "—"}</dd></div>
-              <div className="flex justify-between"><dt className="text-slate-500">Supplier</dt><dd className="font-medium text-slate-900">{refundTarget.order.company?.name ?? "—"}</dd></div>
-              <div className="flex justify-between"><dt className="text-slate-500">Paid via</dt><dd className="font-medium text-slate-900">{refundTarget.provider === "MOYASAR" ? "Moyasar" : "Manual"}{refundTarget.order.paymentMethod ? ` · ${METHOD_LABEL[refundTarget.order.paymentMethod] ?? refundTarget.order.paymentMethod}` : ""}</dd></div>
-              <div className="flex justify-between"><dt className="text-slate-500">Paid amount</dt><dd className="font-semibold tabular-nums text-brand-700">{formatSar(refundTarget.amount, lang)}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-500">{t("reviews.buyer")}</dt><dd className="font-medium text-slate-900">{refundTarget.order.buyer?.name ?? "—"}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-500">{t("product.supplier")}</dt><dd className="font-medium text-slate-900">{refundTarget.order.company?.name ?? "—"}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-500">{t("orders.method")}</dt><dd className="font-medium text-slate-900">{refundTarget.provider === "MOYASAR" ? "Moyasar" : "Manual"}{refundTarget.order.paymentMethod ? ` · ${t(METHOD_KEY[refundTarget.order.paymentMethod])}` : ""}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-500">{t("orders.amount")}</dt><dd className="font-semibold tabular-nums text-brand-700">{formatSar(refundTarget.amount, lang)}</dd></div>
             </dl>
             <Input
               label="Refund amount (SAR)"

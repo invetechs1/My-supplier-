@@ -51,7 +51,7 @@ const BANNERS: Banner[] = [
     key: "sell",
     eyebrow: "For suppliers",
     title: "Sell on MySupplier",
-    body: "Publish your catalogue with stock and prices in minutes and reach contractors across the Kingdom.",
+    body: "Publish your catalogue with stock and prices in minutes and reach contractors across the Kingdom. To register you need your CR number, VAT number, a contact number and the cities you deliver to.",
     cta: "Start selling",
     href: "/supplier/catalog",
     className: "bg-slate-900 text-white",

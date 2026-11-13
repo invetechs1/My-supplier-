@@ -9,6 +9,8 @@ import { formatSar } from "@/lib/format";
 import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, FlashMessage, Input, LoadingBlock, Modal, PageHeader, Select, Table, Toggle, type Column } from "@/components/ui";
 import { MaterialAutocomplete } from "@/components/MaterialAutocomplete";
 import { QuoteOptionList, ZONE_LABEL, etaLabel } from "@/components/shop/DeliveryOptions";
+import { Tabs } from "@/components/integrations/shared";
+import { CarrierIntegrations, CarrierModeBadge } from "@/components/CarrierIntegrations";
 
 const CARRIER_CODES: CarrierCode[] = ["SUPPLIER", "TRUKKER", "TRELLA", "SMSA", "ARAMEX", "SPL", "OTHER"];
 const ZONES: ShippingRate["zone"][] = ["SAME_CITY", "SAME_REGION", "NATIONAL"];
@@ -131,6 +133,7 @@ export default function AdminShippingPage() {
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [carrierFilter, setCarrierFilter] = useState<CarrierCode | "">("");
+  const [tab, setTab] = useState<"rates" | "carriers">("rates");
 
   const carrierName = useMemo(() => {
     const map: Record<string, string> = {};
@@ -221,6 +224,7 @@ export default function AdminShippingPage() {
     { key: "code", header: "Code", render: (c) => <span className="font-mono text-xs text-slate-600">{c.code}</span> },
     { key: "kind", header: "Type", render: (c) => <Badge tone={c.kind === "HEAVY_TRUCKING" ? "purple" : c.kind === "PARCEL" ? "blue" : "slate"}>{KIND_LABEL[c.kind] ?? c.kind}</Badge> },
     { key: "tracking", header: "Tracking", render: (c) => (c.supportsTracking ? <Badge tone="green">API tracking</Badge> : <span className="text-xs text-slate-500">Manual</span>) },
+    { key: "mode", header: "Mode", render: (c) => (c.mode ? <CarrierModeBadge mode={c.mode} /> : "—") },
     { key: "max", header: "Max weight", align: "end", render: (c) => (c.maxWeightKg ? `${c.maxWeightKg} kg` : "—") },
     { key: "enabled", header: t("common.status"), render: (c) => (c.enabled ? <Badge tone="green">Enabled</Badge> : <Badge tone="slate">Disabled</Badge>) },
     { key: "rates", header: "Rate cards", align: "end", render: (c) => (rates.data ?? []).filter((r) => r.carrier === c.code).length },
@@ -256,8 +260,10 @@ export default function AdminShippingPage() {
     <div>
       <PageHeader title={t("admin.shipping")} subtitle="Carriers and rate cards that price delivery at checkout: fee = max(minFee, baseFee + perKg × (kg − includedKg) + perM3 × m³) per zone." action={<Button variant="accent" onClick={() => setModal({ open: true, editing: null })}>+ New rate card</Button>} />
       <FlashMessage flash={flash} className="mb-4" />
+      <Tabs className="mb-6" value={tab} onChange={setTab} tabs={[{ key: "rates", label: t("ship.ratesTab"), count: rates.data?.length }, { key: "carriers", label: t("ship.carriersTab") }]} />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+      {tab === "carriers" && <CarrierIntegrations />}
+      <div className={tab === "carriers" ? "hidden" : "grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]"}>
         <div className="space-y-6">
           <Card>
             <CardHeader title="Carriers" subtitle="Integrated through the API's carrier adapters. Booking/tracking calls the carrier when its credentials are configured; otherwise suppliers manage shipments manually." />

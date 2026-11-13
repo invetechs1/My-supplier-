@@ -311,7 +311,77 @@ ORD-2026-000124,CONFIRMED,,,
 The supplier dashboard also accepts the price file directly (Catalogue → Import), and the AI importer
 (`POST /imports`) reads unstructured PDF/XLSX price lists.
 
-## 6. Idempotency and reliability notes
+## 6. Payments (Moyasar + bank transfer)
+
+MySupplier takes electronic payments through **Moyasar** (SAMA-licensed PSP, PCI-DSS level 1). Card data is
+entered in Moyasar's hosted form and tokenised there – it never reaches MySupplier servers; the API only sees
+payment ids, re-fetches each payment with the secret key and reconciles amount and currency against the order.
+
+### 6.1 Account setup
+1. Register at moyasar.com with the company's CR, VAT certificate and bank account (settlements are paid to this IBAN).
+2. Dashboard → **API keys**: copy the **secret** and **publishable** keys of the *test* account first, later the *live* ones →
+   `MOYASAR_SECRET_KEY`, `MOYASAR_PUBLISHABLE_KEY`. Card payments switch on automatically when both are set
+   (`GET /payments/config` → `cardPaymentsEnabled: true`).
+3. Dashboard → **Webhooks** → add `https://<api-host>/api/v1/payments/webhook/moyasar` (exact path; the API is
+   mounted under `/api/v1`). Subscribe to `payment_paid`, `payment_failed`, `payment_authorized`, `payment_captured`,
+   `payment_refunded`, `payment_voided`. Copy the generated **secret token** → `MOYASAR_WEBHOOK_SECRET`. Moyasar
+   sends it as `secret_token` in the JSON body; the API compares it in constant time and rejects everything else
+   with 401. Deliveries are idempotent – retries of the same payment/status are no-ops.
+4. Methods: `MOYASAR_METHODS="creditcard,applepay,stcpay"` (default). `creditcard` covers **mada**, Visa and
+   Mastercard; remove `applepay` or `stcpay` to hide them. The web checkout, the `/pay/:orderId` page and the
+   hosted mobile page all read the list from the API.
+5. **Apple Pay**: enable it in the Moyasar dashboard (Apple Pay → add the web domain, e.g. `mysupplier.sa` and
+   `www.mysupplier.sa`), download the *domain association file* and serve it unchanged at
+   `https://<web-host>/.well-known/apple-developer-merchantid-domain-association` (put it in
+   `apps/web/public/.well-known/`, no extension, served as plain text). Verify in the dashboard, then Apple Pay
+   appears in the form on Safari/iOS. The hosted mobile page is served from the API host, so add that host too if
+   you want Apple Pay inside the app's in-app browser.
+6. Restart the API. `docs/API.md` lists the endpoints; the flow is: `POST /payments/:orderId/intent` →
+   Moyasar form (`metadata.order_id`) → `on_completed`/callback → `POST /payments/:orderId/verify` (server re-fetch)
+   → webhook (same sync) → order `paymentStatus: PAID`, buyer + supplier notified, `order.paid` ERP webhook.
+
+### 6.2 Test cards (test keys only)
+| Card | Number | Result |
+|---|---|---|
+| Visa | 4111 1111 1111 1111 | paid (3-D Secure page: choose *Success*) |
+| Mastercard | 5105 1051 0510 5100 | paid |
+| mada | 4464 0400 0000 0007 | paid (mada routing) |
+| Any | 4000 0000 0000 0002 | declined (`failed`, source.message = *Declined*) |
+Use any future expiry and any 3-digit CVC. STC Pay in test mode accepts any mobile number with OTP `1234`.
+Refunds: `POST /payments/:orderId/refund` (full or partial) calls Moyasar and writes a `REFUNDED` ledger row; a
+refund made in the Moyasar dashboard arrives through the webhook and does the same.
+
+### 6.3 Bank transfer
+Orders paid by bank transfer show the **supplier's** account (Company → bank name / IBAN / beneficiary; for the
+house supplier this is the *MySupplier Direct* company profile) with the order reference to quote; when a supplier
+has no IBAN the platform account from `BANK_NAME` / `BANK_IBAN` / `BANK_BENEFICIARY` is shown instead. The buyer
+submits the transfer proof (`POST /orders/:id/payments/bank-transfer`: reference, amount, date, optional receipt
+file) → a `SUBMITTED` row, the supplier team (or admins) is notified, and the supplier owner/manager or an admin
+confirms with `PATCH /orders/:id/payment { paymentStatus: "PAID" }`. `/admin/payments` lists pending proofs with
+the receipt and a confirm button.
+
+### 6.4 Reconciliation
+* Hourly job: gateway rows still `INITIATED`/`AUTHORIZED` after 1 h are re-fetched (lost webhook, closed tab);
+  intents with no gateway payment after 24 h are marked `FAILED` (abandoned).
+* Admin → Payments → **Reconcile** does the same for one row on demand (`POST /admin/payments/:id/reconcile`).
+* Ledger states: `INITIATED → AUTHORIZED → CAPTURED/PAID → REFUNDED`, or `FAILED`; `SUBMITTED` = bank-transfer proof
+  awaiting confirmation. A stale event never undoes a `PAID` record; amount or currency mismatches are stored as
+  `FAILED` with the reason and never mark the order paid.
+
+### 6.5 Go-live checklist
+- [ ] Live keys set, test keys removed; `NODE_ENV=production`, `WEB_URL`/`API_URL` are the public HTTPS hosts (the
+      callback URL is built from `WEB_URL`).
+- [ ] Webhook URL points at the production API, secret set, a test payment shows `outcome: applied` in the API log.
+- [ ] Apple Pay domain file served from the production web host and verified in the dashboard.
+- [ ] `MOYASAR_METHODS` matches what the Moyasar account has enabled (mada requires the SAMA/mada activation on the
+      Moyasar side; STC Pay requires the STC Pay merchant activation).
+- [ ] PSP is SAMA-licensed (Moyasar is); card data never touches MySupplier servers – do not log request bodies
+      of `/payments/*` or add card fields to any form. Our PCI scope is SAQ A (hosted form).
+- [ ] Settlement IBAN in the Moyasar dashboard is the company account; refunds are funded from the Moyasar balance.
+- [ ] Bank details (`BANK_*`) and every supplier's IBAN verified; invoices print them while unpaid.
+- [ ] `/admin/payments` reviewed daily: pending bank transfers confirmed, INITIATED rows reconciled.
+
+## 7. Idempotency and reliability notes
 * **Prices / stock** are upserts keyed on `(sku, city)` per company – replaying a file is harmless. Send the full
   current list; rows are only changed when present.
 * **Status** pushes are idempotent: repeating the current status returns `changed: false`; invalid transitions return
@@ -324,3 +394,106 @@ The supplier dashboard also accepts the price file directly (Catalogue → Impor
 * **Time**: all timestamps are UTC ISO-8601; convert to Asia/Riyadh in the ERP presentation layer.
 * **Keys**: rotate by creating a new key, switching the ERP, then revoking the old one. Set `expiresAt` for
   project/consultant keys. Every key action is in the audit log.
+
+## 7. Carriers (shipping companies)
+
+Shipments are booked, tracked, labelled and cancelled through carrier adapters in `apps/api/src/services/carriers/`.
+Connecting a carrier is configuration only: set its environment variables on the API server and restart. The admin
+page **Admin → Shipping → Carriers** shows each carrier's mode, which variables are set or missing, its webhook URL and a
+**Test** button.
+
+| Mode | When | Behaviour |
+| --- | --- | --- |
+| **Manual** | required env vars missing | Supplier types the tracking number; status is updated by hand or by the carrier webhook. Rate-card quoting still works. |
+| **Sandbox** | env vars set + `CARRIER_SANDBOX=1` | Deterministic fake bookings (`SBX-<CARRIER>-…`), no network. Tracking walks BOOKED → PICKED_UP (2 min) → IN_TRANSIT (5) → OUT_FOR_DELIVERY (10) → DELIVERED (15). Label is a generated PDF. |
+| **Live** | env vars set, sandbox off | Real carrier API. Point `<CARRIER>_API_URL` at the carrier's test host first, then at production. |
+
+### 7.1 Environment variables
+
+| Variable | Carrier | Required | Notes |
+| --- | --- | --- | --- |
+| `CARRIER_SANDBOX` | all | – | `1` = sandbox mode for every configured carrier (staging). |
+| `CARRIER_POLL_LIMIT` | all | – | Open shipments refreshed per hourly poll (default 50). |
+| `CARRIER_WEBHOOK_SECRET` | all | – | Legacy shared webhook token (`x-webhook-secret`), used when a carrier has no secret of its own. |
+| `SMSA_API_KEY` | SMSA Express | yes | B2C REST `apikey` header. |
+| `SMSA_API_URL` | SMSA | – | Default `https://ecomapis.smsaexpress.com`; SMSA provides a staging host for test keys. |
+| `SMSA_CUSTOMER_CODE` | SMSA | – | Retail/customer id (`SMSARetailID`) when SMSA assigns one. |
+| `SMSA_WEBHOOK_SECRET` | SMSA | – | Signature header `x-smsa-signature` (or `x-signature` / `x-webhook-token`). |
+| `ARAMEX_USERNAME`, `ARAMEX_API_KEY` | Aramex | yes | Web-service user and password (`ClientInfo.UserName/Password`). |
+| `ARAMEX_ACCOUNT_NUMBER`, `ARAMEX_ACCOUNT_PIN` | Aramex | yes | Account number and PIN. |
+| `ARAMEX_ACCOUNT_ENTITY` | Aramex | – | Default `RUH`. `AccountCountryCode` is always `SA`. |
+| `ARAMEX_API_URL` | Aramex | – | Default `https://ws.aramex.net/ShippingAPI.V2`; sandbox `https://ws.sbx.aramex.net/ShippingAPI.V2`. |
+| `ARAMEX_WEBHOOK_SECRET` | Aramex | – | Signature header `x-aramex-signature`. |
+| `SPL_API_KEY`, `SPL_CUSTOMER_ID` | Saudi Post SPL | yes | `x-api-key` and `x-customer-id` headers. |
+| `SPL_API_URL`, `SPL_WEBHOOK_SECRET` | SPL | – | Gateway from onboarding; `x-spl-signature`. |
+| `TRUKKER_API_KEY` / `TRELLA_API_KEY` | TruKKer / Trella | yes | Bearer token. |
+| `TRUKKER_API_URL` / `TRELLA_API_URL` | TruKKer / Trella | – | Partner API base from onboarding (defaults in `trukker.ts` / `trella.ts`). |
+| `TRUKKER_WEBHOOK_SECRET` / `TRELLA_WEBHOOK_SECRET` | TruKKer / Trella | – | `x-trukker-signature` / `x-trella-signature`. |
+
+### 7.2 Per-carrier onboarding
+
+**SMSA Express (parcels ≤ 70 kg)** – open a B2C e-commerce account with SMSA and request API access; SMSA issues an
+`apikey` for staging and production. Set `SMSA_API_KEY` (+ `SMSA_API_URL` for staging). Booking calls
+`POST /api/shipment/b2c/new` with `ContentDescription`, `ShipmentValue`, `CODAmount`, `Weight` (KG), `Parcels`,
+`ConsigneeAddress`/`ShipperAddress` (`ContactName`, `ContactPhoneNumber`, `City`, `Country: "SA"`, `AddressLine1`); the
+returned AWB is the tracking number and the base64 waybill is stored as the label. Tracking:
+`GET /api/shipment/b2c/query/{awb}`; cancel: `POST /api/shipment/b2c/cancel`; label: `GET /api/shipment/b2c/label?awb=`.
+Ask SMSA to push status updates to the webhook URL below with your secret.
+
+**Aramex (parcels ≤ 70 kg)** – request Shipping API credentials from your Aramex account manager (username, password,
+account number, PIN, entity). Set the five `ARAMEX_*` variables; use the `ws.sbx` host until certified. Booking uses
+`CreateShipments` (domestic `DOM`/`OND`, prepaid, COD when the order is cash-on-delivery, label as URL), tracking
+`TrackShipments`, label `PrintLabel`. Aramex has no cancel call: cancelling in MySupplier closes the shipment locally
+and tells the supplier to cancel the waybill with Aramex. Tracking `UpdateCode`s are mapped in `aramex.ts`
+(`SH014` = delivered etc.); unknown codes fall back to the description text – confirm the list with Aramex.
+
+**Saudi Post | SPL (parcels ≤ 30 kg)** – business account at splonline.com.sa; SPL issues an API key and customer id
+plus the gateway URL. Set `SPL_API_KEY`, `SPL_CUSTOMER_ID`, `SPL_API_URL`. The adapter uses a generic REST contract
+(`POST /shipments`, `GET /shipments/{id}/tracking`, `POST /shipments/{id}/cancel`, `GET /shipments/{id}/label`) –
+confirm field names with SPL onboarding and adjust `spl.ts` if your contract differs.
+
+**TruKKer and Trella (heavy trucking, up to 40 t)** – shipper/partner API access from the marketplace's integration
+team; set `<CARRIER>_API_KEY` and `<CARRIER>_API_URL`. A load is posted with pickup/dropoff stops, cargo weight/volume and
+a truck type derived from the order weight (≤ 7 t dyna, ≤ 25 t flatbed, above that trailer). The load id is stored as
+`externalId` and used for tracking/cancel; waybill/POD documents are returned as the "label" when the API has them.
+Field names in `trucking.ts` are the common denominator of both partner APIs – **confirm them with carrier onboarding**.
+
+### 7.3 Webhooks
+
+Each carrier pushes status updates to `https://<api-host>/api/v1/shipping/webhooks/<carrier>` (`smsa`, `aramex`,
+`spl`, `trukker`, `trella`; `supplier`/`other` accept pushes from a supplier's own TMS). Set `<CARRIER>_WEBHOOK_SECRET`
+and give the carrier the same value. Requests are accepted when either:
+
+* `x-signature` (or the carrier's own header) is the HMAC-SHA256 of the **raw request body** with the secret – hex or
+  base64, optional `sha256=` prefix; or
+* `x-webhook-token` carries the secret itself (for carriers that only support a static token).
+
+Anything else is `401`. Payloads are parsed per carrier (SMSA `{ awb, Activity, Details, Location, Date }`, Aramex
+`{ WaybillNumber, UpdateCode, UpdateDescription, UpdateLocation, UpdateDateTime }`, trucking/SPL
+`{ id | tracking_number, status, description, location, timestamp }`); the generic
+`{ trackingNumber, status, description?, location?, at? }` always works. Unknown tracking numbers return
+`{ ignored: true }`; duplicates are harmless.
+
+Besides webhooks the API polls open shipments (BOOKED → OUT_FOR_DELIVERY) of live/sandbox carriers once an hour
+(`CARRIER_POLL_LIMIT` per run, oldest update first), and anyone with access to the order can press **Refresh tracking**
+(`POST /shipments/:id/refresh`).
+
+### 7.4 Sandbox test (staging)
+
+1. Set `CARRIER_SANDBOX=1` and a dummy key for the carrier you want to exercise, e.g. `SMSA_API_KEY=sandbox`
+   (`ARAMEX_*` needs all four account fields), restart the API.
+2. **Admin → Shipping → Carriers**: the card shows *Sandbox*; press **Test** – it books, tracks, fetches a PDF label and
+   cancels a throw-away shipment.
+3. As a supplier open an order → **Create shipment**, pick the carrier (marked *Books online*) and leave the tracking
+   number blank. The shipment gets an `SBX-…` tracking number and a **Download label** button.
+4. Press **Refresh tracking** after a few minutes (or wait for the hourly poll) to watch the timeline advance; the buyer
+   sees the same timeline with the ETA. **Cancel shipment** closes it.
+5. Send a signed webhook to make sure the secret is wired:
+   ```bash
+   BODY='{"trackingNumber":"SBX-SMSA-…","status":"out_for_delivery","location":"Jeddah"}'
+   SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SMSA_WEBHOOK_SECRET" | awk '{print $2}')
+   curl -X POST https://<api-host>/api/v1/shipping/webhooks/smsa -H "content-type: application/json" -H "x-signature: $SIG" -d "$BODY"
+   ```
+6. Switch to live by removing `CARRIER_SANDBOX` and setting the real keys; shipments created in sandbox keep working
+   (an `SBX-` reference never reaches a carrier API).
+

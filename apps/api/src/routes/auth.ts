@@ -11,31 +11,36 @@ import crypto from "crypto";
 import rateLimit from "express-rate-limit";
 import { env } from "../lib/env";
 import { escapeHtml, layout, sendMail } from "../services/mailer";
+import { recordAcceptances } from "../services/legal";
+import { CR_DUPLICATE_MESSAGE, companyCreateData, registerCompanySchema } from "../lib/companyRegistration";
 
 /** Tighter limit for credential endpoints (brute-force protection). */
 export const authLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false, message: { error: "Too many attempts, try again later" } });
 
 const router = Router();
 
-const companySchema = z.object({
-  name: z.string().min(2),
-  nameAr: z.string().optional(),
-  type: z.enum(["SUPPLIER", "CONTRACTOR", "CONSULTANT", "OTHER"]).default("SUPPLIER"),
-  city: z.string().min(2),
-  crNumber: z.string().optional(),
-  vatNumber: z.string().optional(),
-  phone: z.string().optional(),
-});
-
-const registerSchema = z.object({
-  email: z.string().email().transform((s) => s.toLowerCase()),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  name: z.string().min(2),
-  phone: z.string().optional(),
-  role: z.enum(["BUYER", "SUPPLIER"]).default("BUYER"),
-  locale: z.enum(["en", "ar"]).default("en"),
-  company: companySchema.optional(),
-});
+/**
+ * Self-service sign-up. Every role registers a company (CR, VAT, phone, city, type); suppliers also
+ * declare their delivery zone and accept the Supplier Agreement. Team members join an existing
+ * company through /accept-invite instead, which needs no company block.
+ */
+const registerSchema = z
+  .object({
+    email: z.string().email().transform((s) => s.toLowerCase()),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    name: z.string().trim().min(2, "Contact name is required"),
+    phone: z.string().optional(),
+    role: z.enum(["BUYER", "SUPPLIER"]).default("BUYER"),
+    locale: z.enum(["en", "ar"]).default("en"),
+    company: registerCompanySchema,
+    acceptTerms: z.literal(true, { errorMap: () => ({ message: "You must accept the Terms & Conditions and Privacy Policy" }) }),
+    acceptSupplierAgreement: z.literal(true).optional(),
+  })
+  .superRefine((body, ctx) => {
+    if (body.role !== "SUPPLIER") return;
+    if (!body.acceptSupplierAgreement) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["acceptSupplierAgreement"], message: "Suppliers must accept the Supplier Agreement" });
+    if (!body.company.citiesServed?.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["company", "citiesServed"], message: "Select at least one city you deliver to" });
+  });
 
 const userInclude = { company: true } as const;
 
@@ -44,9 +49,11 @@ router.post(
   authLimiter,
   asyncHandler(async (req, res) => {
     const body = registerSchema.parse(req.body);
-    if (body.role === "SUPPLIER" && !body.company) throw badRequest("Suppliers must provide company details");
+    const supplier = body.role === "SUPPLIER";
     const existing = await prisma.user.findUnique({ where: { email: body.email } });
     if (existing) throw conflict("An account with this email already exists");
+    // One company per CR: colleagues join through a team invitation rather than a second registration.
+    if (await prisma.company.findFirst({ where: { crNumber: body.company.crNumber }, select: { id: true } })) throw conflict(CR_DUPLICATE_MESSAGE);
 
     const passwordHash = await bcrypt.hash(body.password, 10);
     const user = await prisma.user.create({
@@ -57,15 +64,14 @@ router.post(
         phone: body.phone,
         role: body.role,
         locale: body.locale,
-        companyRole: body.company ? "OWNER" : undefined,
-        company: body.company
-          ? { create: { ...body.company, type: body.role === "SUPPLIER" ? "SUPPLIER" : body.company.type, citiesServed: [body.company.city], branches: { create: { name: "Main branch", city: body.company.city, isDefault: true } } } }
-          : undefined,
+        companyRole: "OWNER",
+        company: { create: companyCreateData(body.role, body.company) },
       },
       include: userInclude,
     });
+    await recordAcceptances({ userId: user.id, companyId: user.companyId, documents: ["TERMS", "PRIVACY", ...(supplier ? (["SUPPLIER_AGREEMENT"] as const) : [])], locale: body.locale, req });
     const token = signToken({ id: user.id, email: user.email, role: user.role, companyId: user.companyId, name: user.name, tokenVersion: user.tokenVersion });
-    track(user.role === "SUPPLIER" ? "signup_supplier" : "signup_buyer", { userId: user.id, role: user.role, sessionId: sessionIdOf(req), city: body.company?.city ?? null, props: { withCompany: Boolean(body.company) } });
+    track(supplier ? "signup_supplier" : "signup_buyer", { userId: user.id, role: user.role, sessionId: sessionIdOf(req), city: body.company.city, props: { withCompany: true, companyType: user.company?.type ?? null, citiesServed: user.company?.citiesServed.length ?? 0 } });
     res.status(201).json({ token, user: serialize(user) });
   }),
 );

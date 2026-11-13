@@ -67,7 +67,9 @@ The demo seed (`prisma/seed.ts` without `SEED_MODE`) deletes everything and refu
 3. Restart the API. `GET /payments/config` now returns `cardPaymentsEnabled: true` and the web/mobile
    checkout shows the card option. Test with Moyasar test keys first (test card 4111 1111 1111 1111).
 4. Apple Pay on web needs domain verification in the Moyasar dashboard (hosted file under `/.well-known/`
-   — serve it from `apps/web/public/.well-known/`).
+   — serve it from `apps/web/public/.well-known/`). Choose the form methods with `MOYASAR_METHODS`
+   (default `creditcard,applepay,stcpay`; mada is part of creditcard). Full setup, test cards, bank-transfer
+   proofs, reconciliation and the go-live checklist: `docs/INTEGRATIONS.md` → "Payments".
 
 ## 4b. Phone OTP, carriers, monitoring, e-invoicing
 * **OTP login**: create a Unifonic account (unifonic.com), get an App SID and an approved sender ID → `UNIFONIC_APP_SID`, `UNIFONIC_SENDER_ID`. Until set, phone sign-in works only in development (code 123456).

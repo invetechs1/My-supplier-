@@ -1,19 +1,28 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import type { EInvoiceRecord, EInvoiceStatus, OrderExtended, PaymentRecord, RefundResult } from "@mysupplier/shared";
-import { api, einvoiceXmlPath, errorMessage, openDownload } from "@/lib/api";
+import type { BankDetails, BankTransferProofResult, EInvoiceRecord, EInvoiceStatus, OrderExtended, PaymentRecord, PaymentRecordStatus, RefundResult } from "@mysupplier/shared";
+import { api, einvoiceXmlPath, errorMessage, openDownload, paymentProofPath } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n";
-import { formatDateTime, formatSar } from "@/lib/format";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
+import { formatDate, formatDateTime, formatSar } from "@/lib/format";
 import { Alert, Badge, Button, Card, CardHeader, Input, LoadingBlock, Modal, Textarea } from "./ui";
 
 const PROVIDER_LABEL: Record<string, string> = { MOYASAR: "Card (Moyasar)", MANUAL: "Manual" };
-const RECORD_TONE: Record<string, "green" | "amber" | "red" | "purple" | "slate"> = { PAID: "green", INITIATED: "amber", FAILED: "red", REFUNDED: "purple" };
+const METHOD_KEY: Record<string, TranslationKey> = { COD: "checkout.cod", BANK_TRANSFER: "checkout.bank", CARD: "checkout.card", CREDIT: "orders.creditNet" };
+const RECORD_TONE: Record<string, "green" | "amber" | "red" | "purple" | "slate" | "blue"> = { PAID: "green", INITIATED: "amber", AUTHORIZED: "blue", CAPTURED: "green", SUBMITTED: "amber", FAILED: "red", REFUNDED: "purple" };
+const RECORD_STATUS_KEY: Record<PaymentRecordStatus, TranslationKey> = { INITIATED: "pay.status.INITIATED", AUTHORIZED: "pay.status.AUTHORIZED", CAPTURED: "pay.status.CAPTURED", SUBMITTED: "pay.status.SUBMITTED", PAID: "pay.status.PAID", FAILED: "pay.status.FAILED", REFUNDED: "pay.status.REFUNDED" };
 
-/** Payment records for the order (GET /payments/:orderId); refunds show as REFUNDED rows. */
+/** Localised badge for a ledger row status (INITIATED / SUBMITTED / PAID …). */
+export function PaymentRecordBadge({ status }: { status: PaymentRecordStatus | string }) {
+  const { t } = useI18n();
+  const key = RECORD_STATUS_KEY[status as PaymentRecordStatus];
+  return <Badge tone={RECORD_TONE[status] ?? "slate"}>{key ? t(key) : status}</Badge>;
+}
+
+/** Payment records for the order (GET /payments/:orderId); refunds show as REFUNDED rows, bank-transfer proofs as SUBMITTED. */
 export function PaymentsList({ orderId, refreshKey = 0 }: { orderId: string; refreshKey?: number }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const state = useAsync(() => api.payments(orderId), [orderId, refreshKey]);
   if (state.loading) return <LoadingBlock className="py-3" label="Loading payments…" />;
   if (state.error) return <p className="text-xs text-slate-400">Payment history unavailable.</p>;
@@ -25,18 +34,90 @@ export function PaymentsList({ orderId, refreshKey = 0 }: { orderId: string; ref
         <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
           <div className="min-w-0">
             <p className="font-medium text-slate-900">
-              {PROVIDER_LABEL[p.provider] ?? p.provider}
+              {p.method && METHOD_KEY[p.method] ? t(METHOD_KEY[p.method]) : PROVIDER_LABEL[p.provider] ?? p.provider}
+              {p.provider === "MOYASAR" && p.method && <span className="ms-1 text-xs text-slate-400">· Moyasar</span>}
               {p.providerPaymentId && <span className="ms-2 font-mono text-xs text-slate-400" dir="ltr">{p.providerPaymentId.slice(0, 12)}{p.providerPaymentId.length > 12 ? "…" : ""}</span>}
+              {p.reference && <span className="ms-2 font-mono text-xs text-slate-500" dir="ltr">{t("pay.reference")} {p.reference}</span>}
             </p>
-            <p className="text-xs text-slate-500">{formatDateTime(p.createdAt, lang)}</p>
+            <p className="text-xs text-slate-500">
+              {formatDateTime(p.createdAt, lang)}
+              {p.paidAt && p.status === "SUBMITTED" && <> · {t("pay.transferDate")}: {formatDate(p.paidAt, lang)}</>}
+              {p.hasProof && (
+                <>
+                  {" · "}
+                  <button type="button" onClick={() => void openDownload(paymentProofPath(orderId, p.id))} className="font-medium text-brand-700 hover:underline">{t("pay.viewReceipt")} ↗</button>
+                </>
+              )}
+            </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`font-semibold tabular-nums ${p.status === "REFUNDED" ? "text-violet-700" : "text-slate-900"}`}>{p.status === "REFUNDED" ? "−" : ""}{formatSar(p.amount, lang)}</span>
-            <Badge tone={RECORD_TONE[p.status] ?? "slate"}>{p.status}</Badge>
+            <span className={`font-semibold tabular-nums ${p.status === "REFUNDED" ? "text-violet-700" : "text-slate-900"}`}>{p.amount < 0 ? "−" : ""}{formatSar(Math.abs(p.amount), lang)}</span>
+            <PaymentRecordBadge status={p.status} />
           </div>
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Supplier / platform account to transfer to, with the order reference the buyer must quote. */
+export function BankDetailsList({ bank, order }: { bank: BankDetails; order: Pick<OrderExtended, "reference" | "total"> }) {
+  const { t, lang } = useI18n();
+  return (
+    <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+      <div><dt className="text-slate-500">{t("pay.beneficiary")}</dt><dd className="font-medium text-slate-900">{bank.beneficiary || "—"}<span className="block text-xs font-normal text-slate-500">{bank.source === "supplier" ? t("pay.supplierAccount") : t("pay.platformAccount")}</span></dd></div>
+      <div><dt className="text-slate-500">{t("orders.bank")}</dt><dd className="font-medium text-slate-900">{bank.bankName || "—"}</dd></div>
+      <div><dt className="text-slate-500">{t("orders.iban")}</dt><dd className="font-mono font-medium text-slate-900" dir="ltr">{bank.iban || "—"}</dd></div>
+      <div><dt className="text-slate-500">{t("orders.amount")}</dt><dd className="font-semibold tabular-nums text-brand-700">{formatSar(order.total, lang)}</dd></div>
+      <div className="sm:col-span-2"><dt className="text-slate-500">{t("orders.paymentReference")}</dt><dd className="font-mono font-semibold text-slate-900" dir="ltr">{order.reference}</dd></div>
+    </dl>
+  );
+}
+
+/** Buyer form → POST /orders/:id/payments/bank-transfer (reference, amount, date, optional receipt file). */
+export function BankTransferProofForm({ order, onSubmitted }: { order: OrderExtended; onSubmitted: (result: BankTransferProofResult) => void }) {
+  const { t } = useI18n();
+  const [reference, setReference] = useState("");
+  const [amount, setAmount] = useState(String(order.total));
+  const [paidAt, setPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const value = Number(amount);
+    if (reference.trim().length < 2) return setError(t("pay.errReference"));
+    if (!Number.isFinite(value) || value <= 0) return setError(t("pay.errAmount"));
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.submitBankTransfer(order.id, { reference: reference.trim(), amount: Math.round(value * 100) / 100, paidAt: paidAt || undefined, note: note.trim() || undefined }, file);
+      onSubmitted(result);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <div>
+        <p className="text-sm font-semibold text-slate-900">{t("pay.bankProofTitle")}</p>
+        <p className="text-xs text-slate-500">{t("pay.bankProofSubtitle")}</p>
+      </div>
+      {error && <Alert>{error}</Alert>}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Input label={t("pay.transferReference")} name="transferReference" value={reference} onChange={(e) => setReference(e.target.value)} dir="ltr" maxLength={64} required />
+        <Input label={t("pay.amountTransferred")} name="transferAmount" type="number" min={0.01} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} dir="ltr" required />
+        <Input label={t("pay.transferDate")} name="transferDate" type="date" value={paidAt} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setPaidAt(e.target.value)} dir="ltr" />
+      </div>
+      <Input label={t("pay.receiptFile")} name="transferFile" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      <Textarea label={t("pay.noteOptional")} name="transferNote" rows={2} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
+      <Button type="submit" loading={busy}>{t("pay.submitProof")}</Button>
+    </form>
   );
 }
 

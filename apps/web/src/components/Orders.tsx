@@ -3,18 +3,18 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import type { OrderEvent, OrderExtended, OrderItem, OrderMessage, OrderStatus, PaymentMethod, PaymentStatus, ReturnReason, ReturnRequest, Review } from "@mysupplier/shared";
-import { api, deliveryNoteHtmlPath, errorMessage, invoiceHtmlPath, openDownload } from "@/lib/api";
+import { LEGAL_PATHS, isFaultReason, type OrderEvent, type OrderExtended, type OrderItem, type OrderMessage, type OrderStatus, type PaymentMethod, type PaymentStatus, type ReturnEligibility, type ReturnEligibilityLine, type ReturnReason, type ReturnRequest, type Review } from "@mysupplier/shared";
+import { ApiRequestError, api, deliveryNoteHtmlPath, errorMessage, invoiceHtmlPath, openDownload } from "@/lib/api";
 import { RETURN_REASONS, canRequestReturn, commerceApi, formatAddressLine, returnReasonLabel, returnStatusTone, type OrderWithCommerce } from "@/lib/api/commerce";
 import { canManageCompany, companyRoleOf, useAuth } from "@/lib/auth";
 import { useCart } from "@/lib/cart";
 import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
-import { BANK_TRANSFER_DETAILS, usePaymentConfig } from "@/lib/payments";
+import { brandsLine, usePaymentConfig } from "@/lib/payments";
 import { cn, formatDate, formatDateTime, formatSar, timeAgo } from "@/lib/format";
 import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, FlashMessage, Input, LinkButton, LoadingBlock, Modal, PageHeader, Pagination, Select, Stars, StatusBadge, Table, Textarea, type Column } from "./ui";
 import { OrderShipments } from "./OrderShipments";
-import { EInvoiceCard, PaymentsList, RefundButton } from "./OrderPayments";
+import { BankDetailsList, BankTransferProofForm, EInvoiceCard, PaymentsList, RefundButton } from "./OrderPayments";
 
 export type OrderPerspective = "buyer" | "supplier" | "admin";
 
@@ -169,20 +169,38 @@ export function OrdersList({ perspective, basePath, title, subtitle, filters }: 
   );
 }
 
-/** Static bank-transfer instructions; the order reference must be quoted so the supplier can match the payment. */
-export function BankTransferInstructions({ order }: { order: OrderExtended }) {
-  const { t, lang } = useI18n();
+/**
+ * Bank-transfer card: the supplier's account (house supplier = its company profile, platform account as
+ * fallback) with the order reference to quote, the buyer's proof-of-transfer form, and the pending-proof notice.
+ */
+export function BankTransferInstructions({ order, perspective, refreshKey = 0, onProofSubmitted }: { order: OrderExtended; perspective: OrderPerspective; refreshKey?: number; onProofSubmitted: (order: OrderExtended) => void }) {
+  const { t } = useI18n();
+  const { config } = usePaymentConfig();
+  const records = useAsync(() => api.payments(order.id), [order.id, refreshKey]);
+  const pending = (records.data ?? []).find((p) => p.status === "SUBMITTED");
+  // The API hides IBANs on company objects; the invoice payload carries the account to pay into (supplier or platform).
+  const invoice = useAsync(() => api.invoice(order.id), [order.id]);
+  const bank = invoice.data?.bank ?? config?.bankTransfer ?? { bankName: "", iban: "", beneficiary: order.company?.name ?? "", source: "platform" as const };
   return (
     <Card>
       <CardHeader title={t("orders.bankTitle")} subtitle={t("orders.bankSubtitle")} />
-      <dl className="grid gap-x-6 gap-y-3 px-5 py-4 text-sm sm:grid-cols-2">
-        <div><dt className="text-slate-500">{t("orders.bank")}</dt><dd className="font-medium text-slate-900">{BANK_TRANSFER_DETAILS.bankName}</dd></div>
-        <div><dt className="text-slate-500">{t("orders.accountName")}</dt><dd className="font-medium text-slate-900">{BANK_TRANSFER_DETAILS.accountName}</dd></div>
-        <div><dt className="text-slate-500">{t("orders.iban")}</dt><dd className="font-mono font-medium text-slate-900" dir="ltr">{BANK_TRANSFER_DETAILS.iban}</dd></div>
-        <div><dt className="text-slate-500">{t("orders.swift")}</dt><dd className="font-mono font-medium text-slate-900" dir="ltr">{BANK_TRANSFER_DETAILS.swift}</dd></div>
-        <div><dt className="text-slate-500">{t("orders.amount")}</dt><dd className="font-semibold tabular-nums text-brand-700">{formatSar(order.total, lang)}</dd></div>
-        <div><dt className="text-slate-500">{t("orders.paymentReference")}</dt><dd className="font-mono font-semibold text-slate-900" dir="ltr">{order.reference}</dd></div>
-      </dl>
+      <div className="px-5 py-4">
+        <BankDetailsList bank={bank} order={order} />
+      </div>
+      {pending && (
+        <div className="border-t border-slate-100 px-5 py-3">
+          <Alert kind="info">
+            <span className="font-semibold">{t("pay.proofPending")}</span>{" "}
+            {perspective === "buyer" ? null : t("pay.proofPendingSupplier")}{" "}
+            <span className="font-mono text-xs" dir="ltr">{t("pay.reference")} {pending.reference}</span>
+          </Alert>
+        </div>
+      )}
+      {perspective === "buyer" && !pending && !records.loading && (
+        <div className="border-t border-slate-100 px-5 py-4">
+          <BankTransferProofForm order={order} onSubmitted={(result) => { records.reload(); onProofSubmitted(result.order); }} />
+        </div>
+      )}
       <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
         {t("orders.sendReceiptTo")} <a href="mailto:payments@mysupplier.sa" className="font-semibold text-brand-700 hover:underline">payments@mysupplier.sa</a> {t("orders.quotingReference")}
       </p>
@@ -190,7 +208,6 @@ export function BankTransferInstructions({ order }: { order: OrderExtended }) {
   );
 }
 
-/** Compact ZATCA invoice preview (GET /orders/:id/invoice) with a link to the printable HTML version. */
 export function InvoicePreview({ orderId }: { orderId: string }) {
   const { t, lang } = useI18n();
   const invoice = useAsync(() => api.invoice(orderId), [orderId]);
@@ -562,12 +579,28 @@ export function OrderReturns({ orderId, perspective, refreshKey = 0, onLoaded }:
 
 /** Buyer modal: pick the lines and quantities to send back. */
 export function ReturnRequestModal({ order, open, onClose, existing, onCreated }: { order: OrderExtended; open: boolean; onClose: () => void; existing: ReturnRequest[]; onCreated: (r: ReturnRequest) => void }) {
-  const { t, lang } = useI18n();
+  const { t, lang, has } = useI18n();
   const [reason, setReason] = useState<ReturnReason | "">("");
   const [details, setDetails] = useState("");
   const [qty, setQty] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Per-line returns policy (window, restocking fee, conditions) from the API; the same rules are enforced on submit.
+  const [eligibility, setEligibility] = useState<ReturnEligibility | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    commerceApi.returnEligibility(order.id).then((e) => { if (!cancelled) setEligibility(e); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [open, order.id]);
+  const policyOf = (itemId: string): ReturnEligibilityLine | undefined => eligibility?.lines.find((l) => l.orderItemId === itemId);
+  const fault = reason !== "" && isFaultReason(reason);
+  /** A line can be requested for the chosen reason (unknown policy = allowed; the API decides). */
+  const lineAllowed = (itemId: string) => {
+    const p = policyOf(itemId);
+    if (!p || reason === "") return true;
+    return fault ? p.fault.allowed : p.changeOfMind.allowed;
+  };
 
   // Quantities already claimed by open or accepted returns cannot be requested again.
   const claimed = useMemo(() => {
@@ -577,9 +610,11 @@ export function ReturnRequestModal({ order, open, onClose, existing, onCreated }
       .forEach((r) => r.items.forEach((i) => map.set(i.orderItemId, (map.get(i.orderItemId) ?? 0) + i.quantity)));
     return map;
   }, [existing]);
-  const lines = (order.items ?? []).map((it: OrderItem) => ({ item: it, remaining: Math.max(0, it.quantity - (claimed.get(it.id) ?? 0)) }));
-  const selected = lines.filter((l) => (qty[l.item.id] ?? 0) > 0);
-  const estimate = selected.reduce((s, l) => s + (qty[l.item.id] ?? 0) * l.item.unitPrice, 0);
+  const lines = (order.items ?? []).map((it: OrderItem) => ({ item: it, remaining: Math.max(0, it.quantity - (claimed.get(it.id) ?? 0)), allowed: lineAllowed(it.id) }));
+  const selected = lines.filter((l) => (qty[l.item.id] ?? 0) > 0 && l.allowed);
+  const goods = selected.reduce((s, l) => s + (qty[l.item.id] ?? 0) * l.item.unitPrice, 0);
+  const restocking = fault ? 0 : selected.reduce((s, l) => s + (qty[l.item.id] ?? 0) * l.item.unitPrice * ((policyOf(l.item.id)?.changeOfMind.restockingPct ?? 0) / 100), 0);
+  const estimate = goods - restocking;
 
   useEffect(() => {
     if (!open) {
@@ -604,10 +639,31 @@ export function ReturnRequestModal({ order, open, onClose, existing, onCreated }
       });
       onCreated(created);
     } catch (err) {
-      setError(errorMessage(err));
+      // Policy rejections carry a bilingual code (RETURN_NON_RETURNABLE, …) and the offending line; show them in the site language.
+      const details = err instanceof ApiRequestError ? (err.details as { code?: string; item?: string } | undefined) : undefined;
+      const key = details?.code ? (`returns.err.${details.code}` as TranslationKey) : null;
+      setError(key && has(key) ? `${details?.item ? `${details.item}: ` : ""}${t(key)}` : errorMessage(err));
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const policyCell = (p: ReturnEligibilityLine | undefined, allowed: boolean) => {
+    if (!p) return null;
+    const pol = p.policy;
+    return (
+      <div className="mt-1 space-y-0.5 text-xs text-slate-500">
+        {pol.returnable ? (
+          <p>
+            <span className="font-medium text-slate-700">{t("returns.policyLabel")}:</span> {pol.windowDays} {t("returns.daysSuffix")} · {t("returns.restocking")} <span dir="ltr">{pol.restockingPct}%</span>
+          </p>
+        ) : (
+          <p><Badge tone="red">{t("returns.nonReturnable")}</Badge> <span className="ms-1">{t("returns.claimWithin48")}</span></p>
+        )}
+        <p className="line-clamp-2" title={pol.conditions[lang]}>{pol.conditions[lang]}</p>
+        {!allowed && <p className="font-semibold text-red-700">{t("returns.notEligibleForReason")}</p>}
+      </div>
+    );
   };
 
   return (
@@ -624,7 +680,10 @@ export function ReturnRequestModal({ order, open, onClose, existing, onCreated }
       }
     >
       <div className="space-y-4">
-        <p className="text-sm text-slate-600">{t("returns.policy")}</p>
+        <p className="text-sm text-slate-600">
+          {t("returns.policy")} <Link href={LEGAL_PATHS.RETURNS_POLICY} target="_blank" className="font-semibold text-brand-700 hover:underline">{t("returns.policyLink")} ↗</Link>
+        </p>
+        <p className="text-xs text-slate-500">{fault ? t("returns.faultHint") : t("returns.changeOfMindHint")}</p>
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -636,11 +695,12 @@ export function ReturnRequestModal({ order, open, onClose, existing, onCreated }
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {lines.map(({ item, remaining }) => (
-                <tr key={item.id} className={cn(remaining <= 0 && "opacity-50")}>
+              {lines.map(({ item, remaining, allowed }) => (
+                <tr key={item.id} className={cn((remaining <= 0 || !allowed) && "opacity-60")}>
                   <td className="px-3 py-2">
                     <p className="font-medium text-slate-900">{item.name}</p>
                     <p className="text-xs text-slate-500">{formatSar(item.unitPrice, lang)} / {item.unit}</p>
+                    {policyCell(policyOf(item.id), allowed)}
                   </td>
                   <td className="px-3 py-2 text-end tabular-nums">{item.quantity}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{remaining}</td>
@@ -654,14 +714,14 @@ export function ReturnRequestModal({ order, open, onClose, existing, onCreated }
                         max={remaining}
                         step="any"
                         value={qty[item.id] ?? 0}
-                        disabled={remaining <= 0}
+                        disabled={remaining <= 0 || !allowed}
                         onChange={(e) => {
                           const v = Math.max(0, Math.min(remaining, Number(e.target.value) || 0));
                           setQty((q) => ({ ...q, [item.id]: v }));
                         }}
                         className="w-24"
                       />
-                      <button type="button" className="text-xs font-medium text-brand-700 hover:underline disabled:opacity-40" disabled={remaining <= 0} onClick={() => setQty((q) => ({ ...q, [item.id]: remaining }))}>
+                      <button type="button" className="text-xs font-medium text-brand-700 hover:underline disabled:opacity-40" disabled={remaining <= 0 || !allowed} onClick={() => setQty((q) => ({ ...q, [item.id]: remaining }))}>
                         {t("returns.all")}
                       </button>
                     </div>
@@ -676,6 +736,7 @@ export function ReturnRequestModal({ order, open, onClose, existing, onCreated }
           <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm">
             <p className="text-slate-500">{t("returns.estimatedRefundExVat")}</p>
             <p className="text-lg font-semibold tabular-nums text-slate-900">{formatSar(estimate, lang)}</p>
+            {restocking > 0 && <p className="text-xs text-amber-700">{t("returns.estimatedRestocking")}: −{formatSar(restocking, lang)}</p>}
             <p className="text-xs text-slate-500">{t("returns.finalAmountNote")}</p>
           </div>
         </div>
@@ -793,8 +854,10 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
   const canSupplierAct = (perspective === "supplier" || perspective === "admin") && nextStatus;
   const canBuyerCancel = (perspective === "buyer" || perspective === "admin") && o.status === "PENDING";
   const canMarkPaid = (perspective === "supplier" || perspective === "admin") && o.paymentStatus !== "PAID" && o.status !== "CANCELLED";
-  const canPayByCard = perspective === "buyer" && o.paymentStatus === "UNPAID" && o.paymentMethod === "CARD" && o.status !== "CANCELLED" && !!paymentConfig?.cardPaymentsEnabled;
-  const showBankInstructions = o.paymentMethod === "BANK_TRANSFER" && o.paymentStatus === "UNPAID" && o.status !== "CANCELLED";
+  // Any unpaid order (direct, RFQ-awarded, recurring, credit invoice) can be settled by card once the gateway is on.
+  const canPayByCard = perspective === "buyer" && o.paymentStatus === "UNPAID" && o.status !== "CANCELLED" && !!paymentConfig?.cardPaymentsEnabled;
+  const awaitingCard = canPayByCard && o.paymentMethod === "CARD";
+  const showBankInstructions = o.paymentStatus === "UNPAID" && o.status !== "CANCELLED" && (o.paymentMethod === "BANK_TRANSFER" || o.paymentMethod === "CREDIT" || !o.paymentMethod);
 
   const orderItems = o.items ?? [];
   const bidItems = o.bid?.items ?? [];
@@ -902,15 +965,31 @@ export function OrderDetail({ id, perspective, backHref }: { id: string; perspec
         <OrderStatusTimeline status={o.status} />
       </Card>
 
-      {canPayByCard && (
+      {awaitingCard && (
         <Alert kind="warning" className="mt-6">
           <span className="font-semibold">{t("orders.paymentPending")}</span> {t("orders.awaitingCard")}{" "}
           <Link href={`/pay/${o.id}`} className="font-semibold underline underline-offset-2">{t("orders.pay")} {formatSar(o.total, lang)} {t("orders.now")}</Link>
         </Alert>
       )}
+      {canPayByCard && !awaitingCard && (
+        <Alert kind="info" className="mt-6">
+          {t("pay.cardAlsoAvailable")} <span className="text-xs text-slate-500">{brandsLine(paymentConfig?.brands)}</span>{" "}
+          <Link href={`/pay/${o.id}`} className="font-semibold underline underline-offset-2">{t("pay.payByCard")} · {formatSar(o.total, lang)}</Link>
+        </Alert>
+      )}
       {showBankInstructions && (
         <div className="mt-6">
-          <BankTransferInstructions order={o} />
+          <BankTransferInstructions
+            order={o}
+            perspective={perspective}
+            refreshKey={paymentsKey}
+            onProofSubmitted={(updated) => {
+              state.setData((prev) => (prev ? { ...prev, ...updated } : updated));
+              setPaymentsKey((k) => k + 1);
+              bumpActivity();
+              setFlash({ kind: "success", message: t("pay.proofSubmitted") });
+            }}
+          />
         </div>
       )}
 

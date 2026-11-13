@@ -11,6 +11,7 @@ import { snapshotHistory } from "../services/catalog";
 import { importCatalog, type ImportRow } from "../services/catalogImport";
 import { validateTiers } from "../services/commerce";
 import { applyStockMovement } from "../services/portal";
+import { supplierAgreementGuard } from "../services/legal";
 import { track } from "../services/analytics";
 
 const router = Router();
@@ -56,6 +57,7 @@ router.get(
 router.post(
   "/supplier/prices",
   requireAuth("SUPPLIER"),
+  supplierAgreementGuard,
   asyncHandler(async (req, res) => {
     const companyId = requireCompany(req);
     const body = priceSchema.parse(req.body);
@@ -77,6 +79,7 @@ router.post(
 router.post(
   "/supplier/prices/bulk",
   requireAuth("SUPPLIER"),
+  supplierAgreementGuard,
   asyncHandler(async (req, res) => {
     const companyId = requireCompany(req);
     const { items } = z.object({ items: z.array(priceSchema).min(1).max(500) }).parse(req.body);
@@ -114,6 +117,7 @@ router.delete(
 router.patch(
   "/supplier/prices/:id",
   requireAuth("SUPPLIER"),
+  supplierAgreementGuard,
   asyncHandler(async (req, res) => {
     const companyId = requireCompany(req);
     const data = z
@@ -177,6 +181,7 @@ const catalogItem = z.object({
 router.post(
   "/supplier/catalog/import",
   requireAuth("SUPPLIER"),
+  supplierAgreementGuard,
   asyncHandler(async (req, res) => {
     const companyId = requireCompany(req);
     const { items } = z.object({ items: z.array(catalogItem).min(1).max(1000) }).parse(req.body);

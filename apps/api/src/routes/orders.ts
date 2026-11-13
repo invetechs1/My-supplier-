@@ -10,6 +10,7 @@ import { paged, paginate } from "../lib/pagination";
 import { companyUserIds, notify } from "../services/notifications";
 import { applyStockMovement, recordOrderEvent, requireCompanyRole } from "../services/portal";
 import { frequentlyOrdered, releaseCredit } from "../services/commerce";
+import { recordManualSettlement } from "../services/payments";
 import { emitOrderWebhook } from "../services/webhooks";
 
 const router = Router();
@@ -110,9 +111,11 @@ router.patch(
 );
 
 /**
- * Payment confirmation rules: card payments are confirmed by the gateway only; bank transfers land in
- * the platform account and are confirmed by the admin; suppliers may only confirm cash collected on
- * delivery (COD) for delivered orders. Refunds go through /payments/:orderId/refund.
+ * Payment confirmation rules: card payments are confirmed by the gateway only; bank transfers land in the
+ * supplier's account (or the platform's when the supplier has no IBAN) and are confirmed by the supplier
+ * owner/manager or an admin, ideally after the buyer submitted the transfer proof; suppliers may only
+ * confirm cash collected on delivery (COD) for delivered orders; credit-terms settlements are confirmed by
+ * MySupplier. Every confirmation writes a Payment row. Refunds go through /payments/:orderId/refund.
  */
 router.patch(
   "/orders/:id/payment",
@@ -124,10 +127,12 @@ router.patch(
     if (!order) throw notFound("Order not found");
     if (order.paymentStatus === "REFUNDED") throw badRequest("Refunded orders cannot be changed");
     if (req.user!.role !== "ADMIN") {
-      if (order.paymentMethod !== "COD") throw forbidden("Only cash-on-delivery payments can be confirmed by the supplier; bank transfers and credit-terms settlements are confirmed by MySupplier");
-      if (paymentStatus === "PAID" && order.status !== "DELIVERED") throw badRequest("Confirm cash collection after the order is delivered");
+      if (order.paymentMethod === "CARD") throw forbidden("Card payments are confirmed by the payment gateway");
+      if (order.paymentMethod === "CREDIT") throw forbidden("Credit-terms settlements are confirmed by MySupplier");
+      if (order.paymentMethod === "COD" && paymentStatus === "PAID" && order.status !== "DELIVERED") throw badRequest("Confirm cash collection after the order is delivered");
     }
     const updated = await prisma.order.update({ where: { id: order.id }, data: { paymentStatus }, include: orderInclude });
+    if (paymentStatus === "PAID" && order.paymentStatus !== "PAID") await recordManualSettlement(order, req.user!.id);
     // Net-terms settlement: paying a CREDIT order frees the company's credit line again.
     let released = 0;
     if (order.paymentMethod === "CREDIT" && paymentStatus === "PAID" && order.paymentStatus !== "PAID") released = await releaseCredit(order.id);

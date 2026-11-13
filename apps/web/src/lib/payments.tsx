@@ -53,10 +53,6 @@ export function usePaymentConfig(): { config: PaymentConfig | null; loading: boo
   return { config, loading };
 }
 
-/** Static bank-transfer instructions shown on BANK_TRANSFER orders (replace placeholders with the real account). */
-export const BANK_TRANSFER_DETAILS = {
-  bankName: "Saudi National Bank (SNB)",
-  accountName: "MySupplier Trading Co.",
-  iban: "SAxx xxxx xxxx xxxx xxxx xxxx",
-  swift: "NCBKSAJE",
-};
+/** Fallback brand list when the config has not loaded yet (matches the default MOYASAR_METHODS). */
+export const DEFAULT_BRANDS = ["mada", "Visa", "Mastercard", "Apple Pay", "STC Pay"];
+export const brandsLine = (brands?: string[] | null) => (brands && brands.length ? brands : DEFAULT_BRANDS).join(" · ");

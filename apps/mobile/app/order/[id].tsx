@@ -382,6 +382,11 @@ function OrderDetailContent() {
   const [cardBusy, setCardBusy] = useState(false);
   const [cardError, setCardError] = useState<string | null>(null);
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null);
+  const [proof, setProof] = useState({ reference: "", amount: "", paidAt: new Date().toISOString().slice(0, 10) });
+  const [proofBusy, setProofBusy] = useState(false);
+  const [proofError, setProofError] = useState<string | null>(null);
+  // Ledger rows: a SUBMITTED row means the buyer already reported a transfer that awaits confirmation.
+  const ledger = useApi(() => api.orderPayments(id), [id, data?.paymentStatus, data?.paymentMethod, data?.updatedAt], Boolean(id) && Boolean(data));
   // ZATCA simplified invoice (number + QR); available for every order the caller may see.
   const invoice = useApi(() => api.invoice(id), [id, data?.paymentStatus, data?.status], Boolean(id) && Boolean(data));
 
@@ -486,6 +491,29 @@ function OrderDetailContent() {
       setCardError(getErrorMessage(err));
     } finally {
       setCardBusy(false);
+    }
+  };
+
+  const pendingProof = (ledger.data ?? []).find((p) => p.status === "SUBMITTED");
+  // Account to pay into (supplier's IBAN, platform fallback) comes with the invoice payload.
+  const bank = invoice.data?.bank ?? paymentConfig?.bankTransfer ?? null;
+  const showBank = paymentStatus === "UNPAID" && !cancelled && (order.paymentMethod === "BANK_TRANSFER" || order.paymentMethod === "CREDIT" || !order.paymentMethod);
+
+  const submitProof = async () => {
+    const amount = Number(proof.amount || order.total);
+    if (proof.reference.trim().length < 2) return setProofError(t("transferReference"));
+    if (!Number.isFinite(amount) || amount <= 0) return setProofError(t("amountTransferred"));
+    setProofBusy(true);
+    setProofError(null);
+    try {
+      const result = await api.submitBankTransfer(order.id, { reference: proof.reference.trim(), amount: Math.round(amount * 100) / 100, paidAt: /^\d{4}-\d{2}-\d{2}$/.test(proof.paidAt) ? proof.paidAt : undefined });
+      setData(result.order);
+      ledger.reload();
+      Alert.alert(t("submitProof"), t("proofSubmitted"));
+    } catch (err) {
+      setProofError(getErrorMessage(err));
+    } finally {
+      setProofBusy(false);
     }
   };
 
@@ -645,10 +673,11 @@ function OrderDetailContent() {
           </View>
           <StatusBadge status={paymentStatus} />
         </View>
-        {isBuyer && order.paymentMethod === "CARD" && paymentStatus === "UNPAID" && !cancelled ? (
+        {isBuyer && paymentStatus === "UNPAID" && !cancelled && (order.paymentMethod === "CARD" || cardEnabled) ? (
           <>
             <Button
-              title={`${t("payNow")} · ${formatSar(order.total)}`}
+              title={`${order.paymentMethod === "CARD" ? t("payNow") : t("payByCardAlso")} · ${formatSar(order.total)}`}
+              variant={order.paymentMethod === "CARD" ? "primary" : "secondary"}
               icon="card-outline"
               fullWidth
               loading={cardBusy}
@@ -662,18 +691,33 @@ function OrderDetailContent() {
             {cardError ? <Text style={[typography.caption, { color: colors.danger, marginTop: spacing.xs, textAlign: "center" }]}>{cardError}</Text> : null}
           </>
         ) : null}
-        {order.paymentMethod === "BANK_TRANSFER" && paymentStatus === "UNPAID" && !cancelled ? (
+        {showBank ? (
           <View style={styles.bankBox}>
             <View style={styles.bankHead}>
               <Ionicons name="business-outline" size={16} color={colors.primary} />
               <Text style={styles.bankTitle}>{t("bankTransferInstructions")}</Text>
             </View>
-            <KeyValue label="Beneficiary" value={order.company?.name ?? "Supplier"} />
+            <KeyValue label={t("beneficiary")} value={bank?.beneficiary || order.company?.name || "Supplier"} />
+            {bank?.bankName ? <KeyValue label={t("bankName")} value={bank.bankName} /> : null}
+            {bank?.iban ? <KeyValue label={t("iban")} value={bank.iban} /> : null}
             <KeyValue label="Amount" value={formatSar(order.total)} />
             <KeyValue label="Transfer reference" value={order.reference} />
-            <Text style={[typography.caption, { marginTop: spacing.sm }]}>
-              Transfer the amount to the supplier's bank account (IBAN shared on the order confirmation / invoice) and quote the reference above so the supplier can match it. The supplier marks the order as paid once funds arrive.
-            </Text>
+            {bank?.source === "platform" ? <Text style={[typography.caption, { marginTop: spacing.xs }]}>{t("platformAccountNote")}</Text> : null}
+            {pendingProof ? (
+              <Text style={[typography.bodySmall, { marginTop: spacing.sm, fontWeight: "600", color: colors.primary }]}>
+                {t("proofPending")} · {pendingProof.reference}{isOrderSupplier || isAdmin ? `\n${t("proofPendingSupplier")}` : ""}
+              </Text>
+            ) : isBuyer ? (
+              <View style={{ marginTop: spacing.md }}>
+                <Text style={[typography.body, { fontWeight: "600" }]}>{t("bankProofTitle")}</Text>
+                <Text style={[typography.caption, { marginBottom: spacing.sm }]}>{t("bankProofHint")}</Text>
+                <TextField label={t("transferReference")} value={proof.reference} onChangeText={(v) => setProof({ ...proof, reference: v })} autoCapitalize="characters" />
+                <TextField label={t("amountTransferred")} value={proof.amount} placeholder={String(order.total)} keyboardType="decimal-pad" onChangeText={(v) => setProof({ ...proof, amount: v })} />
+                <TextField label={t("transferDate")} value={proof.paidAt} placeholder="2026-01-31" onChangeText={(v) => setProof({ ...proof, paidAt: v })} />
+                {proofError ? <Text style={[typography.caption, { color: colors.danger, marginBottom: spacing.xs }]}>{proofError}</Text> : null}
+                <Button title={t("submitProof")} icon="cloud-upload-outline" fullWidth loading={proofBusy} onPress={submitProof} />
+              </View>
+            ) : null}
           </View>
         ) : null}
         {(isOrderSupplier || isAdmin) && paymentStatus === "UNPAID" && !cancelled ? (

@@ -42,6 +42,8 @@ import type {
   OtpRequestResult,
   OtpVerifyPayload,
   Paginated,
+  BankTransferProofPayload,
+  BankTransferProofResult,
   PaymentConfig,
   PaymentIntent,
   PaymentRecord,
@@ -640,6 +642,9 @@ export const api = {
       body: { paymentId },
     }),
   orderPayments: (orderId: string) => request<PaymentRecord[]>(`/payments/${orderId}`),
+  /** Buyer reports a bank transfer (reference, amount, date); the supplier/admin confirms it → PAID. */
+  submitBankTransfer: (orderId: string, body: BankTransferProofPayload) =>
+    request<BankTransferProofResult>(`/orders/${encodeURIComponent(orderId)}/payments/bank-transfer`, { method: "POST", body }),
 
   // Invoices (ZATCA simplified tax invoice)
   invoice: (orderId: string) => request<InvoiceData>(`/orders/${orderId}/invoice`),

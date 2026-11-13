@@ -243,6 +243,15 @@ function CompanyPageInner() {
         </Card>
 
         <Card>
+          <CardHeader title={t("sup.company.legalIds")} subtitle={t("sup.company.legalIdsHint")} action={<VerificationBadge status={c.verificationStatus} />} />
+          <CardBody className="grid gap-4 sm:grid-cols-2">
+            {/* CR and VAT are set at registration and verified by the admin; the PATCH endpoint does not accept them. */}
+            <Input label={t("sup.company.cr")} name="crNumber" dir="ltr" value={c.crNumber ?? ""} placeholder={t("sup.company.notProvided")} readOnly disabled className="font-mono" />
+            <Input label={t("sup.company.vat")} name="vatNumber" dir="ltr" value={c.vatNumber ?? ""} placeholder={t("sup.company.notProvided")} readOnly disabled className="font-mono" />
+          </CardBody>
+        </Card>
+
+        <Card>
           <CardHeader title={t("sup.company.identity")} subtitle={t("sup.company.identitySubtitle")} />
           <CardBody className="grid gap-4 sm:grid-cols-2">
             <Input label={t("sup.company.name")} name="name" value={form.name} onChange={(e) => set("name", e.target.value)} error={errors.name} required />

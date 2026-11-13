@@ -38,6 +38,7 @@ import analyticsRouter from "./routes/analytics";
 import supplierProductRoutes from "./routes/supplierProducts";
 import commerceRoutes from "./routes/commerce";
 import marketplaceRoutes from "./routes/marketplace";
+import legalRoutes from "./routes/legal";
 
 export function createApp() {
   initSentry();
@@ -51,7 +52,8 @@ export function createApp() {
       exposedHeaders: ["X-Unread-Count"],
     }),
   );
-  app.use(express.json({ limit: "2mb" }));
+  // Keep the raw body so webhook signatures (carriers, payment gateway) can be verified byte-for-byte.
+  app.use(express.json({ limit: "2mb", verify: (req, _res, buf) => { (req as express.Request).rawBody = buf.toString("utf8"); } }));
   // Never write tokens (download links, magic links) into access logs.
   morgan.token("url", (req) => ((req as express.Request).originalUrl ?? req.url ?? "").replace(/([?&])(token|code)=[^&]*/gi, "$1$2=[redacted]").replace(/\/(update-prices|reset-password)\/[^/?]+/g, "/$1/[token]"));
   if (env.nodeEnv !== "test") app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
@@ -64,6 +66,7 @@ export function createApp() {
   api.use(boqRoutes);
   api.use(shopRoutes);
   api.use(marketplaceRoutes);
+  api.use(legalRoutes);
   api.use(cartRoutes);
   api.use(commerceRoutes);
   api.use(feedRoutes);

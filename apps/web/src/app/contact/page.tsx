@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { COMPANY, LegalNav, ProsePage } from "@/components/legal/Prose";
+import { LegalNav, ProsePage } from "@/components/legal/Prose";
+import { COMPANY } from "@/components/legal/company";
 import { Card, CardBody, CardHeader } from "@/components/ui";
 import { ContactForm } from "./ContactForm";
 

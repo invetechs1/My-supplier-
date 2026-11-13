@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
-import type { ReturnItem, ReturnRequest, ReturnStatus } from "@mysupplier/shared";
+import { restockingFeeFor, type ReturnItem, type ReturnRequest, type ReturnStatus } from "@mysupplier/shared";
 import { errorMessage } from "@/lib/api";
 import { RETURN_TRANSITIONS, supplierCommerceApi, type ReturnActionPayload, type ReturnActionStatus } from "@/lib/api/supplierCommerce";
 import { useAsync, useFlash } from "@/lib/hooks";
@@ -154,7 +154,9 @@ export function ReturnsWorkspace({ mode, initialId }: { mode: "supplier" | "admi
     { key: "qty", header: t("orders.qty"), align: "end", render: (i) => <span className="tabular-nums">{formatNumber(i.quantity, lang)} {i.unit}</span> },
     { key: "unit", header: t("product.unitPrice"), align: "end", render: (i) => <span className="tabular-nums">{formatSar(i.unitPrice, lang)}</span> },
     { key: "total", header: t("product.lineTotal"), align: "end", render: (i) => <span className="font-semibold tabular-nums">{formatSar(i.quantity * i.unitPrice, lang)}</span> },
+    { key: "restocking", header: t("returns.restocking"), align: "end", render: (i) => <span className="tabular-nums" dir="ltr">{i.restockingPct ? `${i.restockingPct}%` : "—"}</span> },
   ];
+  const restockingFee = ret ? restockingFeeFor(ret.items) : 0;
 
   const tile = (s: ReturnStatus) => {
     const selected = status === s;
@@ -287,11 +289,17 @@ export function ReturnsWorkspace({ mode, initialId }: { mode: "supplier" | "admi
                   </div>
                 </div>
 
-                <dl className="grid gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm sm:grid-cols-3">
+                <dl className={cn("grid gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm", restockingFee > 0 ? "sm:grid-cols-4" : "sm:grid-cols-3")}>
                   <div>
                     <dt className="text-xs text-slate-500">{t("returns.goodsValue")}</dt>
                     <dd className="font-semibold tabular-nums text-slate-900">{formatSar(itemsTotal(ret.items), lang)}</dd>
                   </div>
+                  {restockingFee > 0 && (
+                    <div>
+                      <dt className="text-xs text-slate-500">{t("returns.restockingFee")}</dt>
+                      <dd className="font-semibold tabular-nums text-amber-700" title={t("returns.restockingNote")}>−{formatSar(restockingFee, lang)}</dd>
+                    </div>
+                  )}
                   <div>
                     <dt className="text-xs text-slate-500">{t("returns.estimatedRefund")}</dt>
                     <dd className="font-semibold tabular-nums text-slate-900" title={t("returns.estimatedRefundHint")}>{ret.estimatedRefund === null || ret.estimatedRefund === undefined ? "—" : formatSar(ret.estimatedRefund, lang)}</dd>

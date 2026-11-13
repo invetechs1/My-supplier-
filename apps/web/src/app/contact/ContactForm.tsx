@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { api, errorMessage } from "@/lib/api";
-import { COMPANY } from "@/components/legal/Prose";
+import { COMPANY } from "@/components/legal/company";
 import { Alert, Button, Input, Select, Textarea } from "@/components/ui";
 
 const TOPICS = [

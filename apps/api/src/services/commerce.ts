@@ -331,22 +331,31 @@ export interface RefundOrder {
  * Refund for returned lines: unit price × quantity, minus the order's pro-rata coupon discount,
  * plus the VAT share (VAT was charged on the discounted subtotal).
  */
-export function computeRefund(order: RefundOrder, returned: Array<{ orderItemId: string; quantity: number }>, vatRate = VAT_RATE): number {
+/**
+ * Refund for a set of return lines: goods value net of the line's restocking fee (a % stored on the line by the
+ * returns policy; 0 for supplier-fault reasons), minus the pro-rata coupon discount, plus VAT.
+ */
+export function computeRefund(order: RefundOrder, returned: Array<{ orderItemId: string; quantity: number; restockingPct?: number | null }>, vatRate = VAT_RATE): number {
   const subtotal = Number(order.subtotal);
   const discount = Number(order.discount ?? 0);
   const factor = subtotal > 0 ? Math.max(0, (subtotal - discount) / subtotal) : 1;
   // Aggregate per order line and clamp to the quantity bought, so duplicate lines never inflate the refund.
-  const perItem = new Map<string, number>();
-  for (const r of returned) perItem.set(r.orderItemId, (perItem.get(r.orderItemId) ?? 0) + r.quantity);
+  const perItem = new Map<string, { qty: number; restockingPct: number }>();
+  for (const r of returned) {
+    const cur = perItem.get(r.orderItemId);
+    const pct = Math.min(100, Math.max(0, Number(r.restockingPct ?? 0) || 0));
+    perItem.set(r.orderItemId, { qty: (cur?.qty ?? 0) + r.quantity, restockingPct: Math.max(cur?.restockingPct ?? 0, pct) });
+  }
   let goods = 0;
-  for (const [orderItemId, qty] of perItem) {
+  for (const [orderItemId, { qty, restockingPct }] of perItem) {
     const item = order.items.find((i) => i.id === orderItemId);
     if (!item) continue;
-    goods += Number(item.unitPrice) * Math.min(qty, item.quantity);
+    goods += Number(item.unitPrice) * Math.min(qty, item.quantity) * (1 - restockingPct / 100);
   }
   return round2(goods * factor * (1 + vatRate));
 }
 
+/** Upper bound on any category's change-of-mind window (per-category windows live in packages/shared/src/returns.ts). */
 export const RETURN_WINDOW_DAYS = 14;
 export const RETURN_REASONS = ["DAMAGED", "DEFECTIVE", "WRONG_ITEM", "NOT_AS_DESCRIBED", "EXCESS", "OTHER"] as const;
 

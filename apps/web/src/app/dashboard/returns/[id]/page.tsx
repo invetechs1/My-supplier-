@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import type { ReturnStatus } from "@mysupplier/shared";
+import { restockingFeeFor, type ReturnStatus } from "@mysupplier/shared";
 import { errorMessage } from "@/lib/api";
 import { RETURN_FLOW, commerceApi, returnReasonLabel } from "@/lib/api/commerce";
 import { useAsync, useFlash, usePageTitle } from "@/lib/hooks";
@@ -56,7 +56,7 @@ function ReturnTimeline({ status }: { status: ReturnStatus }) {
 
 export default function ReturnDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const state = useAsync(() => commerceApi.returnDetail(id), [id]);
   const [flash, setFlash] = useFlash();
   const [cancelling, setCancelling] = useState(false);
@@ -80,6 +80,7 @@ export default function ReturnDetailPage() {
   if (state.error || !state.data) return <Alert onRetry={state.reload}>{state.error ?? "Return not found"}</Alert>;
   const r = state.data;
   const goodsValue = r.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  const restockingFee = restockingFeeFor(r.items);
   const refundShown = typeof r.refundAmount === "number" ? r.refundAmount : r.estimatedRefund;
 
   return (
@@ -154,6 +155,12 @@ export default function ReturnDetailPage() {
                   <td colSpan={4} className="px-4 py-2 text-end text-slate-600">Goods value (excl. VAT)</td>
                   <td className="px-4 py-2 text-end tabular-nums text-slate-900">{formatSar(goodsValue, lang)}</td>
                 </tr>
+                {restockingFee > 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-2 text-end text-slate-600">{t("returns.restockingFee")}</td>
+                    <td className="px-4 py-2 text-end tabular-nums text-amber-700">−{formatSar(restockingFee, lang)}</td>
+                  </tr>
+                )}
                 <tr className="border-t border-slate-200">
                   <td colSpan={4} className="px-4 py-3 text-end font-semibold text-slate-700">{typeof r.refundAmount === "number" ? "Refund amount" : "Estimated refund (incl. VAT)"}</td>
                   <td className="px-4 py-3 text-end text-base font-bold tabular-nums text-brand-700">{formatSar(refundShown, lang)}</td>

@@ -18,6 +18,21 @@ export const SAUDI_CITIES = [
 ] as const;
 export type SaudiCity = (typeof SAUDI_CITIES)[number];
 
+/** Administrative region of each city; used for the registration "same region" helper and the Company.region column. */
+export const SAUDI_CITY_REGION: Record<SaudiCity, string> = {
+  Riyadh: "Central", Buraidah: "Central", Hail: "Central", Jeddah: "Western", Makkah: "Western", Madinah: "Western", Taif: "Western", Yanbu: "Western",
+  Dammam: "Eastern", Khobar: "Eastern", Dhahran: "Eastern", Jubail: "Eastern", "Al Ahsa": "Eastern", Qatif: "Eastern",
+  Tabuk: "Northern", NEOM: "Northern", Abha: "Southern", "Khamis Mushait": "Southern", Najran: "Southern", Jazan: "Southern",
+};
+export const regionOfCity = (city: string): string | null => SAUDI_CITY_REGION[city as SaudiCity] ?? null;
+export const citiesInRegionOf = (city: string): string[] => SAUDI_CITIES.filter((c) => SAUDI_CITY_REGION[c] === regionOfCity(city));
+
+/** Registration identity rules (mirrored by the API's zod schema): 10-digit CR, 15-digit VAT/TIN starting and ending with 3, Saudi mobile or landline. */
+export const CR_NUMBER_REGEX = /^\d{10}$/;
+export const VAT_NUMBER_REGEX = /^3\d{13}3$/;
+export const SAUDI_PHONE_REGEX = /^(?:\+?966|00966|0)?(?:5\d{8}|1[1-7]\d{7})$/;
+export const isSaudiPhone = (input: string): boolean => SAUDI_PHONE_REGEX.test(input.replace(/[\s()-]/g, ""));
+
 export const UNITS = ["ton", "kg", "bag", "m3", "m2", "m", "piece", "pallet", "roll", "litre", "drum", "sheet", "bundle"] as const;
 export type Unit = (typeof UNITS)[number];
 
@@ -245,22 +260,29 @@ export interface PriceIndexEntry {
 
 // Request payloads -----------------------------------------------------------
 
+/** Company block of `POST /auth/register`: required for every role. Suppliers must also send `citiesServed` (delivery zone). */
+export interface RegisterCompany {
+  name: string;
+  nameAr?: string;
+  type: CompanyType; // SUPPLIER for suppliers; CONTRACTOR (default) / CONSULTANT / OTHER for buyers
+  city: string;
+  crNumber: string; // 10 digits
+  vatNumber: string; // 15 digits, starts and ends with 3
+  phone: string; // Saudi mobile or landline, normalised by the API to +966…
+  citiesServed?: string[]; // suppliers: min 1, each in SAUDI_CITIES
+  website?: string;
+}
+
 export interface RegisterPayload {
   email: string;
   password: string;
-  name: string;
+  name: string; // also the company contact name
   phone?: string;
   role: Exclude<Role, "ADMIN">;
   locale?: "en" | "ar";
-  company?: {
-    name: string;
-    nameAr?: string;
-    type: CompanyType;
-    city: string;
-    crNumber?: string;
-    vatNumber?: string;
-    phone?: string;
-  };
+  company: RegisterCompany;
+  acceptTerms: true; // Terms & Conditions + Privacy Policy
+  acceptSupplierAgreement?: true; // required for SUPPLIER
 }
 
 export interface LoginPayload {
@@ -563,7 +585,17 @@ export interface Feed {
 // Production: payments, invoices, devices, password reset --------------------------
 
 export type PaymentProvider = "MOYASAR" | "MANUAL";
-export type PaymentRecordStatus = "INITIATED" | "PAID" | "FAILED" | "REFUNDED";
+/** Ledger row state: gateway intermediate states, SUBMITTED = bank-transfer proof awaiting confirmation. */
+export type PaymentRecordStatus = "INITIATED" | "AUTHORIZED" | "CAPTURED" | "SUBMITTED" | "PAID" | "FAILED" | "REFUNDED";
+/** Moyasar form methods (mada is part of creditcard). */
+export type GatewayMethod = "creditcard" | "applepay" | "stcpay";
+/** Account the buyer transfers to: the supplier's own (house supplier included) or the platform's. */
+export interface BankDetails {
+  bankName: string;
+  iban: string;
+  beneficiary: string;
+  source: "supplier" | "platform";
+}
 
 export interface PaymentConfig {
   provider: PaymentProvider;
@@ -571,6 +603,9 @@ export interface PaymentConfig {
   publishableKey?: string | null; // Moyasar publishable key for the client form
   currency: string;
   methods: PaymentMethod[];
+  gatewayMethods?: GatewayMethod[]; // MOYASAR_METHODS, empty when card payments are disabled
+  brands?: string[]; // "mada", "Visa", "Mastercard", "Apple Pay", "STC Pay"
+  bankTransfer?: BankDetails; // platform fallback account
 }
 
 export interface PaymentRecord {
@@ -578,10 +613,32 @@ export interface PaymentRecord {
   orderId: string;
   provider: PaymentProvider;
   providerPaymentId?: string | null;
-  amount: number; // SAR
+  amount: number; // SAR (negative for refunds)
   currency: string;
   status: PaymentRecordStatus;
+  method?: PaymentMethod | null;
+  reference?: string | null; // bank-transfer reference quoted by the buyer
+  paidAt?: string | null;
+  note?: string | null;
+  hasProof?: boolean; // receipt file available at /orders/:id/payments/:paymentId/file
+  submittedById?: string | null;
+  confirmedById?: string | null;
+  confirmedAt?: string | null;
   createdAt: string;
+  updatedAt?: string;
+}
+
+/** POST /orders/:id/payments/bank-transfer (JSON, or multipart with an optional `file` receipt). */
+export interface BankTransferProofPayload {
+  reference: string;
+  amount: number; // SAR
+  paidAt?: string; // ISO date
+  note?: string;
+}
+export interface BankTransferProofResult {
+  order: OrderExtended;
+  payment: PaymentRecord;
+  bank: BankDetails;
 }
 
 export interface PaymentIntent {
@@ -593,6 +650,8 @@ export interface PaymentIntent {
   currency: string;
   description: string;
   callbackUrl: string;
+  methods?: GatewayMethod[]; // passed to Moyasar.init
+  brands?: string[];
   publishableKey: string | null;
   provider: PaymentProvider;
 }
@@ -605,6 +664,7 @@ export interface InvoiceData {
   issuedAt: string;
   zatcaQr: string; // base64 TLV (ZATCA phase 1 simplified invoice)
   qrSvg: string; // ready-to-embed SVG of the QR
+  bank?: BankDetails; // where to transfer while unpaid
 }
 
 export interface DeviceRegistration {
@@ -950,7 +1010,7 @@ export interface OtpVerifyPayload {
   code: string;
   name?: string; // required when the phone is new (account is created as BUYER)
   role?: "BUYER" | "SUPPLIER";
-  company?: RegisterPayload["company"];
+  company?: Omit<RegisterCompany, "crNumber" | "vatNumber" | "phone"> & Partial<RegisterCompany>;
 }
 
 export interface RefundPayload {
@@ -966,6 +1026,9 @@ export interface RefundResult {
 export type ShipmentStatus = "PENDING" | "BOOKED" | "PICKED_UP" | "IN_TRANSIT" | "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED" | "CANCELLED";
 export type CarrierCode = "SUPPLIER" | "TRUKKER" | "TRELLA" | "SMSA" | "ARAMEX" | "SPL" | "OTHER";
 
+/** live = real carrier API, sandbox = CARRIER_SANDBOX fake bookings, manual = no credentials (tracking typed by the supplier). */
+export type CarrierMode = "live" | "sandbox" | "manual";
+
 export interface Carrier {
   code: CarrierCode;
   name: string;
@@ -974,6 +1037,49 @@ export interface Carrier {
   enabled: boolean;
   supportsTracking: boolean;
   maxWeightKg: number | null;
+  mode?: CarrierMode;
+  /** True when POST /orders/:id/shipments will create the shipment with the carrier (live or sandbox). */
+  booksOnline?: boolean;
+  apiConfigured?: boolean;
+}
+
+/** `GET /admin/shipping/carriers`: integration state per carrier (env names only, never secret values). */
+export interface CarrierIntegration {
+  code: CarrierCode;
+  name: string;
+  nameAr: string;
+  kind: Carrier["kind"];
+  enabled: boolean;
+  mode: CarrierMode;
+  configured: boolean;
+  booksOnline: boolean;
+  env: { required: Array<{ name: string; set: boolean }>; optional: Array<{ name: string; set: boolean }> };
+  missing: string[];
+  apiUrl: string | null;
+  webhookUrl: string;
+  webhookSecretName: string;
+  webhookSecured: boolean;
+}
+export interface CarrierIntegrationsResponse { sandbox: boolean; carriers: CarrierIntegration[] }
+/** `POST /admin/shipping/carriers/:code/test` */
+export interface CarrierTestResult { ok: boolean; mode: CarrierMode; detail: string; steps: Array<{ step: string; ok: boolean; detail: string }> }
+/** `GET /shipments/:id/label` */
+export interface ShipmentLabel { url: string | null; pdfBase64: string | null; trackingNumber?: string | null }
+/** `GET /admin/shipping/shipments` */
+export interface AdminShipmentRow {
+  id: string;
+  carrier: CarrierCode;
+  carrierName: string;
+  service?: string | null;
+  trackingNumber?: string | null;
+  externalId?: string | null;
+  status: ShipmentStatus;
+  sandbox: boolean;
+  hasLabel: boolean;
+  cost: number | null;
+  updatedAt: string;
+  createdAt: string;
+  order: { id: string; reference: string; deliveryCity?: string | null; supplier: string };
 }
 
 export interface DeliveryQuote {
@@ -1018,8 +1124,16 @@ export interface Shipment {
   vehicle?: string | null;
   scheduledAt?: string | null;
   deliveredAt?: string | null;
+  /** Carrier-side id (waybill / load id) when booked online; "SBX-…" in sandbox mode. */
+  externalId?: string | null;
+  labelUrl?: string | null;
+  /** True when a label can be fetched from GET /shipments/:id/label. */
+  hasLabel?: boolean;
+  /** Estimated delivery (scheduled/booked time + rate-card ETA days); null once closed. */
+  etaAt?: string | null;
   events: ShipmentEvent[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface CreateShipmentPayload {
@@ -1033,6 +1147,9 @@ export interface CreateShipmentPayload {
   vehicle?: string;
   scheduledAt?: string;
   cost?: number;
+  /** Printed on the carrier waybill (defaults to the first order lines). */
+  contentDescription?: string;
+  pieces?: number;
 }
 
 export interface ShippingRate {
@@ -1134,6 +1251,12 @@ export interface AdminPaymentRow {
   amount: number;
   currency: string;
   status: PaymentRecordStatus;
+  method?: PaymentMethod | null;
+  reference?: string | null;
+  paidAt?: string | null;
+  note?: string | null;
+  hasProof?: boolean;
+  confirmedAt?: string | null;
   createdAt: string;
   order: {
     id: string;
@@ -1149,6 +1272,27 @@ export interface AdminPaymentRow {
 export interface AdminPaymentsResponse extends Paginated<AdminPaymentRow> {
   summary: Record<string, { count: number; amount: number }>;
   outstanding: { count: number; amount: number };
+  totals: {
+    collectedToday: { count: number; amount: number };
+    collectedMonth: { count: number; amount: number };
+    pendingBankTransfers: { count: number; amount: number };
+    refundedMonth: { count: number; amount: number };
+  };
+}
+export interface AdminPaymentsQuery {
+  status?: PaymentRecordStatus | "";
+  provider?: PaymentProvider | "";
+  method?: PaymentMethod | "";
+  q?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+}
+/** POST /admin/payments/:id/reconcile – re-fetch from Moyasar and sync ledger + order. */
+export interface AdminReconcileResult {
+  payment: PaymentRecord;
+  outcomes: Array<{ outcome: "applied" | "noop" | "ignored" | "mismatch" | "no_order" | "foreign"; status: PaymentRecordStatus | null }>;
+  order: OrderExtended | null;
 }
 
 export interface ReportBucket {
@@ -1288,3 +1432,5 @@ export * from "./marketplace";
 export * from "./commerce";
 export * from "./integrations";
 export * from "./demand";
+export * from "./legal";
+export * from "./returns";

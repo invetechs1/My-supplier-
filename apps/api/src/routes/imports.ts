@@ -11,6 +11,7 @@ import { paged, paginate } from "../lib/pagination";
 import { ACCEPTED_TYPES, MAX_FILE_MB, aiConfig } from "../services/ai";
 import { createImport, importInclude, publishImport, shapeImport } from "../services/imports";
 import { normaliseUnit } from "../services/boq";
+import { supplierAgreementGuard } from "../services/legal";
 
 const router = Router();
 const upload = multer({
@@ -137,6 +138,7 @@ router.post(
 router.post(
   "/imports/:id/publish",
   requireAuth(),
+  supplierAgreementGuard,
   asyncHandler(async (req, res) => {
     const imp = await ownedImport(req.params.id, req.user!);
     if (imp.status === "REJECTED" || imp.status === "FAILED") throw badRequest(`Cannot publish a ${imp.status.toLowerCase()} import`);

@@ -109,7 +109,8 @@ const profileSchema = z.object({
   deliveryFee: z.coerce.number().nonnegative().nullable().optional(), freeDeliveryAbove: z.coerce.number().nonnegative().nullable().optional(), deliveryDays: z.coerce.number().int().min(0).nullable().optional(),
   workingHours: z.string().max(200).nullable().optional(), phone: z.string().nullable().optional(), email: z.string().email().nullable().optional(),
   website: httpUrl.nullable().optional(), bankName: z.string().nullable().optional(), iban: z.string().nullable().optional(), beneficiary: z.string().nullable().optional(),
-  lowStockThreshold: z.coerce.number().int().min(0).optional(), city: z.string().optional(), crNumber: z.string().nullable().optional(), vatNumber: z.string().nullable().optional(),
+  lowStockThreshold: z.coerce.number().int().min(0).optional(), city: z.string().optional(),
+  // CR and VAT are captured at registration and verified by the admin; suppliers cannot edit them here.
 });
 
 router.get(
@@ -137,7 +138,7 @@ router.patch(
     if (!isOwner && (data.iban !== undefined || data.bankName !== undefined || data.beneficiary !== undefined)) throw forbidden("Only the company owner can change bank details");
     const current = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
     // Legal identity changes on a verified company send it back to review.
-    const identityChanged = (data.vatNumber !== undefined && data.vatNumber !== current.vatNumber) || (data.crNumber !== undefined && data.crNumber !== current.crNumber) || (data.name !== undefined && data.name !== current.name);
+    const identityChanged = data.name !== undefined && data.name !== current.name;
     const reverify = identityChanged && current.verificationStatus === "VERIFIED" && req.user!.role !== "ADMIN";
     const updated = await prisma.company.update({ where: { id: companyId }, data: { ...data, ...(reverify ? { verificationStatus: "UNDER_REVIEW", verified: false, verificationNotes: "Legal details changed – pending re-verification" } : {}) } });
     res.json(serialize(updated, { includePrivate: true }));

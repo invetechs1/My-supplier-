@@ -91,6 +91,7 @@ export function Footer() {
             <li><Link href="/terms" className="hover:text-brand-600">{t("footer.terms")}</Link></li>
             <li><Link href="/privacy" className="hover:text-brand-600">{t("footer.privacy")}</Link></li>
             <li><Link href="/refund-policy" className="hover:text-brand-600">{t("footer.refund")}</Link></li>
+            <li><Link href="/supplier-agreement" className="hover:text-brand-600">{t("footer.supplierAgreement")}</Link></li>
           </ul>
         </div>
       </div>

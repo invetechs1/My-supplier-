@@ -215,4 +215,18 @@ router.post(
   }),
 );
 
+// Legal acceptance rows (terms, privacy, supplier agreement) recorded by the company's users: who, when, from where.
+router.get(
+  "/admin/companies/:id/acceptances",
+  asyncHandler(async (req, res) => {
+    const rows = await prisma.legalAcceptance.findMany({
+      where: { OR: [{ companyId: req.params.id }, { user: { companyId: req.params.id } }] },
+      include: { user: { select: { id: true, name: true, email: true, companyRole: true } } },
+      orderBy: { acceptedAt: "desc" },
+      take: 200,
+    });
+    res.json(serialize(rows));
+  }),
+);
+
 export default router;

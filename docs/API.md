@@ -41,7 +41,7 @@ Roles: `BUYER` (contractor / anyone buying), `SUPPLIER` (must have a company), `
 | DELETE | `/cart` | `Cart` (empty) |
 | POST | `/checkout` | `CheckoutPayload` -> `CheckoutResult`: one `DIRECT` order per supplier in the cart, cart emptied, suppliers notified |
 
-Orders (`/orders`) now return `OrderExtended` (with `review` embedded when one exists) (with `type`, `items`, `subtotal`, `vat`, `deliveryFee`, `paymentStatus`, delivery details). Suppliers can `PATCH /orders/:id/status`; `PATCH /orders/:id/payment { paymentStatus }` is supplier/admin.
+Orders (`/orders`) now return `OrderExtended` (with `review` embedded when one exists) (with `type`, `items`, `subtotal`, `vat`, `deliveryFee`, `paymentStatus`, delivery details). Suppliers can `PATCH /orders/:id/status`; `PATCH /orders/:id/payment { paymentStatus }` is supplier/admin (rules under "Payments"). `GET /orders/:id/invoice` and the printable invoice carry `bank` (supplier IBAN, platform fallback) with the order reference while unpaid.
 
 ## Supplier catalogue (role SUPPLIER)
 | POST | `/supplier/catalog/import` | `{ items: SupplierCatalogItem[] }` -> `{ created, updated, listings, errors[] }` creates new materials (source SUPPLIER) when the SKU/name is unknown and upserts the supplier's offer with stock |
@@ -55,12 +55,17 @@ Orders (`/orders`) now return `OrderExtended` (with `review` embedded when one e
 | DELETE | `/admin/feeds/:id` | `{ ok: true }` |
 
 ## Production features
-### Payments (Moyasar-ready; Mada, Visa/Mastercard, Apple Pay)
-| GET | `/payments/config` | `PaymentConfig` – tells clients whether card payments are enabled and the publishable key |
-| POST | `/payments/:orderId/intent` | auth buyer -> `PaymentIntent` (amount in halalas, callback URL) used to render the Moyasar form / hosted page |
-| POST | `/payments/:orderId/verify` | auth buyer: `{ paymentId }` – server verifies with Moyasar (amount + status) and marks the order PAID -> `{ order: OrderExtended, payment: PaymentRecord }` |
-| POST | `/payments/webhook/moyasar` | gateway webhook (secret header `x-webhook-secret`) marks orders paid |
-| GET | `/payments/:orderId` | `PaymentRecord[]` for the order (buyer / supplier / admin) |
+### Payments (Moyasar: mada, Visa/Mastercard, Apple Pay, STC Pay; bank transfer with proof)
+| GET | `/payments/config` | `PaymentConfig` – whether card payments are enabled, publishable key, `gatewayMethods` (`MOYASAR_METHODS`), `brands` to display and the platform `bankTransfer` fallback account |
+| POST | `/payments/:orderId/intent` | auth buyer -> `PaymentIntent` (amount in halalas, callback URL, `methods`) for any UNPAID non-cancelled order (direct, RFQ-awarded, recurring, credit invoice); one INITIATED ledger row per open intent |
+| POST | `/payments/:orderId/verify` | auth buyer: `{ paymentId }` – the payment is re-fetched from Moyasar (never trusted from the client), bound to the order via `metadata.order_id`, amount/currency checked, then ledger + order are synced -> `{ order: OrderExtended, payment: PaymentRecord }`; 400 when not paid |
+| POST | `/payments/webhook/moyasar` | Moyasar webhook: `secret_token` in the body (or `x-webhook-secret` header) is compared constant-time with `MOYASAR_WEBHOOK_SECRET`; the payment is re-fetched, amount/currency verified, raw payload stored; the same id/status twice is a no-op and a stale event never undoes a PAID record. Handles paid/captured, authorized, failed/voided and refunded |
+| GET | `/payments/:orderId` | `PaymentRecord[]` for the order (buyer / supplier / admin): status `INITIATED\|AUTHORIZED\|CAPTURED\|SUBMITTED\|PAID\|FAILED\|REFUNDED`, `method`, bank-transfer `reference`/`paidAt`, `hasProof` |
+| POST | `/orders/:id/payments/bank-transfer` | auth buyer: `BankTransferProofPayload` as JSON, or multipart with an optional `file` receipt (PDF/JPEG/PNG/WebP, 10 MB) -> `BankTransferProofResult`. Writes a `SUBMITTED` MANUAL row, switches COD/RFQ orders to `BANK_TRANSFER`, notifies the supplier team (or admins when the platform account is used) |
+| GET | `/orders/:id/payments/:paymentId/file` | receipt file (buyer, supplier team, admin); works with a download token |
+| PATCH | `/orders/:id/payment` | `{ paymentStatus }` – supplier owner/manager may confirm COD (after delivery) and BANK_TRANSFER; CARD is gateway-only and CREDIT admin-only. Marking PAID turns SUBMITTED proofs into PAID (`confirmedById/At`) or writes a MANUAL PAID row |
+| GET | `/admin/payments?status=&provider=&method=&q=&from=&to=&page=` | ADMIN ledger: rows with order/buyer/supplier, `summary` per status, `outstanding` unpaid orders and `totals` (collected today / this month in Riyadh time, pending bank transfers, refunded this month) |
+| POST | `/admin/payments/:id/reconcile` | ADMIN: re-fetch the gateway payment (or look the order up by metadata when the intent never came back) and sync -> `AdminReconcileResult`. The hourly job does the same for INITIATED/AUTHORIZED gateway rows older than 1 h and marks intents abandoned after 24 h |
 
 ### Invoices (ZATCA phase-1 simplified tax invoice QR)
 | GET | `/orders/:id/invoice` | auth (buyer/supplier/admin) -> `InvoiceData` (JSON incl. base64 TLV QR + SVG) |
@@ -175,17 +180,23 @@ Checkout records `OUT` movements per order item; cancelling a PENDING/CONFIRMED 
 | POST | `/payments/:orderId/refund` | SUPPLIER (owner/manager) or ADMIN: `RefundPayload` -> `RefundResult`. Card payments are refunded through Moyasar (`POST /payments/:id/refund`); bank/COD payments are recorded as manual refunds. Order `paymentStatus` becomes `REFUNDED`, an event and notification are written |
 
 ### Shipments & carriers
-| GET | `/shipping/carriers` | `Carrier[]` (enabled carriers) |
+| GET | `/shipping/carriers` | `Carrier[]` (enabled carriers) with `mode: live|sandbox|manual` and `booksOnline` (the adapter will create the shipment with the carrier) |
 | POST | `/shipping/quote` | public: `{ supplierCompanyId?, items: [{ materialId, quantity }], deliveryCity, pickupCity? }` -> `DeliveryQuote[]` sorted by price (zone from pickup vs delivery city, weight/volume from material logistics data, rate cards) |
 | GET | `/cart?deliveryCity=` | (existing) `deliveryFee` now comes from the cheapest quote per supplier, falling back to the flat fee; `Cart` gains `quotes: Record<supplierId, DeliveryQuote | null>`. When a supplier set `freeDeliveryAbove` and the group's subtotal (excl. VAT) reaches it, the supplier's own-fleet quote is `price: 0, free: true, freeAbove`; third-party carriers stay paid |
 | POST | `/checkout` | (existing) accepts optional `carrierBySupplier: Record<supplierId, CarrierCode>`; the chosen quote's price becomes the order's `deliveryFee` and a `PENDING` shipment is created per order |
 | GET | `/orders/:id/shipments` | `Shipment[]` (buyer, supplier, admin) |
-| POST | `/orders/:id/shipments` | supplier: `CreateShipmentPayload` -> `Shipment` (status BOOKED; sets order IN_TRANSIT when it moves) |
+| POST | `/orders/:id/shipments` | supplier: `CreateShipmentPayload` (+ `contentDescription?`, `pieces?` for the waybill) -> `Shipment` (status BOOKED; sets order IN_TRANSIT when it moves). When the carrier is live/sandbox and no `trackingNumber` is given, the adapter books with the carrier and fills `trackingNumber`, `externalId`, `trackingUrl`, `labelUrl`; a carrier error returns 400 with the carrier's message |
 | PATCH | `/shipments/:id` | supplier: partial `CreateShipmentPayload` + `{ status?, description?, location? }` -> `Shipment` (adds an event; DELIVERED sets the order DELIVERED, notifies buyer) |
-| POST | `/shipping/webhooks/:carrier` | carrier tracking webhook (`x-webhook-secret` = `CARRIER_WEBHOOK_SECRET`): `{ trackingNumber, status, description?, location? }` |
+| GET | `/shipments/:id/label` | supplier/admin: `ShipmentLabel { url, pdfBase64 }` from the stored label or the carrier API (cached on the shipment); `?format=pdf` streams the PDF / redirects to the hosted label; 404 when none |
+| POST | `/shipments/:id/cancel` | supplier/admin: `{ reason? }` -> `Shipment & { cancelledWithCarrier, note }`. Cancels with the carrier when API-backed (Aramex has no cancel API: local only + note), then status CANCELLED |
+| POST | `/shipments/:id/refresh` | buyer/supplier/admin: pulls tracking from the carrier now -> `Shipment & { refreshed, applied }` (`applied` = new events appended) |
+| POST | `/shipping/webhooks/:carrier` | carrier tracking webhook. Verified by the adapter with `<CARRIER>_WEBHOOK_SECRET`: HMAC-SHA256 of the raw body (hex/base64, optional `sha256=`) in `x-signature` or the carrier's header (`x-smsa-signature`, `x-aramex-signature`, …), or the secret itself in `x-webhook-token`; legacy `CARRIER_WEBHOOK_SECRET` + `x-webhook-secret` still accepted. Payload is carrier-specific (`adapter.parseWebhook`); generic `{ trackingNumber, status, description?, location?, at? }` always works. 401 on bad signature, `{ ignored: true }` for unknown tracking numbers |
+| GET | `/admin/shipping/carriers` | `CarrierIntegrationsResponse`: per carrier `mode`, env var names set/missing (never values), `webhookUrl`, `webhookSecured`, plus `sandbox` flag |
+| POST | `/admin/shipping/carriers/:code/test` | `CarrierTestResult`: sandbox = book → track → label → cancel a throw-away shipment; live = credentials check (no shipment created); manual = `ok: false` with the missing env names |
+| GET | `/admin/shipping/shipments?limit=&carrier=&status=` | `AdminShipmentRow[]` most recently updated shipments across the platform (order reference, supplier, tracking, status) |
 | GET/POST | `/admin/shipping/rates` · `PATCH/DELETE /admin/shipping/rates/:id` | `ShippingRate` cards (seeded for SUPPLIER own fleet, TRUKKER/TRELLA heavy trucking, SMSA/ARAMEX parcel) |
 | PATCH | `/admin/materials/:id` | (existing) now accepts `weightKg`, `volumeM3`, `hazardous` |
-Carrier APIs (Trukker, Trella, SMSA, Aramex) are integrated through `services/carriers/*` adapters: quoting uses the rate cards; booking/tracking calls the carrier when its credentials are configured, otherwise shipments are managed manually by the supplier with tracking numbers.
+Carrier APIs (SMSA Express, Aramex, Saudi Post SPL, TruKKer, Trella) are integrated through `services/carriers/<carrier>.ts` adapters (see docs/INTEGRATIONS.md "Carriers" for onboarding and env vars). Quoting always uses the rate cards. A carrier whose env vars are set is **live**: booking, tracking (hourly poll of open shipments, 50 per run, plus `/refresh` and webhooks), label and cancel go through its API. `CARRIER_SANDBOX=1` makes configured carriers **sandbox** (deterministic `SBX-` bookings that walk BOOKED → DELIVERED over 15 minutes, no network). Without credentials a carrier is **manual**: the supplier types the tracking number and updates the status. `Shipment` gains `externalId`, `labelUrl`, `hasLabel`, `etaAt` (scheduled/booked time + rate-card ETA days).
 
 ### E-invoicing (ZATCA phase 2 groundwork)
 | GET | `/orders/:id/einvoice` | `EInvoiceRecord` (generated on first request: UBL 2.1 XML, SHA-256 hash chained to the previous invoice, UUID, counter, phase-1 QR) |
@@ -197,7 +208,7 @@ Carrier APIs (Trukker, Trella, SMSA, Aramex) are integrated through `services/ca
 Verification documents are now served only through `GET /supplier/company/documents/:id/file` (owner/manager) and `GET /admin/companies/:id/documents/:docId/file` (admin), both accepting `?token=`; logos remain public under `/uploads/`.
 
 ## Auth
-| POST | `/auth/register` | body `RegisterPayload` -> `AuthResponse` (SUPPLIER must include `company`) |
+| POST | `/auth/register` | body `RegisterPayload` -> `AuthResponse` (201). The `company` block is required for every role: `name` (≥2), `type` (SUPPLIER for suppliers; CONTRACTOR default / CONSULTANT / OTHER for buyers), `city`, `crNumber` (exactly 10 digits), `vatNumber` (15 digits, starts and ends with 3), `phone` (Saudi mobile or landline, normalised to +966…), optional `nameAr`, `website`; suppliers also send `citiesServed: string[]` (≥1, each in `SAUDI_CITIES`; `region` is derived from the first city). `acceptTerms: true` is required (records TERMS + PRIVACY acceptances) and suppliers must send `acceptSupplierAgreement: true` (records SUPPLIER_AGREEMENT). The user becomes company OWNER. 400 on validation (`details` = zod flatten), 409 when the email or the CR is already registered (colleagues join via `/auth/accept-invite`, which needs no company block) |
 | POST | `/auth/login` | body `LoginPayload` -> `AuthResponse` |
 | GET | `/auth/me` | `User` (company embedded) |
 | PATCH | `/auth/me` | `{ name?, phone?, locale?, alertSms?, alertWhatsapp? }` -> `User` (alert flags control WhatsApp/SMS alerts to the phone) |
@@ -261,7 +272,7 @@ Verification documents are now served only through `GET /supplier/company/docume
 | GET/POST | `/admin/coupons`, `PATCH`/`DELETE /admin/coupons/:id` | Coupons & promotions: `{ code, type: PERCENT|FIXED, value, minOrder?, maxDiscount?, startsAt?, endsAt?, usageLimit?, active }`; listing includes `orders` and `discountGiven` |
 | GET | `/cart?coupon=CODE` | Cart quote with `discount`, `coupon` and `couponError`; `POST /checkout` accepts `couponCode` (discount split pro rata per supplier order, VAT on the discounted subtotal, `usedCount` incremented) |
 | GET | `/admin/reviews?rating=&hidden=&q=&page=` | `Paginated<AdminReview>` + `summary { average, total, hidden }`; `PATCH /admin/reviews/:id { hidden?, reply? }`, `DELETE`. Hidden reviews are excluded from public supplier pages |
-| GET | `/admin/payments?status=&provider=&q=&page=` | Payments ledger with `summary` per status and `outstanding` unpaid orders; refunds via `POST /payments/:orderId/refund` |
+| GET | `/admin/payments?…` | Payments ledger – see "Payments" above; refunds via `POST /payments/:orderId/refund`, reconcile via `POST /admin/payments/:id/reconcile` |
 | GET | `/admin/reports?days=30` | `AdminReports`: totals (GMV and change vs previous period, orders, AOV, active buyers, new users, RFQ conversion, paid share, discounts, open support), daily series, top products/suppliers, by category/city/payment method/status |
 | GET | `/admin/audit?entity=&action=&q=&page=` | Append-only audit log of privileged actions (user role changes, verification, settings, payouts, refunds, coupons, moderation, announcements, support) |
 | GET/POST | `/admin/announcements` | `POST { title, body, audience: ALL|BUYERS|SUPPLIERS, link?, email? }` notifies every active user in the audience (in-app + push, optional email); `GET` lists past sends |
@@ -338,10 +349,21 @@ Volume tiers & sales, address book, credit terms (net terms), reorder / buy agai
 ### Returns / RMA
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/orders/:id/returns` | buyer, order `IN_TRANSIT` or `DELIVERED` within 14 days of delivery: `ReturnPayload { reason: DAMAGED\|DEFECTIVE\|WRONG_ITEM\|NOT_AS_DESCRIBED\|EXCESS\|OTHER, details?, items: [{ orderItemId, quantity }] }` (quantities net of earlier returns) -> `ReturnRequest` with reference `RET-YYYY-nnnnnn`; supplier notified, order event recorded |
+| GET | `/orders/:id/return-eligibility` | buyer/admin. `ReturnEligibility`: per order line the category `policy` (`returnPolicyFor(categorySlug)` from `packages/shared/src/returns.ts`: returnable, windowDays, restockingPct, bilingual conditions), `remaining` quantity, and whether a `changeOfMind` (EXCESS/OTHER) or `fault` (DAMAGED/DEFECTIVE/WRONG_ITEM/NOT_AS_DESCRIBED) return would be accepted now, with deadlines; `deliveredAt` = DELIVERED status event |
+| POST | `/orders/:id/returns` | buyer, order `IN_TRANSIT` or `DELIVERED`: `ReturnPayload { reason: DAMAGED\|DEFECTIVE\|WRONG_ITEM\|NOT_AS_DESCRIBED\|EXCESS\|OTHER, details?, items: [{ orderItemId, quantity }] }` (quantities net of earlier returns). **Returns policy enforced per line** (`evaluateReturnLine`): non-returnable families (cement/chemicals, aggregates, rental, services) only for fault reasons within 48 h of delivery; change of mind only within the family window (7 days) → 400 with `details { code: RETURN_NON_RETURNABLE \| RETURN_CLAIM_WINDOW_CLOSED \| RETURN_WINDOW_CLOSED, orderItemId, item, messageAr, policy, deadline }`. Each stored line carries `categorySlug` and `restockingPct` (0 for fault reasons) -> `ReturnRequest` with reference `RET-YYYY-nnnnnn`; supplier notified, order event recorded |
 | GET | `/returns?status=&orderId=&page=` | `Paginated<ReturnRequest>` – buyer: own, supplier: company, admin: all |
-| GET | `/returns/:id` | `ReturnRequest & { estimatedRefund }` |
+| GET | `/returns/:id` | `ReturnRequest & { estimatedRefund, restockingFee }` (`computeRefund` deducts each line's `restockingPct` before the pro-rata discount and VAT) |
 | PATCH | `/returns/:id` | `ReturnUpdatePayload { status, resolution?, refundAmount? }`. Transitions: `REQUESTED -> APPROVED\|REJECTED\|CANCELLED`, `APPROVED -> RECEIVED\|REJECTED\|CANCELLED`, `RECEIVED -> REFUNDED`. Buyers may only `CANCELLED`. `RECEIVED` computes `refundAmount` (unit price × qty, minus pro-rata coupon discount, plus VAT; override may only lower it) and restocks the listing. `REFUNDED` (supplier or admin) records a `Payment` (`MANUAL`, `REFUNDED`, negative amount), sets the order `paymentStatus REFUNDED` when fully refunded, adds an order event and notifies the buyer |
+
+### Legal documents and acceptances
+Versions, paths, required-by-role and `SUPPLIER_FEES` live in `packages/shared/src/legal.ts` (web pages, consent prompts and the API read the same constants). Rows: `LegalAcceptance { userId, companyId, document, version, locale, ip, userAgent, acceptedAt }`, one per user+document+version (`recordAcceptances()` in `services/legal.ts`, also called by registration).
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/legal/documents` | Public. `LegalDocumentsInfo { versions, paths, fees, requiredByRole }` |
+| GET | `/legal/acceptances/me` | Auth. `MyLegalAcceptances { acceptances, required, pending, versions, company? }` – `required`: BUYER → TERMS+PRIVACY, SUPPLIER → +SUPPLIER_AGREEMENT; `company` (suppliers): `{ isOwner, supplierAgreementAccepted, acceptedBy }` where accepted = an OWNER (or role-less user) of the company accepted the current version |
+| POST | `/legal/accept` | Auth. `LegalAcceptPayload { documents: LegalDocumentKey[], locale? }`; records IP + user agent; returns the updated `MyLegalAcceptances` |
+| GET | `/admin/companies/:id/acceptances` | Admin. `LegalAcceptance[]` (with `user`) for the company's users, newest first |
+| guard | `requireSupplierAgreement(req)` / `supplierAgreementGuard` | 403 `{ error, details: { code: "SUPPLIER_AGREEMENT_REQUIRED", version, path, messageAr } }` for SUPPLIER users whose company has no owner acceptance of the current agreement. Applied to `POST /supplier/prices`, `POST /supplier/prices/bulk`, `PATCH /supplier/prices/:id`, `POST /supplier/catalog/import`, `POST /imports/:id/publish` and partner `PUT /v1/prices`. The supplier web portal shows owners a blocking accept modal and other members a banner |
 
 ### Recurring orders (role BUYER, company profile required)
 | Method | Path | Notes |

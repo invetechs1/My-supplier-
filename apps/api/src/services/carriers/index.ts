@@ -1,68 +1,62 @@
 /**
- * Carrier adapters. Each adapter exposes book()/track(); when the carrier's API key is missing the
- * adapter reports `configured: false` and the shipment is managed manually (tracking number typed
- * by the supplier, status updated by hand or by the carrier webhook).
+ * Carrier adapter registry. One module per carrier (smsa.ts, aramex.ts, spl.ts, trukker.ts, trella.ts) describes the
+ * carrier's API; `defineAdapter` (common.ts) adds the env-driven mode, sandbox fakes and webhook verification.
  *
- * To integrate a real carrier: implement book() with the carrier's create-shipment call, map its
- * status codes in mapStatus(), and set the API key env var. Everything else (quotes, timeline,
- * notifications, webhooks) already works.
+ * Connecting a real carrier is configuration only: set the env vars listed in `adapter.env` (see .env.example and
+ * docs/INTEGRATIONS.md "Carriers"). With CARRIER_SANDBOX=1 every configured adapter books deterministic "SBX-"
+ * shipments without touching the network, so staging can exercise booking → tracking → label → cancel.
+ * Without credentials a carrier is "manual": the supplier types the tracking number and updates status by hand
+ * (or the carrier pushes updates to /shipping/webhooks/:carrier).
  */
-import type { CarrierCode, ShipmentStatus } from "@prisma/client";
+import type { CarrierCode } from "@prisma/client";
+import { type CarrierAdapter, type CarrierEnv, defineAdapter, mapGenericStatus, parseGenericWebhook, readEnv, verifyWebhookRequest } from "./common";
+import { smsa } from "./smsa";
+import { aramex } from "./aramex";
+import { spl } from "./spl";
+import { trukker } from "./trukker";
+import { trella } from "./trella";
 
-export interface BookingRequest {
-  orderReference: string;
-  pickup: { city: string; address?: string | null; phone?: string | null; name: string };
-  dropoff: { city: string; address?: string | null; phone?: string | null; name: string };
-  weightKg: number | null;
-  volumeM3: number | null;
-  service?: string | null;
-  scheduledAt?: Date | null;
-}
-export interface BookingResult { externalId: string; trackingNumber: string; trackingUrl?: string | null; cost?: number | null }
+export * from "./common";
 
-export interface CarrierAdapter {
-  code: CarrierCode;
-  configured(): boolean;
-  book(req: BookingRequest): Promise<BookingResult>;
-  mapStatus(raw: string): ShipmentStatus;
-}
-
-const GENERIC_STATUS: Record<string, ShipmentStatus> = {
-  created: "BOOKED", booked: "BOOKED", accepted: "BOOKED", assigned: "BOOKED",
-  picked_up: "PICKED_UP", pickedup: "PICKED_UP", collected: "PICKED_UP",
-  in_transit: "IN_TRANSIT", intransit: "IN_TRANSIT", on_the_way: "IN_TRANSIT", departed: "IN_TRANSIT",
-  out_for_delivery: "OUT_FOR_DELIVERY", ofd: "OUT_FOR_DELIVERY",
-  delivered: "DELIVERED", completed: "DELIVERED", pod: "DELIVERED",
-  failed: "FAILED", exception: "FAILED", returned: "FAILED",
-  cancelled: "CANCELLED", canceled: "CANCELLED",
-};
-export const mapGenericStatus = (raw: string): ShipmentStatus => GENERIC_STATUS[raw.toLowerCase().replace(/[\s-]+/g, "_")] ?? "IN_TRANSIT";
-
-function apiAdapter(code: CarrierCode, envKey: string, endpoint: string): CarrierAdapter {
+/** Own-fleet / other: never books online; webhooks still accepted (e.g. a supplier's own TMS) with the shared secret. */
+function manualAdapter(code: CarrierCode): CarrierAdapter {
+  const env: CarrierEnv = { required: [], optional: ["CARRIER_WEBHOOK_SECRET"] };
+  const unsupported = async () => { throw new Error(`${code} is managed manually and has no carrier API`); };
   return {
-    code,
-    configured: () => Boolean(process.env[envKey]),
-    async book(req) {
-      const key = process.env[envKey];
-      if (!key) throw new Error(`${code} is not configured (set ${envKey})`);
-      // Generic JSON booking call; adjust payload/response mapping to the carrier's contract when onboarding.
-      const resp = await fetch(endpoint, { method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(req), signal: AbortSignal.timeout(20_000) });
-      if (!resp.ok) throw new Error(`${code} booking failed (${resp.status})`);
-      const json = (await resp.json()) as { id?: string; shipment_id?: string; tracking_number?: string; awb?: string; tracking_url?: string; cost?: number };
-      return { externalId: String(json.id ?? json.shipment_id ?? ""), trackingNumber: String(json.tracking_number ?? json.awb ?? json.id ?? ""), trackingUrl: json.tracking_url ?? null, cost: json.cost ?? null };
-    },
-    mapStatus: mapGenericStatus,
+    code, env, tracksBy: "trackingNumber", configured: () => false, mode: () => "manual", mapStatus: mapGenericStatus, parseWebhook: parseGenericWebhook,
+    verifyWebhook: (req) => verifyWebhookRequest(readEnv("CARRIER_WEBHOOK_SECRET"), req),
+    book: unsupported, track: async () => [], cancel: async () => ({ remote: false, note: "Manual shipment: nothing to cancel with a carrier" }), label: async () => null,
+    ping: async () => ({ ok: false, detail: "Manual carrier: no API to test" }),
   };
 }
 
-const manual: CarrierAdapter = { code: "SUPPLIER", configured: () => true, async book() { throw new Error("Manual carrier does not book online"); }, mapStatus: mapGenericStatus };
-
 export const adapters: Record<CarrierCode, CarrierAdapter> = {
-  SUPPLIER: manual,
-  OTHER: { ...manual, code: "OTHER" },
-  TRUKKER: apiAdapter("TRUKKER", "TRUKKER_API_KEY", process.env.TRUKKER_API_URL ?? "https://api.trukker.com/v1/shipments"),
-  TRELLA: apiAdapter("TRELLA", "TRELLA_API_KEY", process.env.TRELLA_API_URL ?? "https://api.trella.app/v1/loads"),
-  SMSA: apiAdapter("SMSA", "SMSA_API_KEY", process.env.SMSA_API_URL ?? "https://ecomapis.smsaexpress.com/api/shipment/b2c/new"),
-  ARAMEX: apiAdapter("ARAMEX", "ARAMEX_API_KEY", process.env.ARAMEX_API_URL ?? "https://ws.aramex.net/ShippingAPI.V2/Shipping/Service_1_0.svc/json/CreateShipments"),
-  SPL: apiAdapter("SPL", "SPL_API_KEY", process.env.SPL_API_URL ?? "https://api.splonline.com.sa/v1/shipments"),
+  SUPPLIER: manualAdapter("SUPPLIER"),
+  OTHER: manualAdapter("OTHER"),
+  TRUKKER: defineAdapter(trukker),
+  TRELLA: defineAdapter(trella),
+  SMSA: defineAdapter(smsa),
+  ARAMEX: defineAdapter(aramex),
+  SPL: defineAdapter(spl),
 };
+
+export const adapterFor = (code: string): CarrierAdapter | undefined => adapters[code.toUpperCase() as CarrierCode];
+
+/** Admin view of one carrier's integration state (never includes secret values). */
+export function carrierStatus(code: CarrierCode, apiUrl: string) {
+  const a = adapters[code];
+  const set = (n: string) => readEnv(n) !== "";
+  const webhookSecretName = a.env.optional.find((n) => n.endsWith("_WEBHOOK_SECRET")) ?? "CARRIER_WEBHOOK_SECRET";
+  return {
+    code,
+    mode: a.mode(),
+    configured: a.configured(),
+    booksOnline: a.mode() !== "manual",
+    env: { required: a.env.required.map((name) => ({ name, set: set(name) })), optional: a.env.optional.map((name) => ({ name, set: set(name) })) },
+    missing: a.env.required.filter((n) => !set(n)),
+    apiUrl: readEnv(`${code}_API_URL`) || null,
+    webhookUrl: `${apiUrl.replace(/\/+$/, "")}/shipping/webhooks/${code.toLowerCase()}`,
+    webhookSecretName,
+    webhookSecured: set(webhookSecretName) || set("CARRIER_WEBHOOK_SECRET"),
+  };
+}

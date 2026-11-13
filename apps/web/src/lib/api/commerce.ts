@@ -18,6 +18,7 @@ import type {
   RecurringOrderUpdatePayload,
   RecurringRunResult,
   ReorderResult,
+  ReturnEligibility,
   ReturnPayload,
   ReturnReason,
   ReturnRequest,
@@ -146,6 +147,7 @@ export const commerceApi = {
 
   // Returns / RMA
   createReturn: (orderId: string, body: ReturnPayload) => request<ReturnRequest>(`/orders/${encodeURIComponent(orderId)}/returns`, { method: "POST", body }),
+  returnEligibility: (orderId: string) => request<ReturnEligibility>(`/orders/${encodeURIComponent(orderId)}/return-eligibility`),
   returns: (query: ReturnsQuery = {}) =>
     request<Paginated<ReturnRequest>>("/returns", { query: { status: query.status || undefined, orderId: query.orderId || undefined, page: query.page } }),
   returnDetail: (id: string) => request<ReturnDetail>(`/returns/${encodeURIComponent(id)}`),

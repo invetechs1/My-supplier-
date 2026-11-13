@@ -18,8 +18,9 @@ import { applyStockMovement, recordOrderEvent } from "../services/portal";
 import { round2 } from "../services/pricing";
 import { isPurchasable, toOffer } from "../services/shop";
 import { getOrCreateCart, shapeCart } from "./cart";
+import { RETURN_VERDICT_MESSAGES, evaluateReturnLine, restockingFeeFor, returnPolicyFor } from "@mysupplier/shared";
 import {
-  RETURN_REASONS, RETURN_WINDOW_DAYS, assertPurchasable, cheapestOffer, computeNextRunAt, computeRefund, creditInfoFor, nextCommerceReference,
+  RETURN_REASONS, assertPurchasable, cheapestOffer, computeNextRunAt, computeRefund, creditInfoFor, nextCommerceReference,
   orderLineInclude, parseRecurringItems, releaseCredit, runRecurringOrder,
 } from "../services/commerce";
 
@@ -206,8 +207,52 @@ function returnScope(req: Request): Prisma.ReturnWhereInput {
   return { buyerId: user.id };
 }
 
-type ReturnLine = { orderItemId: string; name: string; unit: string; quantity: number; unitPrice: number };
+type ReturnLine = { orderItemId: string; name: string; unit: string; quantity: number; unitPrice: number; categorySlug?: string | null; restockingPct?: number };
 const returnLines = (raw: Prisma.JsonValue): ReturnLine[] => (Array.isArray(raw) ? (raw as unknown as ReturnLine[]) : []);
+
+/** Order with the data the returns policy needs: category per line and the delivery time. */
+const returnOrderInclude = {
+  items: { include: { material: { select: { category: { select: { slug: true, parent: { select: { slug: true } } } } } } } },
+  events: { where: { type: "STATUS" as const, status: "DELIVERED" as const }, orderBy: { createdAt: "desc" as const }, take: 1 },
+} satisfies Prisma.OrderInclude;
+type ReturnOrder = Prisma.OrderGetPayload<{ include: typeof returnOrderInclude }>;
+type ReturnOrderItem = ReturnOrder["items"][number];
+
+/** When the goods were handed over (DELIVERED status event, else the last update of a delivered order); null while in transit. */
+const deliveredAtOf = (order: ReturnOrder): Date | null => order.events[0]?.createdAt ?? (order.status === "DELIVERED" ? order.updatedAt : null);
+const policyOfItem = (item: ReturnOrderItem) => returnPolicyFor(item.material?.category?.slug, item.material?.category?.parent?.slug);
+
+/** Quantities already claimed by open or accepted returns on this order. */
+async function claimedQuantities(orderId: string) {
+  const prior = await prisma.return.findMany({ where: { orderId, status: { notIn: ["REJECTED", "CANCELLED"] } }, select: { items: true } });
+  const claimed = new Map<string, number>();
+  for (const r of prior) for (const l of returnLines(r.items)) claimed.set(l.orderItemId, (claimed.get(l.orderItemId) ?? 0) + l.quantity);
+  return claimed;
+}
+
+// Per-line returns policy for the buyer's return form: window, restocking fee, conditions and whether a
+// change-of-mind or a supplier-fault claim would be accepted right now.
+router.get("/orders/:id/return-eligibility", requireAuth("BUYER", "ADMIN"), asyncHandler(async (req, res) => {
+  const user = req.user!;
+  const order = await prisma.order.findFirst({ where: { id: req.params.id, ...(user.role === "ADMIN" ? {} : { buyerId: user.id }) }, include: returnOrderInclude });
+  if (!order) throw notFound("Order not found");
+  const deliveredAt = deliveredAtOf(order);
+  const claimed = await claimedQuantities(order.id);
+  const now = new Date();
+  const lines = order.items.map((item) => {
+    const policy = policyOfItem(item);
+    const changeOfMind = evaluateReturnLine(policy, "EXCESS", deliveredAt, now);
+    const fault = evaluateReturnLine(policy, "DAMAGED", deliveredAt, now);
+    return {
+      orderItemId: item.id, name: item.name, unit: item.unit, quantity: item.quantity, unitPrice: Number(item.unitPrice),
+      remaining: Math.max(0, item.quantity - (claimed.get(item.id) ?? 0)),
+      categorySlug: item.material?.category?.slug ?? null, policy,
+      changeOfMind: { allowed: changeOfMind.ok, code: changeOfMind.code, restockingPct: changeOfMind.restockingPct, deadline: changeOfMind.deadline },
+      fault: { allowed: fault.ok, code: fault.code, deadline: fault.deadline },
+    };
+  });
+  res.json(serialize({ orderId: order.id, status: order.status, deliveredAt, lines }));
+}));
 
 router.post("/orders/:id/returns", requireAuth("BUYER", "ADMIN"), asyncHandler(async (req, res) => {
   const body = z.object({
@@ -216,16 +261,11 @@ router.post("/orders/:id/returns", requireAuth("BUYER", "ADMIN"), asyncHandler(a
     items: z.array(z.object({ orderItemId: z.string(), quantity: z.coerce.number().positive() })).min(1),
   }).parse(req.body);
   const user = req.user!;
-  const order = await prisma.order.findFirst({ where: { id: req.params.id, ...(user.role === "ADMIN" ? {} : { buyerId: user.id }) }, include: { items: true, events: { where: { type: "STATUS", status: "DELIVERED" }, orderBy: { createdAt: "desc" }, take: 1 } } });
+  const order = await prisma.order.findFirst({ where: { id: req.params.id, ...(user.role === "ADMIN" ? {} : { buyerId: user.id }) }, include: returnOrderInclude });
   if (!order) throw notFound("Order not found");
   if (order.status !== "DELIVERED" && order.status !== "IN_TRANSIT") throw badRequest("Returns can only be requested for shipped or delivered orders");
-  const since = order.events[0]?.createdAt ?? order.updatedAt;
-  if (Date.now() - since.getTime() > RETURN_WINDOW_DAYS * 86400000) throw badRequest(`The ${RETURN_WINDOW_DAYS}-day return window for this order has closed`);
-
-  // Quantities already claimed by open or accepted returns on this order.
-  const prior = await prisma.return.findMany({ where: { orderId: order.id, status: { notIn: ["REJECTED", "CANCELLED"] } }, select: { items: true } });
-  const claimed = new Map<string, number>();
-  for (const r of prior) for (const l of returnLines(r.items)) claimed.set(l.orderItemId, (claimed.get(l.orderItemId) ?? 0) + l.quantity);
+  const deliveredAt = deliveredAtOf(order);
+  const claimed = await claimedQuantities(order.id);
 
   // Aggregate the request per order line first so duplicated lines cannot multiply the returnable quantity.
   const wanted = new Map<string, number>();
@@ -236,7 +276,15 @@ router.post("/orders/:id/returns", requireAuth("BUYER", "ADMIN"), asyncHandler(a
     if (!item) throw badRequest(`Item ${orderItemId} does not belong to this order`);
     const remaining = item.quantity - (claimed.get(item.id) ?? 0);
     if (quantity > remaining + 1e-9) throw badRequest(`Only ${remaining} ${item.unit} of "${item.name}" can still be returned`);
-    lines.push({ orderItemId: item.id, name: item.name, unit: item.unit, quantity, unitPrice: Number(item.unitPrice) });
+    // Returns policy per material category (packages/shared/src/returns.ts): non-returnable goods only for supplier-fault
+    // reasons within 48 h of delivery; change of mind within the category window, with its restocking fee stored on the line.
+    const policy = policyOfItem(item);
+    const verdict = evaluateReturnLine(policy, body.reason, deliveredAt);
+    if (!verdict.ok) {
+      const msg = RETURN_VERDICT_MESSAGES[verdict.code as keyof typeof RETURN_VERDICT_MESSAGES];
+      throw badRequest(`${item.name}: ${msg.en}`, { code: verdict.code, orderItemId: item.id, item: item.name, messageAr: `${item.name}: ${msg.ar}`, policy: { group: policy.group, windowDays: policy.windowDays, restockingPct: policy.restockingPct }, deadline: verdict.deadline });
+    }
+    lines.push({ orderItemId: item.id, name: item.name, unit: item.unit, quantity, unitPrice: Number(item.unitPrice), categorySlug: item.material?.category?.slug ?? null, restockingPct: verdict.restockingPct });
   }
   const reference = await nextCommerceReference("RET");
   const ret = await prisma.return.create({
@@ -266,8 +314,9 @@ router.get("/returns/:id", auth, asyncHandler(async (req, res) => {
   const ret = await prisma.return.findFirst({ where: { id: req.params.id, ...returnScope(req) }, include: returnInclude });
   if (!ret) throw notFound("Return not found");
   const order = await prisma.order.findUnique({ where: { id: ret.orderId }, select: { subtotal: true, discount: true, vat: true, items: { select: { id: true, unitPrice: true, quantity: true } } } });
-  const estimatedRefund = order ? computeRefund(order, returnLines(ret.items)) : null;
-  res.json(serialize({ ...ret, estimatedRefund }));
+  const lines = returnLines(ret.items);
+  const estimatedRefund = order ? computeRefund(order, lines) : null;
+  res.json(serialize({ ...ret, estimatedRefund, restockingFee: restockingFeeFor(lines) }));
 }));
 
 const returnTransitions: Record<string, string[]> = {

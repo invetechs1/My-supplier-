@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { COMPANY, LegalNav, ProsePage, Section } from "@/components/legal/Prose";
+import { LegalNav, ProsePage, Section } from "@/components/legal/Prose";
+import { COMPANY } from "@/components/legal/company";
 
 export const metadata: Metadata = {
   title: "About",

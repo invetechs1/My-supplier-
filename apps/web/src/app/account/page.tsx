@@ -4,11 +4,13 @@ import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { LEGAL_PATHS, LEGAL_VERSIONS, type LegalDocumentKey } from "@mysupplier/shared";
 import { api, errorMessage } from "@/lib/api";
+import { legalApi } from "@/lib/api/legal";
 import { homeForRole, useAuth } from "@/lib/auth";
-import { useFlash, usePageTitle } from "@/lib/hooks";
-import { useI18n } from "@/lib/i18n";
-import { formatDate } from "@/lib/format";
+import { useAsync, useFlash, usePageTitle } from "@/lib/hooks";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { formatSaudiPhone, normaliseSaudiPhone } from "@/lib/phone";
 import { Alert, Badge, Button, Card, CardBody, CardHeader, FlashMessage, Input, LoadingBlock, Modal, PageHeader, Select, VerifiedBadge, Toggle } from "@/components/ui";
 import { OtpCodeInput } from "@/components/OtpCodeInput";
@@ -24,6 +26,56 @@ function PhoneVerifiedBadge() {
       </svg>
       {t("account.phoneVerified")}
     </Badge>
+  );
+}
+
+const LEGAL_DOC_KEY: Record<LegalDocumentKey, TranslationKey> = { TERMS: "legal.doc.TERMS", PRIVACY: "legal.doc.PRIVACY", SUPPLIER_AGREEMENT: "legal.doc.SUPPLIER_AGREEMENT", RETURNS_POLICY: "legal.doc.RETURNS_POLICY" };
+
+/** "Legal documents you accepted": one row per acceptance (document, version, date) plus pending documents with an accept action. */
+function LegalAcceptancesCard() {
+  const { t, lang } = useI18n();
+  const state = useAsync(() => legalApi.acceptancesMe(), []);
+  const [busy, setBusy] = useState(false);
+  const accept = async (docs: LegalDocumentKey[]) => {
+    setBusy(true);
+    try {
+      state.setData(await legalApi.accept({ documents: docs, locale: lang }));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card className="mt-6">
+      <CardHeader title={t("legal.accepted.title")} subtitle={t("legal.accepted.hint")} />
+      <CardBody className="space-y-3">
+        {state.loading && !state.data ? <LoadingBlock className="py-4" /> : state.error ? <Alert onRetry={state.reload}>{state.error}</Alert> : state.data ? (
+          <>
+            {state.data.pending.length > 0 && (
+              <Alert kind="warning">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm"><span className="font-semibold">{t("legal.accepted.pending")}:</span> {state.data.pending.map((d) => t(LEGAL_DOC_KEY[d])).join(" · ")}</p>
+                  <Button size="sm" onClick={() => accept(state.data!.pending)} loading={busy}>{t("legal.accepted.acceptNow")}</Button>
+                </div>
+              </Alert>
+            )}
+            {state.data.acceptances.length === 0 ? <p className="text-sm text-slate-500">{t("legal.accepted.none")}</p> : (
+              <ul className="divide-y divide-slate-100 text-sm">
+                {state.data.acceptances.map((a) => (
+                  <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link href={LEGAL_PATHS[a.document] ?? "#"} className="font-medium text-brand-700 hover:underline">{t(LEGAL_DOC_KEY[a.document] ?? "legal.doc.TERMS")}</Link>
+                      <span className="font-mono text-xs text-slate-500" dir="ltr">{a.version}</span>
+                      {a.version === LEGAL_VERSIONS[a.document] ? <Badge tone="green">{t("legal.accepted.current")}</Badge> : <Badge tone="slate">{t("legal.accepted.superseded")}</Badge>}
+                    </div>
+                    <span className="text-xs text-slate-500">{t("legal.accepted.acceptedOn")} {formatDateTime(a.acceptedAt, lang)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : null}
+      </CardBody>
+    </Card>
   );
 }
 
@@ -275,6 +327,8 @@ export default function AccountPage() {
           </CardBody>
         </Card>
       </div>
+
+      <LegalAcceptancesCard />
 
       <Card className="mt-6 border-red-200">
         <CardHeader title={<span className="text-red-700">{t("account.dangerZone")}</span>} subtitle={t("account.dangerZoneHint")} />

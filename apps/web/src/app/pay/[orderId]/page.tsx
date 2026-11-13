@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useAsync, usePageTitle } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
-import { usePaymentConfig } from "@/lib/payments";
+import { brandsLine, usePaymentConfig } from "@/lib/payments";
 import { formatSar } from "@/lib/format";
 import { MoyasarForm } from "@/components/MoyasarForm";
 import { PaymentStatusBadge } from "@/components/Orders";
@@ -46,7 +46,7 @@ export default function PayOrderPage() {
         <span className="mx-2">/</span>
         <span className="text-slate-700">Pay</span>
       </nav>
-      <PageHeader title="Pay by card" subtitle="Mada, Visa, Mastercard and Apple Pay — processed securely by Moyasar." />
+      <PageHeader title="Pay by card" subtitle={`${brandsLine(config?.brands)} — processed securely by Moyasar.`} />
 
       {order.loading || configLoading ? (
         <LoadingBlock />

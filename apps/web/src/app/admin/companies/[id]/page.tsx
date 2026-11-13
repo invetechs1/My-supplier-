@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
-import type { Branch, CompanyDocument, DocumentStatus, TeamMember, VerificationStatus } from "@mysupplier/shared";
+import { LEGAL_VERSIONS, type Branch, type CompanyDocument, type DocumentStatus, type LegalAcceptance, type TeamMember, type VerificationStatus } from "@mysupplier/shared";
 import { adminDocumentFilePath, api, errorMessage, fileUrl, openDownload, type AdminCompanyDetail } from "@/lib/api";
 import { supplierCommerceApi } from "@/lib/api/supplierCommerce";
+import { legalApi } from "@/lib/api/legal";
 import { COMPANY_ROLE_LABEL } from "@/lib/auth";
 import { useAsync, useFlash } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
@@ -55,6 +56,7 @@ export default function AdminCompanyDetailPage() {
   const state = useAsync(() => api.adminCompany(id), [id]);
   const settings = useAsync(() => api.adminSettings(), []);
   const credit = useAsync(() => supplierCommerceApi.adminCompanyCredit(id), [id]);
+  const acceptances = useAsync(() => legalApi.adminCompanyAcceptances(id), [id]);
   const [flash, setFlash] = useFlash(6000);
   const [verification, setVerification] = useState<{ status: VerificationStatus; notes: string; commissionPct: string }>({ status: "PENDING", notes: "", commissionPct: "" });
   const [savingVerification, setSavingVerification] = useState(false);
@@ -106,6 +108,13 @@ export default function AdminCompanyDetailPage() {
   ];
 
   const pendingDocs = c.documents.filter((d) => d.status === "PENDING").length;
+  const acceptanceColumns: Column<LegalAcceptance>[] = [
+    { key: "document", header: t("admin.acceptances.document"), render: (a) => <span className="font-medium text-slate-900">{a.document.replace("_", " ")}</span> },
+    { key: "version", header: t("admin.acceptances.version"), render: (a) => <span className="inline-flex items-center gap-2"><span className="font-mono text-xs" dir="ltr">{a.version}</span>{a.version === LEGAL_VERSIONS[a.document] ? <Badge tone="green">{t("legal.accepted.current")}</Badge> : <Badge tone="slate">{t("legal.accepted.superseded")}</Badge>}</span> },
+    { key: "who", header: t("admin.acceptances.who"), render: (a) => <div><p className="font-medium text-slate-900">{a.user?.name ?? a.userId}</p><p className="text-xs text-slate-500" dir="ltr">{a.user?.email ?? ""}{a.user?.companyRole ? ` · ${a.user.companyRole}` : ""} · {a.locale}</p></div> },
+    { key: "when", header: t("admin.acceptances.when"), render: (a) => <span className="text-slate-600">{formatDateTime(a.acceptedAt)}</span> },
+    { key: "ip", header: t("admin.acceptances.ip"), render: (a) => <span className="text-xs text-slate-500" dir="ltr" title={a.userAgent ?? undefined}>{a.ip ?? "—"}</span> },
+  ];
 
   return (
     <div>
@@ -145,6 +154,12 @@ export default function AdminCompanyDetailPage() {
           <Card>
             <CardHeader title="Branches" />
             <Table columns={branchColumns} rows={c.branches} rowKey={(b) => b.id} dense empty={<EmptyState title="No branches" />} />
+          </Card>
+          <Card>
+            <CardHeader title={t("admin.acceptances.title")} subtitle={t("admin.acceptances.hint")} />
+            {acceptances.loading && !acceptances.data ? <LoadingBlock className="py-6" /> : acceptances.error ? <Alert onRetry={acceptances.reload} className="m-4">{acceptances.error}</Alert> : (
+              <Table columns={acceptanceColumns} rows={acceptances.data ?? []} rowKey={(a) => a.id} dense empty={<EmptyState title={t("admin.acceptances.none")} />} />
+            )}
           </Card>
         </div>
 

@@ -9,6 +9,7 @@ import { htmlPage } from "../lib/htmlPage";
 import { forbidden, notFound, unauthorized } from "../lib/errors";
 import { serialize } from "../lib/serialize";
 import { qrSvg, zatcaTlvBase64 } from "../services/zatca";
+import { bankDetailsFor } from "../services/payments";
 
 const router = Router();
 const include = {
@@ -37,6 +38,8 @@ async function invoiceFor(orderId: string, user: Pick<AuthUser, "id" | "role" | 
     qrSvg: await qrSvg(zatca),
     sellerVatNumber: sellerVat,
     vatAmount: vat,
+    // Where to transfer when unpaid: the supplier's own account (house supplier included) or the platform's.
+    bank: bankDetailsFor(seller),
   };
 }
 
@@ -44,7 +47,9 @@ router.get(
   "/orders/:id/invoice",
   requireAuth(),
   asyncHandler(async (req, res) => {
-    res.json(serialize(await invoiceFor(req.params.id, req.user!)));
+    const inv = await invoiceFor(req.params.id, req.user!);
+    // Bank details are deliberately outside serialize(), which hides iban/bankName keys on company objects.
+    res.json({ ...serialize(inv), bank: inv.bank });
   }),
 );
 
@@ -61,6 +66,7 @@ router.get(
     const rows = o.items.length
       ? o.items.map((i, idx) => `<tr><td>${idx + 1}</td><td>${esc(i.name)}<div class="muted">${esc(i.material?.nameAr ?? "")}</div></td><td>${esc(i.unit)}</td><td class="r">${i.quantity}</td><td class="r">${money(i.unitPrice)}</td><td class="r">${money(i.lineTotal)}</td></tr>`).join("")
       : `<tr><td>1</td><td>Order ${esc(o.reference)}</td><td>lot</td><td class="r">1</td><td class="r">${money(o.subtotal)}</td><td class="r">${money(o.subtotal)}</td></tr>`;
+    const bank = inv.bank;
     const { nonce } = htmlPage(res);
     res.send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${inv.invoiceNumber}</title>
 <style>body{font-family:Inter,Arial,sans-serif;color:#111827;margin:0;padding:32px;max-width:900px;margin:0 auto}h1{color:#0B6E4F;margin:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:24px 0}.box{border:1px solid #e5e7eb;border-radius:12px;padding:16px}.muted{color:#6b7280;font-size:12px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:left;font-size:14px;vertical-align:top}th{background:#f4f6f5;font-size:12px;text-transform:uppercase;letter-spacing:.04em}.r{text-align:right}.totals{margin-left:auto;width:320px;margin-top:16px}.totals td{border:none;padding:6px 8px}.grand td{font-weight:700;font-size:16px;border-top:2px solid #0B6E4F}.badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;background:${o.paymentStatus === "PAID" ? "#dcfce7;color:#166534" : "#fef3c7;color:#92400e"}}.qr svg{width:140px;height:140px}@media print{.noprint{display:none}body{padding:0}}</style></head>
@@ -71,7 +77,8 @@ router.get(
 <table><thead><tr><th>#</th><th>Item</th><th>Unit</th><th class="r">Qty</th><th class="r">Unit price (SAR)</th><th class="r">Total (SAR)</th></tr></thead><tbody>${rows}</tbody></table>
 <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:8px"><div class="qr">${inv.qrSvg}<div class="muted">Scan to verify (ZATCA)</div></div>
 <table class="totals"><tr><td>Subtotal (excl. VAT)</td><td class="r">${money(o.subtotal)}</td></tr><tr><td>Delivery</td><td class="r">${money(o.deliveryFee)}</td></tr><tr><td>VAT ${Math.round(env.vatRate * 100)}%</td><td class="r">${money(inv.vatAmount)}</td></tr><tr class="grand"><td>Total (SAR)</td><td class="r">${money(o.total)}</td></tr></table></div>
-<p class="muted" style="margin-top:32px">Issued via MySupplier (${esc(env.seller.name)}, VAT ${esc(env.seller.vatNumber)}) on behalf of the seller. Bank transfer: ${esc(env.bank.name)} · IBAN ${esc(env.bank.iban)} · Beneficiary ${esc(env.bank.beneficiary)} · Reference ${esc(o.reference)}.</p>
+${o.paymentStatus === "UNPAID" ? `<div class="box" style="margin-top:24px"><div class="muted">Pay by bank transfer / الدفع بالتحويل البنكي</div><div><strong>${esc(bank.beneficiary)}</strong>${bank.bankName ? ` · ${esc(bank.bankName)}` : ""}</div><div>IBAN <strong style="font-family:monospace">${esc(bank.iban)}</strong></div><div>Amount ${money(o.total)} SAR · Quote reference <strong>${esc(o.reference)}</strong> so the payment can be matched${bank.source === "platform" ? " (platform collection account)" : ""}.</div></div>` : ""}
+<p class="muted" style="margin-top:24px">Issued via MySupplier (${esc(env.seller.name)}, VAT ${esc(env.seller.vatNumber)}) on behalf of the seller.</p>
 <script nonce="${nonce}">document.getElementById('print').addEventListener('click',function(){window.print()});</script>
 </body></html>`);
   }),

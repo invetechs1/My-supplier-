@@ -29,6 +29,7 @@ import {
   priceRowSchema, scopeSchema, shapeOrderForErp, stockRowSchema, validateRows, type ApiScope, type PriceRow, type StockRow,
 } from "../services/integrations";
 import { WEBHOOK_EVENTS, companyIdsOfUsers, emitWebhook, generateWebhookSecret, retryDelivery, sendTestPing } from "../services/webhooks";
+import { supplierAgreementGuard } from "../services/legal";
 
 const router = Router();
 
@@ -355,6 +356,7 @@ function rowsOrThrow<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, body: unkno
 v1.put(
   "/prices",
   requireScope("prices:write"),
+  supplierAgreementGuard,
   asyncHandler(async (req, res) => {
     const company = await keyCompany(req);
     if (company.type !== "SUPPLIER") throw forbidden("Only supplier companies can publish prices");

@@ -14,7 +14,7 @@ import { LinePricingSummary } from "@/app/cart/LinePricing";
 import { useAsync, usePageTitle } from "@/lib/hooks";
 import { track } from "@/lib/analytics";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
-import { usePaymentConfig } from "@/lib/payments";
+import { brandsLine, usePaymentConfig } from "@/lib/payments";
 import { cn, formatSar } from "@/lib/format";
 import { MoyasarForm } from "@/components/MoyasarForm";
 import { Alert, Badge, Button, Card, CardBody, CardHeader, EmptyState, Input, LinkButton, LoadingBlock, PageHeader, Select, Spinner, StatusBadge, Textarea, VerifiedBadge } from "@/components/ui";
@@ -579,7 +579,7 @@ export default function CheckoutPage() {
                           <span className="block text-xs text-slate-500">
                             {m.value === "CREDIT" && credit
                               ? `${t("checkout.payInvoiceWithin")} ${credit.termsDays} ${t("cart.netDays")}. ${t("checkout.limit")} ${formatSar(credit.limit, lang)} · ${t("checkout.used")} ${formatSar(credit.used, lang)}.`
-                              : t(m.descriptionKey)}
+                              : m.value === "CARD" ? `${brandsLine(paymentConfig?.brands)} — ${t("checkout.securedByMoyasar")}.` : t(m.descriptionKey)}
                           </span>
                           {creditBlocked && credit && (
                             <span className="mt-1 block text-xs font-medium text-amber-800">

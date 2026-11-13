@@ -99,7 +99,8 @@ const GROUPS: Array<{ id: string; title: string; items: Faq[] }> = [
     id: "suppliers",
     title: "Becoming a supplier",
     items: [
-      { q: "How do I list my products?", a: <p><Link href="/register?role=SUPPLIER" className="font-semibold text-brand-700 hover:underline">Register as a supplier</Link> with your CR number, then add prices one by one, upload a CSV or connect a catalogue feed from your dashboard.</p> },
+      { q: "How do I list my products?", a: <p><Link href="/register?role=SUPPLIER" className="font-semibold text-brand-700 hover:underline">Register as a supplier</Link> with your company information – commercial registration (CR) number, VAT number, contact number and the cities you deliver to (your service area) – and accept the Supplier Agreement. Then add prices one by one, upload a CSV or connect a catalogue feed from your dashboard.</p> },
+      { q: "What do I need to register?", a: <p>Every account (supplier or contractor) registers a company: name, type, city, a 10-digit CR number, a 15-digit VAT number and a Saudi contact number. Suppliers also choose the cities they deliver to. One registration per CR – colleagues are invited from Supplier → Team.</p> },
       { q: "What does “Verified” mean?", a: <p>We checked the supplier’s Commercial Registration and VAT registration and confirmed its trading contact. Verified suppliers rank higher and can be filtered by buyers.</p> },
       { q: "What does it cost?", a: <p>Listing prices and receiving RFQs is free. Fees, if any, are set out in your supplier agreement and invoiced separately, exclusive of VAT.</p> },
     ],

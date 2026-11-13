@@ -159,6 +159,7 @@ model User {
   reviews       Review[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+  legalAcceptances LegalAcceptance[]
 }
 
 model Company {
@@ -246,6 +247,8 @@ model Material {
   brand       String?
   specs       Json?
   imageUrl    String?
+  // Photo credit for Creative-Commons product images ("Photo: Author / CC BY 2.0, source URL"); null = own photo.
+  imageAttribution String?
   description String?
   active      Boolean        @default(true)
   tags        String[]       @default([])
@@ -525,6 +528,9 @@ enum PaymentProvider {
 
 enum PaymentRecordStatus {
   INITIATED
+  AUTHORIZED
+  CAPTURED
+  SUBMITTED
   PAID
   FAILED
   REFUNDED
@@ -539,11 +545,24 @@ model Payment {
   amount            Decimal             @db.Decimal(14, 2)
   currency          String              @default("SAR")
   status            PaymentRecordStatus @default(INITIATED)
+  // How the money moved (CARD via the gateway, BANK_TRANSFER / COD / CREDIT recorded manually).
+  method            PaymentMethod?
+  // Bank-transfer receipt / reference number quoted by the buyer.
+  reference         String?
+  paidAt            DateTime?
+  // Private upload (transfer receipt) streamed through /orders/:id/payments/:paymentId/file.
+  proofFile         String?
+  note              String?
+  submittedById     String?
+  confirmedById     String?
+  confirmedAt       DateTime?
   raw               Json?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
   @@index([orderId])
+  @@index([status, createdAt])
+  @@index([provider, status])
 }
 
 model Device {
@@ -925,6 +944,8 @@ model Shipment {
   scheduledAt    DateTime?
   deliveredAt    DateTime?
   externalId     String?
+  // Carrier label / waybill PDF (data URL or hosted link) when the carrier API returns one.
+  labelUrl       String?
   events         ShipmentEvent[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -1399,4 +1420,28 @@ model AnalyticsEvent {
   @@index([name, createdAt])
   @@index([sessionId, createdAt])
   @@index([createdAt])
+}
+
+// Legal documents a user accepted (terms, privacy, supplier agreement, returns policy) with version + proof.
+enum LegalDocument {
+  TERMS
+  PRIVACY
+  SUPPLIER_AGREEMENT
+  RETURNS_POLICY
+}
+
+model LegalAcceptance {
+  id         String        @id @default(cuid())
+  userId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId  String?
+  document   LegalDocument
+  version    String
+  locale     String        @default("en")
+  ip         String?
+  userAgent  String?
+  acceptedAt DateTime      @default(now())
+
+  @@index([userId, document])
+  @@index([companyId, document])
 }

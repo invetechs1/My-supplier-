@@ -1,6 +1,6 @@
 /**
  * Admin capabilities every e-commerce back office needs on top of catalogue, orders and companies:
- * coupons & promotions, review moderation, the payments ledger, reports & analytics, the audit log,
+ * coupons & promotions, review moderation, reports & analytics, the audit log,
  * broadcast announcements and the customer-support inbox (public contact form + admin triage).
  */
 import { Router } from "express";
@@ -113,28 +113,7 @@ router.delete("/admin/reviews/:id", admin, asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// ------------------------------------------------------------------ payments ledger
-router.get("/admin/payments", admin, asyncHandler(async (req, res) => {
-  const { status, provider, q } = z.object({ status: z.enum(["INITIATED", "PAID", "FAILED", "REFUNDED"]).optional(), provider: z.enum(["MOYASAR", "MANUAL"]).optional(), q: z.string().optional() }).parse(req.query);
-  const { page, pageSize, skip, take } = paginate(req.query);
-  const where: Prisma.PaymentWhereInput = {
-    ...(status ? { status } : {}),
-    ...(provider ? { provider } : {}),
-    ...(q ? { OR: [{ providerPaymentId: { contains: q, mode: "insensitive" } }, { order: { reference: { contains: q, mode: "insensitive" } } }, { order: { buyer: { name: { contains: q, mode: "insensitive" } } } }] } : {}),
-  };
-  const [total, items, sums] = await Promise.all([
-    prisma.payment.count({ where }),
-    prisma.payment.findMany({
-      where, skip, take, orderBy: { createdAt: "desc" },
-      include: { order: { select: { id: true, reference: true, paymentMethod: true, paymentStatus: true, total: true, buyer: { select: { id: true, name: true, email: true } }, company: { select: { id: true, name: true } } } } },
-    }),
-    prisma.payment.groupBy({ by: ["status"], _sum: { amount: true }, _count: { _all: true } }),
-  ]);
-  const summary: Record<string, { count: number; amount: number }> = {};
-  for (const s of sums) summary[s.status] = { count: s._count._all, amount: Number(s._sum.amount ?? 0) };
-  const unpaidOrders = await prisma.order.aggregate({ where: { paymentStatus: "UNPAID", status: { notIn: ["CANCELLED"] } }, _sum: { total: true }, _count: { _all: true } });
-  res.json({ ...paged(serialize(items), page, pageSize, total), summary, outstanding: { count: unpaidOrders._count._all, amount: Number(unpaidOrders._sum.total ?? 0) } });
-}));
+// The payments ledger (GET /admin/payments, reconcile) lives in routes/payments.ts.
 
 // ------------------------------------------------------------------ reports & analytics
 router.get("/admin/reports", admin, asyncHandler(async (req, res) => {

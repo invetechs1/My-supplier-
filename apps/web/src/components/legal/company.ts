@@ -1,0 +1,20 @@
+// Company identity used in legal pages and the contact page (plain module: importable from server and client components).
+export const COMPANY = {
+  name: "MySupplier",
+  nameAr: "ماي سبلاير",
+  legalName: "MySupplier Trading Co. (LLC)",
+  legalNameAr: "شركة ماي سبلاير للتجارة (ذات مسؤولية محدودة)",
+  city: "Riyadh, Kingdom of Saudi Arabia",
+  cityAr: "الرياض، المملكة العربية السعودية",
+  address: "King Fahd Road, Al Olaya District, Riyadh 12211, Saudi Arabia",
+  addressAr: "طريق الملك فهد، حي العليا، الرياض 12211، المملكة العربية السعودية",
+  supportEmail: "support@mysupplier.sa",
+  legalEmail: "legal@mysupplier.sa",
+  privacyEmail: "privacy@mysupplier.sa",
+  phone: "+966 11 000 0000",
+  whatsapp: "+966 5X XXX XXXX",
+  crNumber: "10XXXXXXXX",
+  vatNumber: "3XXXXXXXXXXXXX3",
+  hours: "Sunday – Thursday, 9:00 – 18:00 (AST, UTC+3)",
+  hoursAr: "الأحد – الخميس، 9:00 – 18:00 (توقيت السعودية)",
+};

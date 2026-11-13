@@ -6,6 +6,7 @@ import type { PaymentIntent } from "@mysupplier/shared";
 import { api, errorMessage } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { formatSar } from "@/lib/format";
+import { brandsLine } from "@/lib/payments";
 import { Alert, Spinner } from "./ui";
 
 export const MOYASAR_SCRIPT = "https://cdn.moyasar.com/mpf/1.14.0/moyasar.js";
@@ -31,7 +32,7 @@ export interface MoyasarFormProps {
 }
 
 /**
- * Renders the Moyasar hosted payment form (Mada / Visa / Mastercard / Apple Pay) for a payment intent.
+ * Renders the Moyasar hosted payment form (mada / Visa / Mastercard / Apple Pay / STC Pay) for a payment intent.
  * Only one instance should be mounted at a time — Moyasar mounts into the `.mysr-form` element.
  */
 export function MoyasarForm({ orderId, intent, onCompleted, className }: MoyasarFormProps) {
@@ -67,7 +68,8 @@ export function MoyasarForm({ orderId, intent, onCompleted, className }: Moyasar
         publishable_api_key: intent.publishableKey,
         callback_url: intent.callbackUrl,
         metadata: { order_id: intent.orderId },
-        methods: ["creditcard", "applepay"],
+        // MOYASAR_METHODS from the API (mada is part of creditcard); Apple Pay also needs the domain file – see docs/INTEGRATIONS.md.
+        methods: intent.methods && intent.methods.length ? intent.methods : ["creditcard", "applepay"],
         on_completed: async (payment) => {
           setVerifying(true);
           setVerifyError(null);
@@ -115,7 +117,7 @@ export function MoyasarForm({ orderId, intent, onCompleted, className }: Moyasar
         </div>
       )}
       <div className="mysr-form" dir="ltr" />
-      <p className="mt-3 text-center text-xs text-slate-400">{t("checkout.cardFooter")}</p>
+      <p className="mt-3 text-center text-xs text-slate-400">{t("pay.accepted")}: {brandsLine(intent.brands)}. {t("pay.securedNote")}</p>
     </div>
   );
 }

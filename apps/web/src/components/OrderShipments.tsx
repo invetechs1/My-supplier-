@@ -91,9 +91,11 @@ interface ShipmentForm {
   vehicle: string;
   scheduledAt: string;
   cost: string;
+  contentDescription: string;
+  pieces: string;
 }
 
-const emptyForm = (carrier: CarrierCode = "SUPPLIER"): ShipmentForm => ({ carrier, service: "", pickupBranchId: "", trackingNumber: "", trackingUrl: "", driverName: "", driverPhone: "", vehicle: "", scheduledAt: "", cost: "" });
+const emptyForm = (carrier: CarrierCode = "SUPPLIER"): ShipmentForm => ({ carrier, service: "", pickupBranchId: "", trackingNumber: "", trackingUrl: "", driverName: "", driverPhone: "", vehicle: "", scheduledAt: "", cost: "", contentDescription: "", pieces: "" });
 
 function toPayload(f: ShipmentForm): CreateShipmentPayload {
   const cost = f.cost.trim() === "" ? undefined : Number(f.cost);
@@ -108,6 +110,8 @@ function toPayload(f: ShipmentForm): CreateShipmentPayload {
     vehicle: f.vehicle.trim() || undefined,
     scheduledAt: f.scheduledAt ? new Date(f.scheduledAt).toISOString() : undefined,
     cost: cost !== undefined && Number.isFinite(cost) ? cost : undefined,
+    contentDescription: f.contentDescription.trim() || undefined,
+    pieces: f.pieces.trim() !== "" && Number.isInteger(Number(f.pieces)) && Number(f.pieces) > 0 ? Number(f.pieces) : undefined,
   };
 }
 
@@ -133,6 +137,8 @@ function ShipmentFormModal({ open, editing, orderId, carriers, branches, onClose
         vehicle: editing.vehicle ?? "",
         scheduledAt: toDateTimeLocal(editing.scheduledAt),
         cost: editing.cost === null || editing.cost === undefined ? "" : String(editing.cost),
+        contentDescription: "",
+        pieces: "",
       });
     } else {
       const defaultBranch = branches.find((b) => b.isDefault) ?? branches[0];
@@ -143,6 +149,7 @@ function ShipmentFormModal({ open, editing, orderId, carriers, branches, onClose
   }, [open, editing, carriers, branches]);
 
   const carrier = carriers.find((c) => c.code === form.carrier);
+  const booksOnline = Boolean(carrier?.booksOnline) && !editing;
 
   const save = async () => {
     const next: Record<string, string> = {};
@@ -171,11 +178,14 @@ function ShipmentFormModal({ open, editing, orderId, carriers, branches, onClose
       <div className="space-y-4">
         {error && <Alert>{error}</Alert>}
         <div className="grid gap-4 sm:grid-cols-2">
-          <Select label="Carrier" name="carrier" value={form.carrier} onChange={(e) => setForm({ ...form, carrier: e.target.value as CarrierCode })} options={carriers.map((c) => ({ value: c.code, label: `${c.name}${c.kind === "OWN_FLEET" ? " (own fleet)" : c.kind === "HEAVY_TRUCKING" ? " (trucking)" : " (parcel)"}` }))} error={errors.carrier} required />
-          <Input label="Service" name="service" value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })} placeholder={carrier?.kind === "HEAVY_TRUCKING" ? "Flatbed trailer, 6-wheel truck…" : carrier?.kind === "PARCEL" ? "Same-day parcel, Express…" : "Own truck, crane truck…"} />
+          <Select label={t("ship.carrier")} name="carrier" value={form.carrier} onChange={(e) => setForm({ ...form, carrier: e.target.value as CarrierCode })} options={carriers.filter((c) => c.enabled).map((c) => ({ value: c.code, label: `${c.name} · ${c.kind === "OWN_FLEET" ? t("ship.manualTracking") : c.booksOnline ? t("ship.booksOnline") : t("ship.manualTracking")}${c.mode === "sandbox" ? ` (${t("ship.modeSandbox")})` : ""}` }))} error={errors.carrier} required />
+          <Input label={t("ship.service")} name="service" value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })} placeholder={carrier?.kind === "HEAVY_TRUCKING" ? "Flatbed trailer, 6-wheel truck…" : carrier?.kind === "PARCEL" ? "Same-day parcel, Express…" : "Own truck, crane truck…"} />
+          {carrier && carrier.kind !== "OWN_FLEET" && <Alert kind="info" className="sm:col-span-2">{booksOnline || carrier.booksOnline ? t("ship.booksOnlineHint") : t("ship.manualHint")}</Alert>}
           <Select label="Pickup branch" name="pickupBranchId" value={form.pickupBranchId} onChange={(e) => setForm({ ...form, pickupBranchId: e.target.value })} placeholder={branches.length ? "Select branch" : "No branches"} options={branches.map((b) => ({ value: b.id, label: `${b.name} · ${b.city}${b.isDefault ? " (default)" : ""}` }))} />
-          <Input label="Scheduled pickup / delivery" name="scheduledAt" type="datetime-local" dir="ltr" value={form.scheduledAt} onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} />
-          <Input label="Tracking number" name="trackingNumber" dir="ltr" value={form.trackingNumber} onChange={(e) => setForm({ ...form, trackingNumber: e.target.value })} hint={carrier?.supportsTracking ? `${carrier.name} tracking reference` : "Optional for own-fleet deliveries"} />
+          <Input label={t("ship.scheduledPickup")} name="scheduledAt" type="datetime-local" dir="ltr" value={form.scheduledAt} onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} />
+          <Input label={t("ship.trackingNumber")} name="trackingNumber" dir="ltr" value={form.trackingNumber} onChange={(e) => setForm({ ...form, trackingNumber: e.target.value })} hint={booksOnline ? `${t("ship.booksOnline")} — leave blank` : carrier?.supportsTracking ? `${carrier.name} tracking reference` : "Optional for own-fleet deliveries"} />
+          {booksOnline && <Input label={t("ship.contentDescription")} name="contentDescription" value={form.contentDescription} onChange={(e) => setForm({ ...form, contentDescription: e.target.value })} maxLength={100} placeholder="Cement 50kg × 40 bags" />}
+          {booksOnline && <Input label={t("ship.pieces")} name="pieces" type="number" min={1} step="1" dir="ltr" value={form.pieces} onChange={(e) => setForm({ ...form, pieces: e.target.value })} />}
           <Input label="Tracking URL" name="trackingUrl" type="url" dir="ltr" value={form.trackingUrl} onChange={(e) => setForm({ ...form, trackingUrl: e.target.value })} error={errors.trackingUrl} placeholder="https://…" />
           <Input label="Driver name" name="driverName" value={form.driverName} onChange={(e) => setForm({ ...form, driverName: e.target.value })} />
           <Input label="Driver phone" name="driverPhone" type="tel" dir="ltr" value={form.driverPhone} onChange={(e) => setForm({ ...form, driverPhone: e.target.value })} error={errors.driverPhone} placeholder="+9665XXXXXXXX" />
@@ -239,12 +249,55 @@ function trackingHref(s: Shipment): string | null {
   return null;
 }
 
-function ShipmentCard({ shipment, canManage, onEdit, onStatus }: { shipment: Shipment; canManage: boolean; onEdit: () => void; onStatus: () => void }) {
-  const { lang } = useI18n();
+/** Opens the hosted label or downloads the carrier's PDF from GET /shipments/:id/label. */
+async function downloadLabel(s: Shipment) {
+  const label = await api.shipmentLabel(s.id);
+  if (label.url) {
+    window.open(label.url, "_blank", "noopener");
+    return;
+  }
+  if (!label.pdfBase64) throw new Error("No label");
+  const bytes = Uint8Array.from(atob(label.pdfBase64), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `label-${s.trackingNumber ?? s.id}.pdf`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+function ShipmentCard({ shipment, canManage, onEdit, onStatus, onUpdated, onNotice }: { shipment: Shipment; canManage: boolean; onEdit: () => void; onStatus: () => void; onUpdated: (s: Shipment) => void; onNotice: (kind: "success" | "error" | "info", message: string) => void }) {
+  const { lang, t } = useI18n();
+  const [busy, setBusy] = useState<"label" | "refresh" | "cancel" | null>(null);
   const s = shipment;
   const href = trackingHref(s);
   const events = [...(s.events ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const terminal = TERMINAL.includes(s.status) || s.status === "DELIVERED";
+  const bookedOnline = Boolean(s.externalId);
+  const sandbox = Boolean(s.externalId?.startsWith("SBX-") || s.trackingNumber?.startsWith("SBX-"));
+  const run = async (kind: "label" | "refresh" | "cancel", fn: () => Promise<void>) => {
+    setBusy(kind);
+    try {
+      await fn();
+    } catch (err) {
+      onNotice("error", errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const refresh = () => run("refresh", async () => {
+    const fresh = await api.refreshShipment(s.id);
+    onUpdated(fresh);
+    onNotice(fresh.applied > 0 ? "success" : "info", fresh.applied > 0 ? t("ship.refreshed") : t("ship.refreshedNoChange"));
+  });
+  const cancel = () => {
+    if (!window.confirm(t("ship.cancelConfirm"))) return;
+    void run("cancel", async () => {
+      const result = await api.cancelShipment(s.id);
+      onUpdated(result);
+      onNotice("success", result.note ? `${t("ship.cancelled")} ${result.note}` : t("ship.cancelled"));
+    });
+  };
   return (
     <div className="px-5 py-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -252,22 +305,24 @@ function ShipmentCard({ shipment, canManage, onEdit, onStatus }: { shipment: Shi
           <span className="text-sm font-semibold text-slate-900">{s.carrierName || s.carrier}</span>
           {s.service && <span className="text-sm text-slate-500">· {s.service}</span>}
           <ShipmentStatusBadge status={s.status} />
+          {bookedOnline && <Badge tone={sandbox ? "amber" : "slate"}>{sandbox ? t("ship.modeSandbox") : t("ship.bookedOnline")}</Badge>}
         </div>
-        {canManage && (
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={onEdit}>Edit details</Button>
-            {!terminal && <Button size="sm" onClick={onStatus}>Update status</Button>}
-          </div>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {s.hasLabel && canManage && <Button size="sm" variant="outline" loading={busy === "label"} onClick={() => run("label", () => downloadLabel(s))}>{t("ship.downloadLabel")}</Button>}
+          {bookedOnline && !terminal && <Button size="sm" variant="outline" loading={busy === "refresh"} onClick={refresh}>{t("ship.refresh")}</Button>}
+          {canManage && <Button size="sm" variant="outline" onClick={onEdit}>Edit details</Button>}
+          {canManage && !terminal && <Button size="sm" onClick={onStatus}>Update status</Button>}
+          {canManage && !terminal && <Button size="sm" variant="ghost" className="text-red-600" loading={busy === "cancel"} onClick={cancel}>{t("ship.cancel")}</Button>}
+        </div>
       </div>
       <ShipmentStepper status={s.status} />
       <dl className="mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <dt className="text-slate-500">Tracking number</dt>
+          <dt className="text-slate-500">{t("ship.trackingNumber")}</dt>
           <dd className="font-medium text-slate-900" dir="ltr">
             {s.trackingNumber ? (
               href ? (
-                <a href={href} target="_blank" rel="noreferrer" className="font-mono text-brand-700 hover:underline">{s.trackingNumber} ↗</a>
+                <a href={href} target="_blank" rel="noreferrer" className="font-mono text-brand-700 hover:underline" title={`${t("ship.trackWith")} ${s.carrierName}`}>{s.trackingNumber} ↗</a>
               ) : (
                 <span className="font-mono">{s.trackingNumber}</span>
               )
@@ -278,6 +333,7 @@ function ShipmentCard({ shipment, canManage, onEdit, onStatus }: { shipment: Shi
             )}
           </dd>
         </div>
+        {s.etaAt && !terminal && <div><dt className="text-slate-500">{t("ship.eta")}</dt><dd className="font-medium text-slate-900">{formatDate(s.etaAt, lang)}</dd></div>}
         <div><dt className="text-slate-500">Driver</dt><dd className="font-medium text-slate-900">{s.driverName ?? "—"}{s.driverPhone && <a href={`tel:${s.driverPhone}`} className="ms-2 font-normal text-brand-700 hover:underline" dir="ltr">{s.driverPhone}</a>}</dd></div>
         <div><dt className="text-slate-500">Vehicle</dt><dd className="font-medium text-slate-900">{s.vehicle ?? "—"}</dd></div>
         <div><dt className="text-slate-500">Scheduled</dt><dd className="font-medium text-slate-900">{s.scheduledAt ? formatDateTime(s.scheduledAt, lang) : "—"}</dd></div>
@@ -286,7 +342,7 @@ function ShipmentCard({ shipment, canManage, onEdit, onStatus }: { shipment: Shi
         {(s.weightKg || s.volumeM3) && <div><dt className="text-slate-500">Load</dt><dd className="font-medium text-slate-900">{s.weightKg ? `${Math.round(s.weightKg)} kg` : ""}{s.weightKg && s.volumeM3 ? " · " : ""}{s.volumeM3 ? `${s.volumeM3.toFixed(2)} m³` : ""}</dd></div>}
       </dl>
       {events.length > 0 && (
-        <ol className="mt-4 space-y-0 border-t border-slate-100 pt-4">
+        <ol className="mt-4 space-y-0 border-t border-slate-100 pt-4" aria-label={t("ship.timeline")}>
           {events.map((e, i) => (
             <li key={e.id} className="relative flex gap-3 pb-3 last:pb-0">
               {i < events.length - 1 && <span className="absolute start-[5px] top-4 h-[calc(100%-0.5rem)] w-px bg-slate-200" aria-hidden />}
@@ -319,7 +375,7 @@ export function OrderShipments({ orderId, canManage, onDelivered, onChanged }: {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Shipment | null>(null);
   const [statusTarget, setStatusTarget] = useState<Shipment | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ kind: "success" | "error" | "info"; message: string } | null>(null);
 
   useEffect(() => {
     if (!canManage) return;
@@ -352,11 +408,17 @@ export function OrderShipments({ orderId, canManage, onDelivered, onChanged }: {
     });
     onChanged?.();
     if (saved.status === "DELIVERED") {
-      setNotice("Shipment delivered — the order has been marked delivered.");
+      setNotice({ kind: "success", message: "Shipment delivered — the order has been marked delivered." });
       onDelivered?.();
     } else {
       setNotice(null);
     }
+  };
+  /** Refresh/cancel results come back with the full shipment; keep the list in sync without clearing the notice. */
+  const replace = (saved: Shipment) => {
+    state.setData((prev) => (prev ?? []).map((s) => (s.id === saved.id ? saved : s)));
+    onChanged?.();
+    if (saved.status === "DELIVERED") onDelivered?.();
   };
 
   const shipments = state.data ?? [];
@@ -382,7 +444,7 @@ export function OrderShipments({ orderId, canManage, onDelivered, onChanged }: {
       />
       {notice && (
         <div className="px-5 pt-4">
-          <Alert kind="success">{notice}</Alert>
+          <Alert kind={notice.kind}>{notice.message}</Alert>
         </div>
       )}
       {state.loading ? (
@@ -405,6 +467,8 @@ export function OrderShipments({ orderId, canManage, onDelivered, onChanged }: {
                 setFormOpen(true);
               }}
               onStatus={() => setStatusTarget(s)}
+              onUpdated={replace}
+              onNotice={(kind, message) => setNotice({ kind, message })}
             />
           ))}
         </div>

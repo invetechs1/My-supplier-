@@ -104,6 +104,10 @@ export interface ReturnItem {
   unit: string;
   quantity: number;
   unitPrice: number;
+  /** Material category at request time (drives the returns policy); absent on legacy rows. */
+  categorySlug?: string | null;
+  /** Restocking fee applied to this line (% of goods value); 0 for supplier-fault reasons. */
+  restockingPct?: number;
 }
 
 export interface ReturnRequest {

@@ -187,8 +187,8 @@ docker compose -f deploy/docker-compose.prod.yml exec caddy caddy list-certifica
 
 ### 4.3 Manual walkthrough (10 minutes, one pass per role)
 1. **Guest**: open the home page in EN and AR; search "cement"; open a product; add to cart; run a BOQ with three lines; open a supplier page; send the contact form.
-2. **Buyer** (real test account): register with a company → verify the email arrives (if SMTP is set) → add an address → checkout with cash on delivery → open the order → download the invoice (QR present) → request a quotation (RFQ) → create a list and a price alert.
-3. **Supplier** (real test account): register as supplier → upload CR/VAT documents → add a price to an existing product → "Sell a new product" → import a small Excel price list → see the offer in the shop as a guest → receive the buyer's order → confirm → mark delivered → print the delivery note → check Finance shows commission and net.
+2. **Buyer** (real test account): register with the company block (name, type, city, 10-digit CR, 15-digit VAT starting/ending with 3, contact number) and accept the Terms → verify the email arrives (if SMTP is set) → add an address → checkout with cash on delivery → open the order → download the invoice (QR present) → request a quotation (RFQ) → create a list and a price alert.
+3. **Supplier** (real test account): register as supplier (same company block plus the cities you deliver to and the Supplier Agreement checkbox; a second registration with the same CR must be refused with 409) → upload CR/VAT documents → add a price to an existing product → "Sell a new product" → import a small Excel price list → see the offer in the shop as a guest → receive the buyer's order → confirm → mark delivered → print the delivery note → check Finance shows commission and net.
 4. **Admin**: verify the supplier company (badge appears on its page) → approve credit for the buyer company → create a coupon and use it at checkout → hide a review → check Audit shows all of the above → export a report CSV.
 5. **Mobile** (TestFlight/internal build): log in as the buyer, receive the push notification for an order status change, open the invoice from the app.
 

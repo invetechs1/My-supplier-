@@ -1,7 +1,9 @@
 import type {
   SupplierProduct,
   SupplierProductsResponse,
+  AdminPaymentsQuery,
   AdminPaymentsResponse,
+  AdminReconcileResult,
   AdminReports,
   AdminReview,
   AdminReviewsResponse,
@@ -16,10 +18,16 @@ import type {
   AiConfig,
   ApiError,
   AuthResponse,
+  BankTransferProofPayload,
+  BankTransferProofResult,
   Bid,
   BoqAnalysis,
   Carrier,
   CarrierCode,
+  CarrierIntegrationsResponse,
+  CarrierTestResult,
+  AdminShipmentRow,
+  ShipmentLabel,
   ClientErrorReport,
   CreateShipmentPayload,
   DeliveryQuote,
@@ -642,6 +650,12 @@ export const api = {
   adminUpdateShippingRate: (id: string, body: Partial<ShippingRatePayload>) =>
     request<ShippingRate>(`/admin/shipping/rates/${encodeURIComponent(id)}`, { method: "PATCH", body }),
   adminDeleteShippingRate: (id: string) => request<{ ok: boolean }>(`/admin/shipping/rates/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  shipmentLabel: (id: string) => request<ShipmentLabel>(`/shipments/${encodeURIComponent(id)}/label`),
+  cancelShipment: (id: string, reason?: string) => request<Shipment & { cancelledWithCarrier: boolean; note: string | null }>(`/shipments/${encodeURIComponent(id)}/cancel`, { method: "POST", body: { reason } }),
+  refreshShipment: (id: string) => request<Shipment & { refreshed: boolean; applied: number; reason: string | null }>(`/shipments/${encodeURIComponent(id)}/refresh`, { method: "POST" }),
+  adminCarrierIntegrations: () => request<CarrierIntegrationsResponse>("/admin/shipping/carriers"),
+  adminTestCarrier: (code: CarrierCode) => request<CarrierTestResult>(`/admin/shipping/carriers/${encodeURIComponent(code)}/test`, { method: "POST" }),
+  adminRecentShipments: (query: { limit?: number; carrier?: CarrierCode } = {}) => request<AdminShipmentRow[]>("/admin/shipping/shipments", { query }),
 
   // E-invoicing (ZATCA phase 2 groundwork)
   einvoice: (orderId: string) => request<EInvoiceRecord>(`/orders/${encodeURIComponent(orderId)}/einvoice`),
@@ -678,6 +692,18 @@ export const api = {
     }),
   payments: (orderId: string) => request<PaymentRecord[]>(`/payments/${encodeURIComponent(orderId)}`),
   refund: (orderId: string, body: RefundPayload) => request<RefundResult>(`/payments/${encodeURIComponent(orderId)}/refund`, { method: "POST", body }),
+  /** Buyer submits the bank-transfer receipt; multipart when a file (PDF/image ≤ 10 MB) is attached, JSON otherwise. */
+  submitBankTransfer: (orderId: string, body: BankTransferProofPayload, file?: File | null) => {
+    const path = `/orders/${encodeURIComponent(orderId)}/payments/bank-transfer`;
+    if (!file) return request<BankTransferProofResult>(path, { method: "POST", body });
+    const fd = new FormData();
+    fd.append("reference", body.reference);
+    fd.append("amount", String(body.amount));
+    if (body.paidAt) fd.append("paidAt", body.paidAt);
+    if (body.note) fd.append("note", body.note);
+    fd.append("file", file);
+    return requestForm<BankTransferProofResult>(path, fd);
+  },
 
   // Notifications
   notifications: async (unreadOnly = false) => {
@@ -699,7 +725,9 @@ export const api = {
   adminReviews: (query: { rating?: number; hidden?: "true" | "false" | ""; q?: string; page?: number } = {}) => request<AdminReviewsResponse>("/admin/reviews", { query }),
   adminUpdateReview: (id: string, body: { hidden?: boolean; reply?: string | null }) => request<AdminReview>(`/admin/reviews/${encodeURIComponent(id)}`, { method: "PATCH", body }),
   adminDeleteReview: (id: string) => request<{ ok: boolean }>(`/admin/reviews/${encodeURIComponent(id)}`, { method: "DELETE" }),
-  adminPayments: (query: { status?: string; provider?: string; q?: string; page?: number } = {}) => request<AdminPaymentsResponse>("/admin/payments", { query }),
+  adminPayments: (query: AdminPaymentsQuery = {}) =>
+    request<AdminPaymentsResponse>("/admin/payments", { query: { status: query.status || undefined, provider: query.provider || undefined, method: query.method || undefined, q: query.q || undefined, from: query.from || undefined, to: query.to || undefined, page: query.page } }),
+  adminReconcilePayment: (id: string) => request<AdminReconcileResult>(`/admin/payments/${encodeURIComponent(id)}/reconcile`, { method: "POST" }),
   adminReports: (days = 30) => request<AdminReports>("/admin/reports", { query: { days } }),
   adminMessages: (query: { channel?: string; status?: string; kind?: string; days?: number; page?: number } = {}) =>
     request<Paginated<MessageLogEntry> & { summary: MessagingSummary }>("/admin/messages", { query }),
@@ -886,6 +914,8 @@ export const deliveryNoteHtmlPath = (orderId: string) => `/orders/${encodeURICom
 export const einvoiceXmlPath = (orderId: string) => `/orders/${encodeURIComponent(orderId)}/einvoice.xml`;
 /** Private verification document for the supplier's own company (owner/manager). */
 export const supplierDocumentFilePath = (docId: string) => `/supplier/company/documents/${encodeURIComponent(docId)}/file`;
+/** Bank-transfer receipt attached to a payment record (buyer, supplier team, admin). */
+export const paymentProofPath = (orderId: string, paymentId: string) => `/orders/${encodeURIComponent(orderId)}/payments/${encodeURIComponent(paymentId)}/file`;
 /** Private verification document opened by an admin. */
 export const adminDocumentFilePath = (companyId: string, docId: string) =>
   `/admin/companies/${encodeURIComponent(companyId)}/documents/${encodeURIComponent(docId)}/file`;
