@@ -91,6 +91,8 @@ export interface Material {
   brand?: string | null;
   specs?: Record<string, string | number> | null;
   imageUrl?: string | null;
+  /** Photo credit for Creative-Commons catalogue photos (shown under the gallery). */
+  imageAttribution?: string | null;
   description?: string | null;
   // Aggregates (filled by the API when listing)
   minPrice?: number | null;

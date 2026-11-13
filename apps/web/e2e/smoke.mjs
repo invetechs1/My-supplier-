@@ -57,8 +57,8 @@ try {
   check("add to cart", add.ok());
   await page.goto(`${WEB}/checkout`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1500);
-  const citySel = page.locator("select").first();
-  await citySel.selectOption({ label: "Riyadh" }).catch(() => citySel.selectOption("Riyadh"));
+  const citySel = page.locator('select[name="deliveryCity"]').first();
+  if (await citySel.isVisible().catch(() => false)) await citySel.selectOption("Riyadh", { timeout: 5000 }).catch(() => undefined);
   for (const i of await page.locator("input:not([type=radio]):not([type=checkbox]), textarea").all()) {
     const ph = ((await i.getAttribute("placeholder")) || "") + " " + ((await i.getAttribute("name")) || "");
     if (/address/i.test(ph)) await i.fill("King Fahd Rd, Riyadh");

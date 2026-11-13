@@ -9,6 +9,8 @@ export const UPLOAD_DIR = process.env.UPLOAD_DIR ?? path.resolve(process.cwd(), 
 export const PUBLIC_DIR = path.join(UPLOAD_DIR, "public");
 /** Private files (CR/VAT documents) – never served statically; streamed through authenticated routes. */
 export const PRIVATE_DIR = path.join(UPLOAD_DIR, "private");
+/** Product photos shipped with the repo (apps/api/assets/products); served at /catalog-images. */
+export const CATALOG_IMAGES_DIR = process.env.CATALOG_IMAGES_DIR ?? path.resolve(process.cwd(), "assets/products");
 export const UPLOAD_BASE_URL = process.env.UPLOAD_BASE_URL ?? `${env.apiUrl.replace(/\/api\/v1$/, "")}/uploads`;
 fs.mkdirSync(PUBLIC_DIR, { recursive: true });
 fs.mkdirSync(PRIVATE_DIR, { recursive: true });

@@ -8,7 +8,7 @@ import { cn } from "@/lib/format";
 import { generatedImageUrl, productImageUrl } from "./ProductCard";
 
 /** Main image + thumbnail strip. Falls back to the generated SKU image when a photo fails to load. */
-export function ProductGallery({ material, images, overlay }: { material: Pick<Material, "sku" | "imageUrl" | "name">; images?: string[] | null; overlay?: ReactNode }) {
+export function ProductGallery({ material, images, overlay }: { material: Pick<Material, "sku" | "imageUrl" | "name" | "imageAttribution">; images?: string[] | null; overlay?: ReactNode }) {
   const { t } = useI18n();
   const list = useMemo(() => {
     const all = [material.imageUrl, ...(images ?? [])].map((u) => fileUrl(u)).filter((u): u is string => !!u);
@@ -65,6 +65,9 @@ export function ProductGallery({ material, images, overlay }: { material: Pick<M
             </li>
           ))}
         </ul>
+      )}
+      {material.imageAttribution && src === fileUrl(material.imageUrl) && (
+        <p className="text-[11px] leading-snug text-slate-400" dir="ltr">{material.imageAttribution}</p>
       )}
     </div>
   );

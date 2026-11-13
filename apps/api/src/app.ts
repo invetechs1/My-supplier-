@@ -26,7 +26,7 @@ import importRoutes from "./routes/imports";
 import outreachRoutes from "./routes/outreach";
 import portalRoutes from "./routes/supplierPortal";
 import orderExtraRoutes from "./routes/orderExtras";
-import { PUBLIC_DIR } from "./lib/uploads";
+import { CATALOG_IMAGES_DIR, PUBLIC_DIR } from "./lib/uploads";
 import { initSentry, sentryErrorHandler } from "./lib/monitoring";
 import opsRoutes from "./routes/ops";
 import otpRoutes from "./routes/otp";
@@ -94,6 +94,8 @@ export function createApp() {
   api.use(analyticsRouter);
   app.use("/api/v1", api);
   app.use("/uploads", express.static(PUBLIC_DIR, { maxAge: "7d", immutable: true }));
+  // Launch-catalogue product photos committed with the API (filled by `pnpm catalog:launch`).
+  app.use("/catalog-images", express.static(CATALOG_IMAGES_DIR, { maxAge: "30d", immutable: true, fallthrough: true }));
 
   app.get("/", (_req, res) => res.json({ name: "MySupplier API", docs: "/api/v1/health", version: "v1" }));
   app.use((_req, res) => res.status(404).json({ error: "Route not found" }));
